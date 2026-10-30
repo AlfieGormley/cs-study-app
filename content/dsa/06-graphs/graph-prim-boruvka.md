@@ -47,7 +47,7 @@ From A on the example: A, then C (1), B (2 via C), D (5 via B), E (2 via D), F (
 
 It looks almost exactly like Dijkstra. The one difference is the key used to order the min-heap:
 
-```formula
+```formula reference
 key_D(v) = dist(u) + w(u, v)
 key_P(v) = w(u, v)
 where
@@ -57,7 +57,7 @@ w(u, v): the weight of the edge between them
 dist(u): u's shortest distance from the source
 key_D(v): Dijkstra's priority for v: the total distance from the source
 key_P(v): Prim's priority for v: just the cost of the single edge that attaches v
-In words: Dijkstra asks "how far is v from the start?", Prim asks "how cheaply can v be attached?".
+In words: for a waiting vertex, Dijkstra asks "how far is it from the start?", while Prim asks "how cheaply can it be attached to the tree?".
 ```
 
 In the example, D reached from B (distance three from A via C) gets Dijkstra key eight but Prim key five.
@@ -78,17 +78,16 @@ In the table, n is the number of vertices and m the number of edges.
 
 Both are fine for most problems. Kruskal is simpler to write if you have a DSU handy; Prim with an array is the choice for complete graphs, such as points in the plane where every pair is an edge.
 
-A third algorithm, **Borůvka's**, selects a cheapest outgoing edge from every component. Resolve equal weights consistently or use Union-Find to discard cycle-forming selected edges. On a connected graph, every component joins at least one other in each round, so the count at least halves:
+A third algorithm, **Borůvka's**, selects a cheapest outgoing edge from every component. Resolve equal weights consistently or use Union-Find to discard cycle-forming selected edges. On a connected graph, every component joins at least one other in each round, so the count at least halves, and a thousand vertices need at most 10 rounds:
 
-```formula
+```formula reference
 c_{i+1} ≤ c_i / 2
 R ≤ ⌈log_2(n)⌉
-R ≤ ⌈log_2(1000)⌉ = 10
 where
 c_i: the number of components before round i; c_1 = n
 c_{i+1}: the number after that round
 i: the round number
-n: the number of vertices; 1,000 in the example
+n: the number of vertices
 R: the number of rounds until one component remains
 log_2: the base-2 logarithm
 ⌈ ⌉: ceiling: round up to a whole number
@@ -96,7 +95,7 @@ log_2: the base-2 logarithm
 In words: halving the component count each round reaches one component in about log₂ n rounds.
 ```
 
-A thousand vertices need at most 10 rounds. Isolated components in a disconnected graph cannot merge. Its per-component edge choices expose parallel work, and distributed and GPU MST implementations use variants of this approach. Synchronisation, communication and hardware determine their performance.
+Isolated components in a disconnected graph cannot merge. Its per-component edge choices expose parallel work, and distributed and GPU MST implementations use variants of this approach. Synchronisation, communication and hardware determine their performance.
 
 ## Key takeaways
 - Prim uses an attaching-edge cost, while Dijkstra uses a path cost.
@@ -104,7 +103,7 @@ A thousand vertices need at most 10 rounds. Isolated components in a disconnecte
 - Borůvka merges components in logarithmically many rounds on connected input.
 
 ## Further reading
-- [Primary reference for this unit](https://algs4.cs.princeton.edu/43mst/)
+- [Sedgewick and Wayne, Algorithms 4th ed.: 4.3 Minimum spanning trees](https://algs4.cs.princeton.edu/43mst/)
 - [Prim's algorithm — Wikipedia](https://en.wikipedia.org/wiki/Prim%27s_algorithm)
 - [GPU MST research implementation](https://userweb.cs.txstate.edu/~burtscher/research/ECL-MST/)
 - [Engineering massively parallel MST algorithms](https://arxiv.org/abs/2302.12199)

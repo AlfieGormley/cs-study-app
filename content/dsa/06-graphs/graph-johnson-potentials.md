@@ -21,7 +21,7 @@ Dijkstra cannot handle negative edges, and Floyd–Warshall is O(n³). Johnson's
 
 Steps 3 and 5 in full:
 
-```formula
+```formula essential
 h(v) ≤ h(u) + w(u, v)
 w'(u, v) = w(u, v) + h(u) − h(v) ≥ 0
 d(u, v) = d'(u, v) − h(u) + h(v)
@@ -38,19 +38,16 @@ d(u, v): the true shortest distance with the original weights
 In words: shortest distances obey the triangle inequality, so adding the potential difference makes every edge non-negative, and subtracting it at the end restores the true distances.
 ```
 
-For example, with a zero potential at the start, a potential of minus three at the end, and an edge weight of minus three, the reweighted edge costs zero:
-
-
-```formula
-w′ = −3 + 0 − (−3) = 0
-where
-w′: reweighted edge cost, in the original weight units
-In words: Subtracting the end potential cancels the negative edge weight.
-```
-
-
+For example, an edge of weight minus three from a vertex with potential zero to one with potential minus three is reweighted to −3 + 0 − (−3) = 0.
 
 Why step 3 preserves shortest paths: along any path u → x₁ → … → v, each middle potential is added once and subtracted once, so the h terms telescope (cancel in pairs) and every u→v path changes by exactly h(u) − h(v). The ranking of paths is unchanged. (Compare adding a constant to every edge, which penalises long paths more and breaks the ranking.)
+
+> [!analogy] Real-world analogy: height gained on a hill walk
+> On a hill walk, the total height you gain minus the height you lose depends only on where you start and finish, not on the route: every intermediate climb you make, you later descend, or vice versa.
+>
+> **How it maps:** a vertex's potential is like an altitude, and each reweighted edge adds its start altitude minus its end altitude to its original cost. Over any route from u to v the intermediate altitudes cancel, so every route between the same two vertices gets the same adjustment, and the cheapest route stays the cheapest.
+>
+> **Where it stops:** the potentials are shortest-path distances from the extra vertex, not real heights, and they are chosen specifically so that every reweighted edge comes out non-negative. Ordinary altitudes would cancel in the same way but would not guarantee that.
 
 With binary min-heaps on simple graphs, total time is O(n(n + m) log(n + 1)), including the augmented Bellman–Ford run. When the edge count grows at least proportionally to the vertex count, this is commonly simplified to O(nm log n).
 
@@ -60,5 +57,5 @@ With binary min-heaps on simple graphs, total time is O(n(n + m) log(n + 1)), in
 - Recover original distances after running Dijkstra.
 
 ## Further reading
-- [Primary reference for this unit](https://algs4.cs.princeton.edu/44sp/)
+- [Sedgewick and Wayne, Algorithms 4th ed.: 4.4 Shortest paths](https://algs4.cs.princeton.edu/44sp/)
 - [Johnson's algorithm — Wikipedia](https://en.wikipedia.org/wiki/Johnson%27s_algorithm)

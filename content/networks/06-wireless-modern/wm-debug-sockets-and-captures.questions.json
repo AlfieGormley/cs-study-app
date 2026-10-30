@@ -33,27 +33,27 @@
     "id": "wm-debugging-q12",
     "level": "advanced",
     "type": "single",
-    "prompt": "A client's `connect()` is hanging. A capture shows SYNs at 0, 1, 3, 7 and 15 s with no replies. If the kernel keeps retrying with the same backoff, when is the next SYN sent?",
+    "prompt": "A client's `connect()` hangs. A capture shows SYNs at 0, 1, 3, 7 and 15 s with no replies, and the application has no connect timeout of its own. What does the pattern predict, and what should the application change?",
     "options": [
       {
-        "text": "At 16 s",
-        "explanation": "This assumes a fixed 1 s interval. The gaps double each time."
+        "text": "The retries are evenly spaced, so the kernel will give up after one more second",
+        "explanation": "The gaps here are 1, 2, 4 and 8 s: they are growing, not constant."
       },
       {
-        "text": "At 23 s",
-        "explanation": "This adds 8 s, repeating the previous gap rather than doubling it."
+        "text": "The gaps keep growing, so with no application deadline the call can hang for a long time (over two minutes with current Linux defaults); set an explicit connect timeout suited to the use case",
+        "explanation": "Correct. Retransmission backoff lengthens each wait. The kernel's own limit is long, so a user-facing app should set its own deadline and report or retry sensibly."
       },
       {
-        "text": "At 31 s",
-        "explanation": "Correct. The gaps are 1, 2, 4, 8 s, so the next is 16 s: 15 + 16 = 31 s."
+        "text": "The kernel stops after three SYNs, so the hang must be in the application",
+        "explanation": "The capture already shows five SYNs, and the kernel default allows more retries."
       },
       {
-        "text": "At 30 s",
-        "explanation": "This doubles the timestamp rather than the gap between attempts."
+        "text": "The growing gaps prove the server is overloaded",
+        "explanation": "Unanswered SYNs show only that no reply reached this capture point. Filtering, routing, loss or an absent host are equally consistent."
       }
     ],
-    "answer": 2,
-    "workedExample": "The supplied gaps between SYNs double each time:\n\n```formula\ng_{n+1} = 2g_n\ng = 1, 2, 4, 8 → 16 s\nt_next = t_last + g_next\nt_next = 15 s + 16 s = 31 s\nwhere\ng_n: the gap before retry n, in seconds (s)\ng_{n+1}: the gap before the following retry\ng: the observed gaps, 1, 2, 4 and 8 s\n→: \"so the next one is\"\nt_next: the time of the next SYN\nt_last: the time of the last SYN seen, 15 s\ng_next: the next gap, 16 s\ns: second\nIn words: each wait is twice the one before, so after waiting 8 s the kernel waits 16 s, sending at 31 s.\n```\n\nThis is arithmetic for the specified trace, not a universal current Linux retry schedule. Set application deadlines based on requirements and measured behaviour; no fixed 1–5 second recommendation follows.",
+    "answer": 1,
+    "workedExample": "1. The gaps between SYNs are 1, 2, 4 and 8 s: each wait is longer than the last because TCP backs off its retransmission timer.\n2. If nothing answers, the kernel keeps retrying with long waits. The current Linux kernel documentation says its default settings give up after about 131 seconds; versions and configurations differ (recent kernels start with a few linearly spaced retries), so do not rely on one exact schedule.\n3. A user waiting minutes for an error is rarely acceptable, so the application should set a connect deadline based on its requirements and measured behaviour.\n4. Separately, investigate why no SYN-ACK or RST is seen: capture at the server, check filtering, routes and whether the host is up.",
     "link": {
       "title": "tcpdump(1) manual page",
       "url": "https://www.tcpdump.org/manpages/tcpdump.1.html"

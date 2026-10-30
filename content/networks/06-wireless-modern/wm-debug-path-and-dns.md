@@ -7,7 +7,7 @@ summary: A missing intermediate reply is not proof that application packets are 
 sourceLesson: wm-debugging
 ---
 
-This unit focuses on interpreting traceroute, mtr and DNS evidence. It builds on the earlier units in this module; the examples below state their additional assumptions.
+Once a symptom is defined, the next questions are which way packets go and whether the name even resolves to the right place. Traceroute, mtr and dig answer those, but each shows side effects of probes rather than the path your application's packets take, so reading them carefully matters as much as running them.
 
 ## traceroute and mtr: where the path goes
 

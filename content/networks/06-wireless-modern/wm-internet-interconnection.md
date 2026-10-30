@@ -7,7 +7,7 @@ summary: An IXP fabric can connect many agreed peers through a shared attachment
 sourceLesson: wm-internet-structure
 ---
 
-This unit focuses on IXPs, private interconnects and embedded caches. It builds on the earlier units in this module; the examples below state their additional assumptions.
+Networks need physical places to meet. Exchange points, private interconnects and caches placed inside ISPs have flattened the old hierarchy, so much of today's traffic never touches a Tier 1 network.
 
 ## The flattening of the Internet
 

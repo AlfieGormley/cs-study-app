@@ -63,5 +63,4 @@ The last row: in a DAG, relax edges in topological order and each vertex is fina
 - Match edge-weight assumptions to the algorithm before comparing costs.
 
 ## Further reading
-- [Primary reference for this unit](https://cp-algorithms.com/graph/01_bfs.html)
 - [0-1 BFS — cp-algorithms](https://cp-algorithms.com/graph/01_bfs.html)

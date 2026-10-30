@@ -10,21 +10,11 @@ summary: BFS expands a FIFO queue in increasing edge-distance layers.
 Almost every graph algorithm is a traversal in disguise. There are two basic ways to explore a graph from a starting vertex:
 
 - **Breadth-first search (BFS)** spreads out like a ripple in a pond: first everything 1 step away, then everything 2 steps away, and so on.
-- **Depth-first search (DFS)** behaves like someone in a maze with a ball of string: go as deep as possible down one corridor, and only back up when you hit a dead end.
+- **Depth-first search (DFS)** behaves like someone in a maze trailing a ball of twine: go as deep as possible down one corridor, and only back up when you hit a dead end.
 
-Both traversals touch each vertex and each edge a bounded number of times, so their running time grows with the size of the graph:
+Throughout this lesson, n is the number of vertices and m the number of edges. Both traversals touch each vertex and each edge a bounded number of times, so one full traversal costs O(n + m): work proportional to vertices plus edges, so doubling the graph roughly doubles the time. This assumes adjacency lists and the usual constant-time access model; dictionary and set bounds here are expected bounds. All referenced vertices must have adjacency entries.
 
-```formula
-T(n, m) = O(n + m)
-where
-T(n, m): the running time of one full BFS or DFS, counted in basic steps
-n: the number of vertices (points) in the graph
-m: the number of edges (connections) in the graph
-O(…): Big O: grows at most this fast, up to a constant factor, once the graph is large
-In words: the work is proportional to the number of vertices plus the number of edges, so doubling the graph roughly doubles the time.
-```
-
-For example, substituting one million junctions and 2.5 million roads gives a growth expression of 3.5 million; it is not an exact instruction count. This assumes adjacency lists and the usual constant-time access model; dictionary/set bounds here are expected bounds. All referenced vertices must have adjacency entries. What differs between BFS and DFS is the *order*, and that order is what makes each one useful. Throughout this lesson, n is the number of vertices and m the number of edges.
+What differs between BFS and DFS is the *order*, and that order is what makes each one useful.
 
 We will use this graph throughout:
 
@@ -93,7 +83,7 @@ BFS answers plain reachability and fewest unit-cost knight moves on an implicit 
 - Record discovery when enqueuing to prevent duplicate queue entries.
 
 ## Further reading
-- [Primary reference for this unit](https://docs.python.org/3/library/collections.html#collections.deque)
+- [Python docs: collections.deque](https://docs.python.org/3/library/collections.html#collections.deque)
 - [Breadth-first search — Wikipedia](https://en.wikipedia.org/wiki/Breadth-first_search)
 - [Breadth-first search — cp-algorithms](https://cp-algorithms.com/graph/breadth-first-search.html)
 - [Shortest path problem — Wikipedia](https://en.wikipedia.org/wiki/Shortest_path_problem)

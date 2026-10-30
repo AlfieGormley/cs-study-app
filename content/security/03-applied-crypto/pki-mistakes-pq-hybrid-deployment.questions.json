@@ -3,27 +3,27 @@
     "id": "pki-mistakes-pq-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "In a hypothetical TLS deployment supporting these post-quantum signature schemes, a TLS server sends a leaf and one intermediate certificate, both with ML-DSA-65 keys and ML-DSA-65 signatures, and signs CertificateVerify with ML-DSA-65 (public key 1,952 B, signature 3,309 B). Ignoring names, extensions and SCTs, roughly how many bytes of keys and signatures does the client receive, and why does it matter?",
+    "prompt": "A team trials post-quantum certificates: the server sends a leaf and one intermediate certificate with ML-DSA-65 keys and signatures and signs CertificateVerify with ML-DSA-65. The keys and signatures alone come to about 14 KB, against about 256 bytes with Ed25519. Some clients on high-latency links now see slower handshakes. What is the most likely explanation, and a sensible response?",
     "options": [
       {
-        "text": "About 5 KB; it doesn't matter",
-        "explanation": "This counts only one key and one signature. The chain carries two keys and three signatures."
+        "text": "ML-DSA signature verification is too slow for phones; switch back to RSA",
+        "explanation": "Size, not CPU time, is the change described here. ML-DSA verification can be fast; the handshake grew by about 13.5 KB."
       },
       {
-        "text": "About 33 KB",
-        "explanation": "This overcounts: the root's key is not sent, and only three signatures are involved."
+        "text": "The server's first flight now approaches or exceeds TCP's initial congestion window (about 14.6 KB with ten segments), so it may wait for acknowledgements before finishing; measure it, trim the chain, and watch size-reduction work such as Merkle Tree Certificates",
+        "explanation": "Correct. With names, extensions and SCTs added, the flight can exceed the initial window, and on a high-latency link waiting for acknowledgements costs time. An extra round trip is not automatic; it depends on the real window and chain."
       },
       {
-        "text": "About 1 KB, the same as ECDSA",
-        "explanation": "This ignores the stated ML-DSA sizes. A P-256 comparison would also need explicit public-key encoding and signature sizes, plus certificate metadata."
+        "text": "The larger certificates break hybrid key exchange, which forces a fallback to X25519 only",
+        "explanation": "Key exchange and certificate signatures are separate. Hybrid key exchange still works; the certificates simply make the server's flight bigger."
       },
       {
-        "text": "About 14 KB, close to TCP's initial congestion window (about 14.6 KB with 10 segments), so with real certificate overhead the handshake may need an extra round trip",
-        "explanation": "Correct. 2 × 1,952 + 3 × 3,309 = 13,831 bytes. Add names, extensions and SCTs, and the server's flight can exceed the initial window."
+        "text": "Post-quantum signatures require an extra handshake message, which always adds one round trip",
+        "explanation": "TLS 1.3 sends the same messages; only their size grows. Whether time is added depends on the congestion window and network, not on a new message."
       }
     ],
-    "answer": 3,
-    "workedExample": "Two public keys: 2 × 1,952 = 3,904 bytes. Three signatures: 3 × 3,309 = 9,927 bytes. Total 13,831 bytes. With a configured ten-segment initial window and 1,460-byte MSS, the nominal window is 14,600 bytes; other handshake bytes can exceed it. Additional pacing depends on actual window, ACK behavior and the rest of the flight, so a full extra RTT is not guaranteed.",
+    "answer": 1,
+    "workedExample": "1. Identify what changed: certificate keys and signatures grew from a few hundred bytes to about 14 KB (two ML-DSA-65 public keys and three signatures), before names, extensions and SCTs.\n2. A new TCP connection may send only its initial congestion window before waiting for acknowledgements; with ten segments of 1,460 bytes that is about 14.6 KB.\n3. A server flight near or above that size may have to pause for an acknowledgement, which on a high-latency link adds noticeable delay. The exact effect depends on the configured window, segment size and the rest of the flight.\n4. Responses: measure real handshakes, avoid sending unnecessary certificates, consider which certificates really need post-quantum signatures first, and follow proposals such as Merkle Tree Certificates designed to shrink authentication data.\n5. Keep this separate from key exchange: hybrid ML-KEM-768 key exchange adds about 2.3 KB in total (a 1,184-byte key share from the client and a 1,088-byte ciphertext from the server) and protects recorded traffic now; certificate signatures protect against active attacks only once a quantum computer exists.",
     "link": {
       "title": "The state of the post-quantum Internet — Cloudflare blog",
       "url": "https://blog.cloudflare.com/pq-2024/"

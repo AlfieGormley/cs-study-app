@@ -7,7 +7,7 @@ sourceLesson: pki-mistakes-pq
 summary: A reviewed hybrid combiner aims to retain secrecy when either component remains secure.
 ---
 
-Cryptographic security depends on the complete construction and its implementation, including key generation, message authentication and correct nonce handling.
+The post-quantum algorithms are standardised, but they are young and large. Real deployments therefore combine them with classical algorithms and plan a long, careful migration.
 
 ## Hybrids and deployment
 
@@ -17,21 +17,14 @@ Because the new schemes are young, several prominent deployments use **hybrid ke
 - **SSH**: OpenSSH made a hybrid with Streamlined NTRU Prime the default in 2022, and moved to `mlkem768x25519-sha256` by default in version 10.0 in 2025.
 - **Messaging**: Signal's PQXDH (2023) and SPQR ratchet (2025); Apple's iMessage PQ3 (2024).
 
-Signatures are harder. For an illustrative leaf-plus-one-intermediate chain, two public keys and three signatures are transmitted, including CertificateVerify:
+Signatures are harder. Consider a server sending a leaf and one intermediate certificate, both with ML-DSA-65 keys and signatures, and signing CertificateVerify with ML-DSA-65. The client receives two public keys and three signatures: about 13.8 KB of keys and signatures alone, before names, extensions and SCTs, against 256 bytes for the same items with Ed25519. That is close to a typical TCP initial congestion window of about 14.6 KB (ten segments), so a real chain can push the server's first flight past it. Whether that costs an extra round trip depends on the actual window, chain and acknowledgement timing. Proposals such as Merkle Tree Certificates aim to shrink this before PQ certificates become mandatory.
 
-```formula
-L_auth = 2 × L_pk + 3 × L_sig
-L_auth = 2 × 1,952 + 3 × 3,309
-L_auth = 3,904 + 9,927 = 13,831 B
-where
-L_auth: bytes of keys and signatures the client receives
-L_pk: one ML-DSA-65 public key, 1,952 bytes; two are sent (leaf and intermediate; the client already holds the root)
-L_sig: one ML-DSA-65 signature, 3,309 bytes; three are sent (on the leaf, on the intermediate, and CertificateVerify)
-B: bytes
-In words: the post-quantum keys and signatures alone come to about 13.8 KB, against 256 bytes for the same items with Ed25519 (two 32-byte keys and three 64-byte signatures).
-```
-
-These 13,831 bytes come before certificate encoding/extensions and any SCTs. Actual chain composition and TCP initial-window configuration determine whether more acknowledgement pacing is needed; an extra full round trip is not automatic. Proposals such as Merkle Tree Certificates aim to shrink this before PQ certificates become mandatory.
+> [!analogy] Real-world analogy: Two different locks on one door
+> When you are unsure whether a new lock design is as good as it claims, you fit it alongside the old lock you trust. A burglar now has to defeat both.
+>
+> **How it maps:** Hybrid key exchange runs a classical algorithm (X25519) and a post-quantum one (ML-KEM) and feeds both secrets into one key derivation. If the new algorithm turns out to have a flaw, the classical one still protects the session, and if a quantum computer breaks the classical one, ML-KEM still does.
+>
+> **Where it stops:** Two physical locks work independently, so fitting a second one can never weaken the first. In a hybrid, the two secrets are mixed by a specified combiner whose security has to be analysed, and both algorithms run in the same software on the same device: a bug that leaks memory can expose both secrets at once. A hybrid also protects only the key exchange; the certificate signatures still need their own migration.
 
 ## Planning a migration
 
@@ -39,19 +32,15 @@ These 13,831 bytes come before certificate encoding/extensions and any SCTs. Act
 2. **Prioritise by exposure and lifetime.** Long-lived confidential records need harvest-now-decrypt-later protection. Root CA and software-update keys create a distinct long-lived authentication risk, so include their replacement and device-update durations.
 3. **Get crypto-agile.** Hard-coded algorithms, fixed field sizes for keys and signatures, and HSMs without PQ firmware all block migration. Design so algorithms can be swapped by configuration.
 4. **Evaluate supported hybrid key exchange** through compatibility testing, library/service upgrades and deployment policy; middleboxes, protocol negotiation and operational constraints may also require changes.
-5. **Plan signatures** to follow standards and timelines: the November 2024 draft NIST IR 8547 proposed security-strength-dependent transition dates, including 2030 deprecation and 2035 disallowance for listed classical uses. Treat this as a dated draft proposal, not a universal law or a final rule for every application.
+5. **Plan signatures** to follow standards and timelines. NIST IR 8547, finalised on 27 October 2026, says NIST will deprecate quantum-vulnerable public-key cryptography after 2030 and disallow it under NIST standards and guidelines after 2035, while US federal directives require the most sensitive systems to move earlier. These dates bind organisations that follow NIST rules; other sectors and countries set their own, so check the policy that applies to you.
 
 ## Key takeaways
 - A reviewed hybrid combiner aims to retain secrecy when either component remains secure.
 - Larger post-quantum keys and signatures affect handshake size and protocol engineering.
-- Inventory dependencies, test interoperability and distinguish dated draft transition guidance from binding application policy.
+- Inventory dependencies, test interoperability and check which dated transition policy actually applies to your systems.
 
 ## Further reading
-- [Cryptographic storage guidance — OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html)
-- [NIST post-quantum project](https://csrc.nist.gov/projects/post-quantum-cryptography)
+- [NIST IR 8547: Transition to Post-Quantum Cryptography Standards](https://csrc.nist.gov/pubs/ir/8547/final)
 - [NIST releases first three finalised post-quantum encryption standards — NIST](https://www.nist.gov/news-events/news/2024/08/nist-releases-first-3-finalized-post-quantum-encryption-standards)
-- [FIPS 203: Module-Lattice-Based Key-Encapsulation Mechanism Standard](https://csrc.nist.gov/pubs/fips/203/final)
 - [The state of the post-quantum Internet — Cloudflare blog](https://blog.cloudflare.com/pq-2024/)
-- [Nonce-disrespecting adversaries: practical forgery attacks on GCM in TLS](https://eprint.iacr.org/2016/475)
-- [Mining your Ps and Qs: weak keys in network devices](https://factorable.net/)
-- [Cryptographic Storage Cheat Sheet — OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html)
+- [OpenSSH 10.0 release notes](https://www.openssh.com/txt/release-10.0)

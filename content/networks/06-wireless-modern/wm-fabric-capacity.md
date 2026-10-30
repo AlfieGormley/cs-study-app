@@ -7,54 +7,42 @@ summary: Compare total downlink and uplink capacities to obtain the leaf port ra
 sourceLesson: wm-datacentre
 ---
 
-This unit focuses on oversubscription and fabric capacity budgets. It builds on the earlier units in this module; the examples below state their additional assumptions.
+Almost no fabric gives every server enough uplink capacity to send at full speed to other racks all at once. How much it falls short, the oversubscription ratio, is one of the main cost-versus-performance decisions in a data-centre design.
 
-## Oversubscription maths
+## Oversubscription
 
-A leaf has downlinks to servers and uplinks to spines. The **oversubscription ratio** compares them: how much traffic the servers could offer, against how much the leaf can send up to the spines.
+A leaf has downlinks to servers and uplinks to spines. The **oversubscription ratio** compares the traffic its servers could offer with what the leaf can send up to the spines:
 
-```formula
+```formula essential
 OSR = B_down / B_up
-B_down = n_down r_down
-B_up = n_up r_up
 where
-OSR: the oversubscription ratio, written as "x:1"; 1:1 means the uplinks could carry everything the servers send
-B_down: the total server-facing (downlink) bandwidth of the leaf, in gigabits per second (Gbit/s)
-B_up: the total spine-facing (uplink) bandwidth of the leaf, in Gbit/s
-n_down: the number of server ports
-r_down: the speed of each server port, in Gbit/s
-n_up: the number of uplink ports
-r_up: the speed of each uplink port, in Gbit/s
+OSR: the oversubscription ratio, written as "x:1"; 1:1 means the uplinks could carry everything the servers send off the rack
+B_down: the total server-facing (downlink) bandwidth of the leaf: number of server ports times their speed, in gigabits per second (Gbit/s)
+B_up: the total spine-facing (uplink) bandwidth of the leaf: number of uplinks times their speed, in Gbit/s
 Gbit/s: gigabits per second, 10^9 bits per second
 In words: the ratio says how many times more traffic the servers could send off the rack than the uplinks can carry.
 ```
 
-## Worked example
+Compare total bandwidth, not port counts. For example, a leaf with 48 server ports at 25 Gbit/s (1,200 Gbit/s) and 6 uplinks at 100 Gbit/s (600 Gbit/s) is **2:1** oversubscribed.
 
-A leaf has 48 × 25 Gbit/s server ports and 6 × 100 Gbit/s uplinks, one to each of 6 spines. Each spine has 64 × 100 Gbit/s ports.
+What 2:1 means in practice:
 
-```formula
-B_down = 48 × 25 Gbit/s = 1,200 Gbit/s
-B_up = 6 × 100 Gbit/s = 600 Gbit/s
-OSR = 1,200 / 600 = 2:1
-L = P_spine = 64
-S = L × 48 = 64 × 48 = 3,072
-U = L × B_up = 64 × 600 Gbit/s
-U = 38,400 Gbit/s = 38.4 Tbit/s
-where
-B_down: the leaf's total server-facing bandwidth
-B_up: the leaf's total uplink bandwidth
-OSR: the oversubscription ratio
-L: the maximum number of leaves: each leaf uses one port on every spine, so it equals the spine port count
-P_spine: the number of ports on each spine, 64
-S: the maximum number of servers, 48 per leaf
-U: the sum of all leaves' uplink capacities in one direction
-Gbit/s: gigabits per second, 10^9 bits per second
-Tbit/s: terabits per second, 10^12 bits per second (1,000 Gbit/s)
-In words: each leaf can offer twice what it can send up, the 64-port spines cap the fabric at 64 racks of 48 servers, and the uplinks add up to 38.4 Tbit/s.
-```
+- It only bites when off-rack demand is high at the same moment. Most of the time servers are not all sending at line rate, which is why oversubscription is economical.
+- If all 48 servers did send off-rack at once, they would share 600 Gbit/s: about 12.5 Gbit/s each with perfectly equal sharing, which ECMP does not guarantee.
+- Traffic between servers on the same leaf does not use the uplinks at all, though service chaining or dual attachment can change that.
 
-The last line sums one-direction leaf uplink capacities; it is not a statement of bisection bandwidth or guaranteed delivered traffic. **2:1** means offered off-rack line-rate demand can be twice the aggregate uplink capacity. With equal sharing and no other bottleneck, each server gets 600 Gbit/s ÷ 48 = 12.5 Gbit/s; ECMP does not guarantee that allocation. Direct same-leaf traffic avoids these uplinks, but service chaining or dual-attachment policy can differ.
+> [!analogy] Real-world analogy: Town streets feeding a motorway
+> A town's many streets together could carry far more cars than the two-lane motorway out of town. That is fine on most days, because only some residents leave at once. At a holiday rush, everyone heads for the slip roads together and queues build.
+>
+> **How it maps:** The town's streets are the leaf's server ports, the motorway lanes are its uplinks, and the ratio of street capacity to motorway capacity is the oversubscription ratio. The holiday rush is a moment when many servers send off-rack simultaneously, such as a large data shuffle.
+>
+> **Where it stops:** Network queues fill in microseconds and overflowing packets are dropped rather than waiting patiently, and ECMP spreads traffic across uplinks by hashing rather than drivers choosing the emptiest lane.
+
+## How spine ports bound the fabric
+
+Every leaf uses one port on every spine. So the spine's port count caps the number of leaves: with 64-port spines, at most 64 leaves, which with 48 servers each is 3,072 servers. Adding spines adds paths and uplink capacity per leaf (if leaves have spare uplink ports), but not leaf slots. Growing past the spine port count needs bigger spines or another tier.
+
+The sum of all leaves' uplink capacities (64 leaves × 600 Gbit/s = 38.4 Tbit/s here) is one-direction leaf uplink capacity; it is not a statement of bisection bandwidth or guaranteed delivered traffic.
 
 A 1:1 leaf port ratio provides more uplink headroom than 2:1 or 4:1, but is not by itself proof that every traffic matrix runs without blocking. Routing, hash collisions, destination limits and other stages matter. Choose ratios using measured demand, failure headroom and cost; no universal workload-to-ratio rule is assumed here.
 

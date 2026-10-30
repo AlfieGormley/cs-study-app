@@ -7,7 +7,7 @@ summary: Size-sensitive probes help investigate PMTU but ICMP policy and cached 
 sourceLesson: wm-debugging
 ---
 
-This unit focuses on PMTU failures and connection-resource limits. It builds on the earlier units in this module; the examples below state their additional assumptions.
+Some failures depend on packet size or on how many connections are being opened, not on whether the path works at all. They produce distinctive symptoms: small things work while big things hang, or established connections are fine while new ones fail.
 
 ## MTU black holes
 
@@ -22,20 +22,7 @@ ping -4 -M do -s 1472 host  # IPv4 1500
 ping -4 -M do -s 1372 host  # IPv4 1400
 ```
 
-The `-s` value is the ICMP payload only; the headers make up the rest of the IP packet:
-
-```formula
-L_IP = L_data + H_ICMP + H_IP
-L_IP = 1,472 B + 8 B + 20 B = 1,500 B
-L_IP = 1,372 B + 8 B + 20 B = 1,400 B
-where
-L_IP: the total IPv4 packet size, in bytes (B)
-L_data: the ICMP echo payload size set with -s
-H_ICMP: the ICMP echo header, 8 B
-H_IP: the IPv4 header without options, 20 B
-B: byte
-In words: to test a 1,500-byte path, ask for 28 bytes less payload than the MTU.
-```
+The `-s` value is the ICMP payload only. The 8-byte ICMP header and 20-byte IPv4 header make up the rest, so to test a 1,500-byte path ask for 1,472 bytes of payload, and for 1,400 bytes ask for 1,372. If the largest size fails while smaller ones succeed, the working limit lies in between.
 
 These sizes assume IPv4 without options. Probe success/failure also depends on ICMP policy, reverse-path size and local cached PMTU; it is evidence, not proof of the application’s exact PMTU. Correct filtering of relevant ICMP errors, suitable MTU and, for TCP, carefully configured MSS clamping can help. MSS clamping does not repair UDP or every directional problem.
 
@@ -48,7 +35,7 @@ These sizes assume IPv4 without options. Probe success/failure also depends on I
 - **Ephemeral port exhaustion**: a client opening many short connections to one destination runs out of source ports, with many sockets in TIME_WAIT. Reuse connections.
 
 > [!example] Putting it together
-> Upload stalls after a VPN change, with large DF echo probes failing and smaller ones succeeding, support a PMTU hypothesis. Compare both-end captures, effective tunnel MTU and ICMP errors before concluding. If the evidence confirms an encapsulation/PMTU problem, correct the relevant MTU or error handling; apply TCP MSS clamping only where it addresses the measured path.
+> Upload stalls after a VPN change, with large DF echo probes failing and smaller ones succeeding, support a PMTU hypothesis. Compare both-end captures, effective tunnel MTU and ICMP errors before concluding. If the evidence confirms an encapsulation/PMTU problem, correct the relevant MTU or ICMP filtering; apply TCP MSS clamping only where it addresses the measured path.
 
 ## Key takeaways
 - Size-sensitive probes help investigate PMTU but ICMP policy and cached state also matter.

@@ -7,7 +7,7 @@ sourceLesson: pki-e2ee
 summary: Endpoint malware can read content after decryption even when the transport cryptography works.
 ---
 
-End-to-end encryption keeps message-content keys at the communicating endpoints. Signal’s protocol family uses uploaded prekeys to start sessions and ratcheting keys to protect ongoing conversations.
+End-to-end encryption protects message content between devices. It is easy to assume it protects much more; this unit lists what stays exposed even when the cryptography works.
 
 ## What E2EE does not protect
 
@@ -23,11 +23,6 @@ End-to-end encryption keeps message-content keys at the communicating endpoints.
 - Backups, screenshots and user-submitted abuse reports create separate content disclosures.
 
 ## Further reading
-- [X3DH specification — Signal](https://signal.org/docs/specifications/x3dh/)
-- [Double Ratchet specification — Signal](https://signal.org/docs/specifications/doubleratchet/)
-- [The X3DH Key Agreement Protocol — Signal](https://signal.org/docs/specifications/x3dh/)
-- [The Double Ratchet Algorithm — Signal](https://signal.org/docs/specifications/doubleratchet/)
-- [Quantum Resistance and the Signal Protocol — Signal blog](https://signal.org/blog/pqxdh/)
+- [Technology preview: Sealed sender for Signal](https://signal.org/blog/sealed-sender/)
 - [Signal Protocol and Post-Quantum Ratchets — Signal blog](https://signal.org/blog/spqr/)
 - [Deploying key transparency at WhatsApp — Meta Engineering](https://engineering.fb.com/2023/04/13/security/whatsapp-key-transparency/)
-- [RFC 9420: The Messaging Layer Security (MLS) Protocol](https://www.rfc-editor.org/rfc/rfc9420)

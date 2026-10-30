@@ -13,21 +13,20 @@ The running six-vertex example has MST edges A–C 1, B–C 2, D–E 2, E–F 3 
 
 - **Network design**: cabling, pipelines, power grids (the problem Borůvka originally studied in 1926, for electrifying Moravia).
 - **Single-linkage clustering**: run Kruskal but stop when k components remain (k is the number of clusters you want). For a complete graph of pairwise dissimilarities, the result is single-linkage clustering, maximising the minimum distance between clusters. On a sparse graph, spacing refers only to edges present in that graph.
-- **Approximation algorithms**: doubling an MST and shortcutting repeated vertices gives a tour at most 2× optimal for metric TSP (where going direct is never longer than a detour). See the formula after this list.
+- **Approximation algorithms**: doubling an MST and shortcutting repeated vertices gives a tour at most 2× optimal for metric TSP (where going direct is never longer than a detour). The bound is explained after this list.
 - **Union-Find on its own**: incremental undirected connectivity, image segmentation, percolation simulations, and type unification in compilers.
 
-The 2× bound for the travelling salesman problem comes from two inequalities:
+The 2× bound for the travelling salesman problem comes from two facts. Walking round the tree uses each tree edge twice, and shortcuts past already-visited places never add length in a metric. And removing one edge from the best tour leaves a spanning tree, so the MST is no heavier than the best tour.
 
-```formula
+```formula reference
 L ≤ 2 W(MST) ≤ 2 L*
-L ≤ 2 × 100 = 200
 where
 L: the length of the tour built from the doubled MST
 MST: the minimum spanning tree
-W(MST): tree total length, 100 kilometres here; the complete graph has non-negative metric distances
+W(MST): the tree's total length; the complete graph has non-negative metric distances
 L*: the length of the best possible tour
 ≤: is at most
-In words: walking round the tree uses each edge twice, shortcuts never add length, and any tour minus one edge is a spanning tree, so the MST is no heavier than the best tour.
+In words: walking round the tree uses each edge twice, shortcuts never add length, and any tour minus one edge is a spanning tree, so the MST is no heavier than the best tour, and the doubled-tree tour is at most twice the best tour.
 ```
 
 So if the MST weighs 100 km, the tour is at most 200 km, and the best tour is at least 100 km.
@@ -39,7 +38,7 @@ So if the MST weighs 100 km, the tour is at most 200 km, and the best tour is at
 - **Disconnected input**: no spanning tree exists. Kruskal returns a minimum spanning forest; check `len(tree) == n - 1`.
 - **Negative weights are fine.** Only the relative order of weights matters, unlike Dijkstra.
 
-For a single edge-weight decrease, compare that edge with the heaviest edge on the unique tree path between its endpoints. If it is lighter, replacing that heaviest edge reduces the spanning-tree weight. This is the cycle exchange principle; the surrounding graph and its other weights are assumed unchanged.
+For a single edge-weight decrease, compare that edge with the heaviest edge on the unique tree path between its endpoints. If it is lighter, replacing that heaviest edge reduces the weight of the spanning tree. This is the cycle exchange principle; the surrounding graph and its other weights are assumed unchanged.
 
 ## Key takeaways
 - MST paths do not minimise every source-to-target distance.
@@ -47,7 +46,7 @@ For a single edge-weight decrease, compare that edge with the heaviest edge on t
 - The doubled-tree tour bound requires metric distances.
 
 ## Further reading
-- [Primary reference for this unit](https://algs4.cs.princeton.edu/43mst/)
+- [Sedgewick and Wayne, Algorithms 4th ed.: 4.3 Minimum spanning trees](https://algs4.cs.princeton.edu/43mst/)
 - [Minimum spanning tree — Wikipedia](https://en.wikipedia.org/wiki/Minimum_spanning_tree)
 - [Kruskal's algorithm — Wikipedia](https://en.wikipedia.org/wiki/Kruskal%27s_algorithm)
 - [Borůvka’s original 1926 paper](https://www.dml.cz/handle/10338.dmlcz/500114)

@@ -60,6 +60,13 @@ On the example: in-degrees A0, B0, C2, D1, E2. The queue starts [A, B]. Output A
 
 If a cycle exists, its vertices never reach in-degree 0, so the output is short. That makes Kahn's a cycle detector for free. Replace the queue with a min-heap to get the lexicographically smallest order.
 
+> [!analogy] Real-world analogy: planning a degree course by prerequisites
+> Each term a student may take any course whose prerequisites they have all passed. Passing a course may unlock others, which join the list of courses available next.
+>
+> **How it maps:** a course is a vertex, "A is a prerequisite of B" is an edge A→B, and a course's number of unpassed prerequisites is its in-degree. The "can take now" list is Kahn's queue, and passing a course is outputting it and decrementing its dependants' counts.
+>
+> **Where it stops:** a student takes several courses at once and may skip some. Kahn's outputs one vertex at a time and must output every vertex. And if two courses each list the other as a prerequisite, a real university would fix the rules; Kahn's simply never frees either one, which is exactly how it reveals the cycle.
+
 ### DFS-based
 
 Run DFS and record each vertex when it **finishes**. A vertex finishes only after everything it points to has finished, so reversing the finish order puts every vertex before every vertex it has an edge to.
@@ -95,7 +102,7 @@ Both run in **O(n + m)** for n vertices and m edges.
 | Recursion | None | Deep on long chains |
 
 > [!example] Where it is used
-> GNU Make, Bazel and Gradle order build steps topologically. Package managers order installs. Acyclic spreadsheet formulas can be recalculated in dependency order; circular formulas need error handling or an explicitly supported iterative calculation mode. Python ships `graphlib.TopologicalSorter`, a Kahn-style sorter whose `get_ready()` returns every task that can currently run in parallel.
+> GNU Make, Bazel and Gradle order build steps topologically. Package managers order installs. Acyclic spreadsheet formulas can be recalculated in dependency order; circular formulas must be reported as errors or handled by an explicitly supported iterative calculation mode. Python ships `graphlib.TopologicalSorter`, a Kahn-style sorter whose `get_ready()` returns every task that can currently run in parallel.
 
 ## Key takeaways
 - Orient prerequisite edges consistently.
@@ -103,5 +110,5 @@ Both run in **O(n + m)** for n vertices and m edges.
 - Reverse DFS finish order is valid only after establishing acyclicity.
 
 ## Further reading
-- [Primary reference for this unit](https://docs.python.org/3/library/graphlib.html)
+- [Python docs: graphlib](https://docs.python.org/3/library/graphlib.html)
 - [Topological sorting — Wikipedia](https://en.wikipedia.org/wiki/Topological_sorting)

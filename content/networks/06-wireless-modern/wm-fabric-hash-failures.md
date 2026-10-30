@@ -7,47 +7,29 @@ summary: Uniform independent flow selection still produces empty paths and eleph
 sourceLesson: wm-datacentre
 ---
 
-This unit focuses on hash imbalance, remapping and flowlets. It builds on the earlier units in this module; the examples below state their additional assumptions.
+Flow hashing keeps each connection on one path, but it chooses paths blindly. That causes three recurring problems in real fabrics: big flows piling onto one link, healthy flows being reshuffled when a link fails, and different switch tiers making the same unlucky choices.
 
 ## Where ECMP goes wrong
 
-**Elephant flows collide.** With well-distributed keys and enough similarly sized flows, hashing can spread load approximately evenly. A few large flows (backups, replication, ML training) can land on the same link while others sit idle.
+**Elephant flows collide.** With many similarly sized flows, hashing spreads load roughly evenly. A few large flows (backups, replication, ML training) are different: two of them can land on the same link while others sit idle, because the hash knows nothing about load.
 
 > [!example] How lumpy is hashing?
-> Assume 8 equal flows choose independently and uniformly among 8 paths. The chance that every path gets exactly one is only about 0.24%, and on average about a third of the paths carry no flow at all. Actual unused bandwidth also depends on flow demand and other traffic.
-
-The calculation behind that example:
-
-```formula
-P_even = n! / n^n
-P_even = 40,320 / 16,777,216 ≈ 0.0024
-E_empty = n(1 − (1/n))^n
-E_empty = 8 × (7/8)^8 ≈ 2.7
-where
-P_even: the probability that every path gets exactly one flow
-n: the number of flows and also the number of paths, 8 here
-n!: n factorial, 1 × 2 × … × n; 8! = 40,320 is the number of ways to put 8 flows on 8 paths one each
-n^n: n to the power n; 8^8 = 16,777,216 is the number of ways the 8 flows can choose among 8 paths
-E_empty: the expected (average) number of paths that get no flow
-(1 − 1/n)^n: the chance that one particular path is missed by all n flows; (7/8)^8 ≈ 0.34
-≈: approximately equal to
-In words: perfect balance almost never happens by chance, and on average about 2.7 of 8 paths (a third) sit idle.
-```
+> Assume 8 equal flows choose independently and uniformly among 8 paths. The chance that every path gets exactly one flow is only about 0.24%, and on average about a third of the paths (about 2.7 of 8) carry no flow at all. With just two flows on four paths, they share a path one time in four. Actual unused bandwidth also depends on flow demand and other traffic.
 
 Mitigations include **flowlet switching** (changing path after a gap intended to exceed the path-delay difference; the guarantee depends on that delay bound), congestion-aware load balancing in the fabric, and **packet spraying** with transports that tolerate reordering. Applications can also split big transfers over several connections.
 
-**Rehashing on failure.** Consider uniformly distributed hash values and next-hop labels zero through three. If the last-labelled path fails, the survivors retain labels zero through two and the switch changes from taking the hash remainder after division by four to taking its remainder after division by three. A flow keeps its physical path only if both remainders agree. The card generalises this last-member-removal model:
+**Rehashing on failure.** With simple modulo selection, the chosen uplink is the hash's remainder after dividing by the number of paths. If one of four uplinks fails, the switch starts dividing by three instead, and the remainders change for most hash values, not just those that used the failed link:
 
-```formula
-f_keep = 1 / N
-f_keep = 1 / 4 = 25%
-where
-f_keep: the fraction of all flows whose next hop stays the same when the path count drops from N to N − 1
-N: the number of paths before the failure, 4 here
-In words: out of every N × (N − 1) consecutive hash values, only the first N − 1 give the same remainder both ways, so just 1 in N flows stays put.
+```
+h     0 1 2 3 4 5 6 7 8 9 10 11
+mod4  0 1 2 3 0 1 2 3 0 1 2  3
+mod3  0 1 2 0 1 2 0 1 2 0 1  2
+same  y y y . . . . . . . .  .
 ```
 
-For uniform hashes and a stable ordering of the three surviving next hops, about a quarter of all flows keep their old physical path: most flows on *healthy* links move too, potentially causing reordering or disrupting unsynchronised per-flow state, such as a fleet of stateful load balancers behind ECMP. **Resilient hashing** aims to minimise remapping and can preserve healthy assignments on a simple removal. Bucket policies, rebalancing and implementation details determine whether additional flows move.
+The pattern repeats every 12 values. Only 3 of every 12 hash values (a quarter of all flows) keep the same uplink; the flows that were on uplink 3 must move, and so must about two-thirds of the flows on the *healthy* links. In general, with uniform hashes and the last of N paths removed, only about 1 flow in N keeps its path, so the more paths there were, the larger the share of healthy flows that move.
+
+Moved flows can see reordering, and anything holding per-flow state behind ECMP, such as a fleet of stateful load balancers, may receive flows it has never seen. **Resilient hashing** aims to minimise remapping: on a simple removal it can move only the failed path's flows and leave healthy assignments alone. How a switch assigns hash buckets and rebalances them determines whether additional flows move.
 
 **Polarisation.** Correlated hash choices across tiers can underuse some paths, especially with matching path counts and mappings. Different hash seeds or inputs can reduce this polarisation.
 

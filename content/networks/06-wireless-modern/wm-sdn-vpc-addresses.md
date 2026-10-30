@@ -7,7 +7,7 @@ summary: An ordinary AWS IPv4 subnet reserves its first four addresses and last 
 sourceLesson: wm-sdn
 ---
 
-This unit focuses on AWS VPC subnets, addressing and routes. It builds on the earlier units in this module; the examples below state their additional assumptions.
+A cloud VPC is the software-defined network a tenant actually configures. Its address plan is hard to change later, and AWS's subnet rules differ slightly from textbook subnetting, so the planning decisions made on day one matter.
 
 ## A cloud VPC, piece by piece
 
@@ -36,23 +36,12 @@ for az, net in zip("abc", subnets):
 # c 10.20.32.0/20 4091
 ```
 
-The arithmetic behind that output counts the bits left after the IPv4 prefix. This card defines the prefix-length symbol locally:
+The arithmetic behind that output: each extra prefix bit halves a block, so a /20 has 4,096 addresses, and AWS keeps 5 of them in every ordinary subnet, leaving 4,091. A /16 holds sixteen /20s, so this plan leaves thirteen spare for private subnets and future growth.
 
-```formula
-A = 2^(32 − p)
-A_20 = 2^(32 − 20) = 2^12 = 4,096
-U_20 = A_20 − 5 = 4,091
-S = 2^(20 − 16) = 2^4 = 16
-where
-A: the number of addresses in an IPv4 block with prefix length p
-p: the prefix length, the number after the slash in CIDR notation, e.g. 20 in /20
-A_20: the number of addresses in one /20 subnet
-U_20: the usable addresses in a /20 after AWS reserves 5 in every subnet (the first four and the last)
-S: the number of /20 subnets that fit in one /16
-In words: each extra prefix bit halves a block, so a /20 has 4,096 addresses and a /16 holds 16 of them.
-```
+Two practical consequences:
 
-A `/16` holds sixteen `/20`s, so this plan leaves thirteen spare for private subnets and future growth.
+- **Small subnets lose proportionally more.** A /28 has 16 addresses but only 11 usable in AWS, so size subnets with the five reservations in mind.
+- **Plan for growth and connection.** Resizing or renumbering a live subnet is painful, and overlapping ranges block later VPC peering, so allocate generous, non-overlapping blocks centrally from the start.
 
 ## Key takeaways
 - An ordinary AWS IPv4 subnet reserves its first four addresses and last address; exceptions must be checked.

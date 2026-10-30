@@ -2,12 +2,12 @@
 id: wm-debug-timing-phases
 title: Separating DNS, TCP and TLS timing phases
 level: advanced
-minutes: 4
+minutes: 3
 summary: Subtract cumulative milestones only under a connection model that makes that interpretation valid.
 sourceLesson: wm-debugging
 ---
 
-This unit focuses on separating DNS, TCP and TLS timing phases. It builds on the earlier units in this module; the examples below state their additional assumptions.
+"The API is slow" usually means one phase of a request is slow: name lookup, connection setup, TLS, waiting for the server, or the download itself. Splitting a request into those phases is often the fastest way to find which part of the system to look at.
 
 ## curl timings: where the time goes
 
@@ -29,25 +29,7 @@ ttfb    0.910
 total   0.955
 ```
 
-Each value is measured from the start, so subtract the previous milestone to get each phase:
-
-```formula
-T_phase = t_end − t_start
-T_tcp = t_connect − t_dns
-T_tcp = 0.088 s − 0.004 s = 0.084 s = 84 ms
-where
-T_phase: the duration of one phase, in seconds (s)
-t_end: the cumulative time at which the phase finished
-t_start: the cumulative time at which the phase began (the previous milestone)
-T_tcp: the duration of the TCP handshake
-t_connect: curl's time_connect value, 0.088 s here
-t_dns: curl's time_namelookup value, 0.004 s here
-s: second
-ms: millisecond, one thousandth of a second
-In words: every curl timer runs from the very start, so each phase is the difference between two neighbouring timers.
-```
-
-Applying the same subtraction to every milestone:
+Each value is measured from the very start of the command, like a stopwatch that is never reset, so each phase is the difference between neighbouring milestones:
 
 | Phase | Calculation | Time |
 |---|---|---|
@@ -57,45 +39,14 @@ Applying the same subtraction to every milestone:
 | Post-TLS to first byte | 0.910 − 0.262 | 648 ms |
 | Download | 0.955 − 0.910 | 45 ms |
 
-Under an ideal handshake model, 84 ms approximates RTT. Actual connect time can include scheduling, retries and address selection. The 174 ms TLS phase does not by itself identify the TLS version. The 648 ms interval can include request transmission, network/queueing and server work; subtracting one guessed RTT does not isolate backend processing. Confirm with protocol negotiation details, captures and server traces.
+Reading the result:
 
-The same breakdown from inside an application:
+- **The TCP handshake approximates one RTT.** Under an ideal handshake model, 84 ms is a good RTT estimate; actual connect time can include scheduling, retries and address selection.
+- **TLS takes about two RTTs here.** That is consistent with several handshake patterns; the duration alone does not identify the TLS version.
+- **The biggest phase is after TLS.** The 648 ms until the first byte includes sending the request, network and queueing delay, and server work. Subtracting one guessed RTT does not isolate backend processing, but it says where to look next: server-side timing and traces.
+- **The download is quick.** The response is small or the path is fast; throughput is not the problem in this sample.
 
-```python
-import socket, ssl, time
-
-def phases(host, port=443, timeout=5):
-    # First address only; no fallback.
-    ctx = ssl.create_default_context()
-    # Convert phase differences to
-    # milliseconds.
-    ms = lambda a, b: round((b-a) * 1000)
-    t0 = time.perf_counter()
-    # Resolve before opening the chosen
-    # family.
-    info = socket.getaddrinfo(
-        host, port, type=socket.SOCK_STREAM)
-    family, kind, proto, _, addr = info[0]
-    t1 = time.perf_counter()
-    with socket.socket(family, kind,
-                       proto) as sock:
-        sock.settimeout(timeout)
-        # This milestone ends the TCP
-        # connect.
-        sock.connect(addr)
-        t2 = time.perf_counter()
-        # Default context verifies TLS
-        # identity.
-        with ctx.wrap_socket(
-                sock, server_hostname=host):
-            t3 = time.perf_counter()
-    return {"dns": ms(t0, t1),
-            "tcp": ms(t1, t2),
-            "tls": ms(t2, t3)}
-
-```
-
-The function includes address resolution once, preserves IPv6 socket-address fields, verifies TLS using the default trust configuration and closes owned sockets. Its timeout applies to socket operations, not necessarily DNS or the whole procedure. It does not send HTTP, implement Happy Eyeballs or measure server response time.
+The same milestones can be timed inside an application by recording a clock around name resolution, the TCP connect and the TLS handshake. Confirm conclusions with protocol negotiation details, captures and server traces.
 
 ## Key takeaways
 - Subtract cumulative milestones only under a connection model that makes that interpretation valid.

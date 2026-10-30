@@ -50,6 +50,13 @@ In 1953 Charles Clos showed how to build large non-blocking telephone switches o
 - A path between these different leaves traverses three switches: source leaf → spine → destination leaf. Service chains, other fabric tiers and same-leaf traffic differ.
 - Between two leaves there are as many equal paths as there are spines. With 4 spines, 4 paths.
 
+> [!analogy] Real-world analogy: Regional airports and hub airports
+> Imagine an airline where every regional airport has a direct flight to every hub, hubs never fly to each other, and regional airports never fly to each other. Any trip between two regional airports is exactly two flights: out to a hub and back to the destination. Whichever hub you pick, the trip is the same length, and if one hub closes you simply route through another.
+>
+> **How it maps:** Regional airports are leaf switches, hubs are spine switches, and every regional-to-hub route is a leaf-to-spine link. The choice of hub is the choice among equal-cost paths, and a closed hub is a failed spine that removes some capacity but strands no airport.
+>
+> **Where it stops:** Packets are not booked in advance; each switch forwards using hashed path choices and routing tables, and many flows can crowd the same hub at once. Adding a regional airport needs a free gate at every hub, just as a new leaf needs a free port on every spine.
+
 Such fabrics can use fixed-port switches, which need not be identical. Adding spines also needs ports and links on every participating leaf. Adding leaves consumes spine ports; cost and topology limits remain.
 
 Links are normally **layer 3** (routed), not layer 2. Each switch runs a routing protocol; RFC 7938 describes the common choice of eBGP, with an ASN allocation scheme suited to the topology and loop-prevention policy. L3 ECMP can use redundant links without STP blocking, but routing convergence, route limits and failure containment require appropriate design. Where tenants need layer 2 segments, an overlay such as VXLAN carries them over the routed fabric (covered in the SDN lesson).

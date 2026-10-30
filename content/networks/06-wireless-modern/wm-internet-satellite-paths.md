@@ -2,59 +2,36 @@
 id: wm-internet-satellite-paths
 title: GEO, LEO and satellite path geometry
 level: advanced
-minutes: 5
+minutes: 4
 summary: A four-leg vertical bent-pipe model isolates altitude propagation from a complete service path.
 sourceLesson: wm-internet-structure
 ---
 
-This unit focuses on GEO, LEO and satellite path geometry. It builds on the earlier units in this module; the examples below state their additional assumptions.
+Satellite Internet trades cables for altitude. How high the satellite orbits decides the minimum latency, which is why geostationary links feel sluggish for interactive use while low-Earth-orbit constellations can compete with terrestrial paths.
 
 ## A leg-by-leg propagation model
 
-The same formula, with the number of legs made explicit, covers satellites, where the signal goes up and down in vacuum at approximately vacuum light speed:
+A satellite link in its simplest "bent pipe" form relays signals: your request goes up to the satellite and down to a ground station, and the reply goes up and down again. That is four legs through space, at almost the vacuum speed of light, so the minimum propagation RTT depends mainly on how high the satellite is.
 
-```formula
+```formula reference
 RTT = (md) / v
-RTT_fibre = (2 × 5,570 km) / 204,000 km/s
-RTT_fibre ≈ 0.0546 s = 54.6 ms
-RTT_GEO = (4 × 35,786 km) / 299,792 km/s
-RTT_GEO ≈ 0.477 s = 477 ms
-RTT_LEO = (4 × 550 km) / 299,792 km/s
-RTT_LEO ≈ 0.0073 s = 7.3 ms
 where
-RTT: the propagation round-trip time, in seconds (s) or milliseconds (ms)
+RTT: the propagation round-trip time, in seconds (s)
 m: the number of one-way legs the signal travels: 2 for a direct path (there and back), 4 for a satellite bent pipe (up, down, up, down)
 d: the length of each leg, in kilometres (km)
-v: the propagation speed: about 204,000 km/s in fibre, 299,792 km/s in vacuum
-RTT_fibre: a hypothetical 5,570 km fibre route; its propagation RTT is in seconds or milliseconds
-RTT_GEO: a geostationary satellite overhead, 35,786 km up
-RTT_LEO: a low-Earth-orbit satellite overhead, 550 km up
-km/s: kilometres per second
-s: second
-ms: millisecond
-≈: approximately equal to
-In words: the supplied four-leg GEO model contributes about 477 milliseconds of propagation, while the supplied overhead 550-kilometre LEO model contributes about 7.3 milliseconds; neither is a full service RTT.
+v: the propagation speed: about 204,000 km/s in fibre, about 299,792 km/s in vacuum
+In words: the round trip is the number of legs times the length of each, divided by the signal speed; a satellite path has twice as many legs as a direct cable, so altitude counts four times.
 ```
 
-The same model in Python:
+Taking each leg as the satellite's altitude, directly overhead:
 
-```python
-C = 299_792            # km/s in vacuum
-FIBRE = C / 1.47       # ~204,000 km/s
+| Path | Legs | Propagation RTT |
+|---|---|---|
+| GEO, 35,786 km up | 4 | about 477 ms |
+| LEO, 550 km up | 4 | about 7.3 ms |
+| 5,570 km of fibre | 2 | about 55 ms |
 
-def rtt_ms(km, speed, legs=2):
-    if km < 0 or speed <= 0 or legs < 1:
-        raise ValueError("bad model input")
-    return legs * km / speed * 1000
-
-# Hypothetical 5570 km fibre each way
-print(round(rtt_ms(5570, FIBRE), 1))  # 54.6
-# GEO: four ideal altitude legs, in ms.
-print(round(rtt_ms(35786, C, 4)))     # 477
-# LEO: four 550 km legs; no processing.
-print(round(rtt_ms(550, C, 4), 1))    # 7.3
-```
-
+These are idealised minimums for propagation alone, not service RTTs.
 
 ## GEO satellites
 

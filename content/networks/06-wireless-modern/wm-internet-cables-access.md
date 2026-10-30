@@ -7,7 +7,7 @@ summary: Independent physical routes and surviving capacity matter more than mer
 sourceLesson: wm-internet-structure
 ---
 
-This unit focuses on submarine resilience and shared access networks. It builds on the earlier units in this module; the examples below state their additional assumptions.
+Intercontinental Internet traffic depends heavily on fibre-optic cables on the seabed, and most homes reach their ISP over an access network shared with neighbours. Both are physical, finite and sometimes fragile, which shapes outages and evening slow-downs.
 
 ## Submarine cables
 

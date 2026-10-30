@@ -13,7 +13,7 @@ The previous unit’s BFS returns a distance dictionary and parent pointers. In 
 
 The key fact is an invariant (a rule that stays true at every step) about what the queue holds:
 
-```formula
+```formula reference
 d = dist(v_front)
 d ≤ dist(v_back) ≤ d + 1
 where
@@ -23,12 +23,12 @@ v_front: the vertex at the front of the queue (next to be dequeued)
 v_back: the vertex at the back of the queue (most recently enqueued)
 d: the distance of the front vertex, which is the layer BFS is currently finishing
 ≤: is at most
-In words: the queue only ever holds vertices from two neighbouring layers, distance d at the front and d + 1 behind them, in that order.
+In words: the queue only ever holds vertices from two neighbouring layers: those at the distance BFS is currently finishing at the front, and those one edge further away behind them.
 ```
 
-In the trace above, after dequeuing 1 the queue is [2, 3, 4] with distances 1, 2, 2: never more than one apart. So BFS finishes every vertex at distance d before touching any at distance d + 1. The first time BFS reaches a vertex, it has reached it by the fewest possible edges. The invariant only holds because every edge counts as one step; with different edge costs it breaks.
+In the previous unit's trace, after dequeuing 1 the queue is [2, 3, 4] with distances 1, 2, 2: never more than one apart. So BFS finishes every vertex at one distance before touching any vertex one edge further away. The first time BFS reaches a vertex, it has reached it by the fewest possible edges. The invariant only holds because every edge counts as one step; with different edge costs it breaks.
 
-BFS always minimises edge count. This also minimises total cost when all edges have the same non-negative cost. For unequal non-negative weights use Dijkstra; negative weights require additional care (lesson 4).
+BFS always minimises edge count. This also minimises total cost when all edges have the same non-negative cost. For unequal non-negative weights use Dijkstra; negative weights need Bellman–Ford or another method covered in the shortest-path units.
 
 To recover the actual path, follow `parent` pointers back from the target and reverse:
 
@@ -45,6 +45,13 @@ def path_to(parent, t):
 
 # path_to(parent, 5) -> [0, 1, 4, 5]
 ```
+
+> [!analogy] Real-world analogy: asking "who told you?"
+> News spreads through an office. If everyone remembers who first told them, you can trace any piece of gossip back to its source: ask the last person who told them, then ask that person, and so on until you reach whoever started it.
+>
+> **How it maps:** "who first told me" is `parent[v]`, the person who started it is the source, and following the chain backwards then reversing it is `path_to`. Because BFS spreads one layer at a time, the first teller is always one step closer to the source, so the chain is a shortest one.
+>
+> **Where it stops:** office gossip does not spread in tidy layers; someone may hear it first through a long chain while a shorter one exists. BFS's FIFO queue is what guarantees that the first discovery comes by the fewest edges.
 
 ## Depth-first search
 
@@ -99,9 +106,9 @@ This one visits 0, 2, 4, 5, 1, 3. It is still a valid DFS, but the order differs
 
 ## Key takeaways
 - BFS parent pointers recover a shortest unweighted path.
-- A stack changes the exploration order; neighbour order affects the trace.
+- Swapping the queue for a stack reorders the exploration; neighbour order affects the trace.
 
 ## Further reading
-- [Primary reference for this unit](https://algs4.cs.princeton.edu/41graph/)
+- [Sedgewick and Wayne, Algorithms 4th ed.: 4.1 Undirected graphs](https://algs4.cs.princeton.edu/41graph/)
 - [Graph traversal — Wikipedia](https://en.wikipedia.org/wiki/Graph_traversal)
 - [Depth-first search — cp-algorithms](https://cp-algorithms.com/graph/depth-first-search.html)

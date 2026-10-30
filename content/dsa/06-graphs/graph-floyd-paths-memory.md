@@ -56,41 +56,24 @@ def path(nxt, i, j):
 # path(nxt, 1, 0) -> [1, 2, 3, 0]
 ```
 
+> [!analogy] Real-world analogy: signposts at every junction
+> Imagine every junction in a town had a signpost listing every destination with an arrow for the road to take next. To get anywhere you never need the whole route: you follow the arrow at each junction you reach.
+>
+> **How it maps:** the signpost at junction i, arrow for destination j, is `nxt[i][j]`. Following arrows junction by junction is the loop in `path`, which keeps reading `nxt[current][j]` until it arrives.
+>
+> **Where it stops:** real signposts may be missing or inconsistent. The table only works if every arrow agrees with the same set of shortest routes, which holds after Floyd–Warshall when no negative cycle affects the pair; otherwise the arrows can lead round in circles, which is what the guard in `path` catches.
+
 This is a simplified shortest-path next-hop table. Real forwarding tables can aggregate destinations into network prefixes, use policy and offer multiple next hops.
 
 ### Why people like it
 
-Floyd–Warshall is four lines of logic, handles negative weights, has no min-heap, and array-based implementations can exploit contiguous rows and vectorised inner loops. The Python list implementation here does not itself guarantee those optimisations. For n up to a few hundred it is often the simplest correct choice. The three nested loops make the cost easy to count:
-
-```formula
-I = n^3
-I = 500^3 = 1.25 × 10^8
-where
-n: the number of vertices; 500 in the example
-I: the full triple-loop iteration count before the shown code’s unreachable-row skipping (one per choice of k, i and j)
-In words: three nested loops over n vertices run n × n × n times; doubling n multiplies the work by 8.
-```
-
-> [!note] Content gap
-> CPython, C and NumPy runtime estimates are omitted because the project has no reproducible benchmark with specified hardware, data and implementation.
+Floyd–Warshall is four lines of logic, handles negative weights, has no min-heap, and array-based implementations can exploit contiguous rows and vectorised inner loops. The Python list implementation here does not itself guarantee those optimisations. For n up to a few hundred it is often the simplest correct choice. The three nested loops make the cost easy to predict: n × n × n inner steps, 125 million for 500 vertices, and doubling n multiplies the work by 8.
 
 ## Pitfalls
 
 - **Wrong loop order** in Floyd–Warshall: k must be outermost.
-- **INF + INF overflow** in C, Java or Go when INF is `INT_MAX`. Skip addition if either operand is the infinity sentinel, and establish bounds that keep every finite sum representable. A large infinity sentinel alone does not prevent overflow or spurious finite paths from adding a negative value to infinity.
-- **Memory.** The table grows with the square of the vertex count:
-
-```formula
-M = n^2 b
-M = (10^5)^2 × 4 B = 4 × 10^10 B = 40 GB
-where
-M: the memory for the full distance table
-n: the number of vertices; 100,000
-b: bytes per entry; 4 for a 32-bit integer
-B: byte, 8 bits
-GB: gigabyte, 10^9 bytes
-In words: 10¹⁰ entries at 4 bytes each is 40 GB, so APSP tables are for small n.
-```
+- **INF + INF overflow** in C, Java or Go when INF is `INT_MAX`. Skip addition if either operand is the infinity sentinel, and establish bounds that keep every finite total representable. A large infinity sentinel alone does not prevent overflow or spurious finite paths from adding a negative value to infinity.
+- **Memory.** The table grows with the square of the vertex count. For 100,000 vertices it has 10¹⁰ entries: about 40 GB (decimal gigabytes) at 4 bytes each, before any next-hop table. Full APSP tables are for small graphs.
 
 - **Negative cycles** make some distances undefined (−∞). Check the diagonal and propagate: any pair whose path can touch a negative cycle is −∞.
 
@@ -100,6 +83,6 @@ In words: 10¹⁰ entries at 4 bytes each is 40 GB, so APSP tables are for small
 - Infinity sentinel addition and negative cycles need handling beyond the basic recurrence.
 
 ## Further reading
-- [Primary reference for this unit](https://algs4.cs.princeton.edu/44sp/)
+- [Sedgewick and Wayne, Algorithms 4th ed.: 4.4 Shortest paths](https://algs4.cs.princeton.edu/44sp/)
 - [Floyd–Warshall — cp-algorithms](https://cp-algorithms.com/graph/all-pair-shortest-path-floyd-warshall.html)
 - [Floyd–Warshall algorithm — Wikipedia](https://en.wikipedia.org/wiki/Floyd%E2%80%93Warshall_algorithm)

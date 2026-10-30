@@ -18,13 +18,20 @@ In an undirected network:
 
 These are single points of failure: the one fibre link between two regions, the one router everything passes through.
 
+> [!analogy] Real-world analogy: a housing estate with one way in
+> A housing estate joined to the town by a single road is cut off if that road is closed. A roundabout that every route between two districts must pass through cuts them apart if it is shut, even though no single road is the problem.
+>
+> **How it maps:** the lone access road is a bridge, an edge on no cycle. The unavoidable roundabout is an articulation point, a vertex whose removal disconnects the graph. Roads around a ring, with a detour available, are neither.
+>
+> **Where it stops:** a closed road in real life slows traffic down without always cutting anyone off completely, because people walk or take other modes. In the graph, removal is all or nothing, and the question is purely whether any path survives.
+
 ### Low-link values
 
 Run DFS and record `tin[u]`, the time u was discovered. Define `low[u]` as the smallest `tin` reachable from u's subtree using tree edges downwards plus **at most one** back edge.
 
 In symbols:
 
-```formula
+```formula reference
 low(u) = min(tin(u), tin(b), low(v))
 low(v) > tin(u)
 low(v) ≥ tin(u)
@@ -36,7 +43,7 @@ low(v): the earliest discovery time v's subtree can reach with at most one back 
 min(…): the smallest of all these values, over every child v and every back edge
 >: is greater than
 ≥: is at least
-In words: the first line defines low. If the second line holds, v's subtree cannot climb back to u or above, so the edge u–v is its only link (a bridge). If the third line holds, the subtree cannot climb above u without passing through u, so u is a single point of failure (unless u is the root).
+In words: a vertex's low value is the earliest discovery time its DFS subtree can reach with at most one back edge. If a child's subtree cannot climb back to its parent or above, the edge to that child is a bridge; if it cannot climb above the parent, the parent is a single point of failure (unless it is the root).
 ```
 
 For the example below, with adjacency lists in increasing order, DFS from 0 visits 0, 1, 2, 3, 4, 5, 6 in that order. Vertex 3 has discovery and low-link values of three, while vertex 1 has discovery value one. The strict bridge test therefore identifies 1–3.
@@ -114,7 +121,7 @@ One DFS: **O(n + m)** for n vertices and m edges. As with undirected cycle detec
 - Parallel-edge inputs need parent edge identities.
 
 ## Further reading
-- [Primary reference for this unit](https://algs4.cs.princeton.edu/41graph/)
+- [Sedgewick and Wayne, Algorithms 4th ed.: 4.1 Undirected graphs](https://algs4.cs.princeton.edu/41graph/)
 - [Bridge (graph theory) — Wikipedia](https://en.wikipedia.org/wiki/Bridge_(graph_theory))
 - [Finding articulation points — cp-algorithms](https://cp-algorithms.com/graph/cutpoints.html)
 - [Finding bridges — cp-algorithms](https://cp-algorithms.com/graph/bridge-searching.html)

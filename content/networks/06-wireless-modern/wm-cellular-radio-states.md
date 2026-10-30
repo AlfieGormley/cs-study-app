@@ -7,7 +7,7 @@ summary: Idle and connected are protocol states rather than literal fixed power 
 sourceLesson: wm-cellular
 ---
 
-This unit focuses on radio connection states and promotion costs. It builds on the earlier units in this module; the examples below state their additional assumptions.
+A phone's cellular radio is not simply on or off. It moves between protocol states that trade responsiveness against battery life, and those transitions explain why the first request after a quiet spell is often slow and why chatty background traffic drains batteries.
 
 ## Radio power states and application traffic
 
@@ -32,6 +32,13 @@ Two costs follow:
 
 1. **Promotion latency.** When ordinary user-plane transfer requires an idle UE to establish an RRC connection, random access, RRC setup and associated signalling add delay. A quiet period alone does not establish that this transition is required. The delay depends on radio state, procedures, release, coverage and load; no fixed millisecond value is guaranteed.
 2. **Tail energy.** Activity can leave the radio in a higher-energy state after payload transfer ends. Timers, DRX and other state transitions determine the cost. Bursts can overlap or share radio activity; connected time is not identical to measured energy.
+
+> [!analogy] Real-world analogy: Calling a taxi and keeping it waiting
+> If no taxi is waiting, you phone for one and wait for it to arrive before your trip can start. After dropping you off, the driver may wait outside with the meter running for a while in case you need another trip, then leaves.
+>
+> **How it maps:** Phoning and waiting is promotion from idle to connected (random access and RRC setup), which delays the first request. The taxi waiting with the meter running is the tail: the radio stays in a higher-energy state after the transfer ends, costing battery even though nothing is sent. A second trip during the wait starts immediately, as later requests do while the radio is still connected.
+>
+> **Where it stops:** The network, not the user, sets how long the radio "waits", and discontinuous reception lets a connected radio sleep in short bursts, so the meter does not run at a constant rate. An idle phone still listens for paging; it is not switched off like a taxi that has driven away.
 
 ## Reading an application trace
 

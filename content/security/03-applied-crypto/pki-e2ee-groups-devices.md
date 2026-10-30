@@ -7,7 +7,7 @@ sourceLesson: pki-e2ee
 summary: Device membership and session fan-out need authentication as well as content encryption.
 ---
 
-End-to-end encryption keeps message-content keys at the communicating endpoints. Signal’s protocol family uses uploaded prekeys to start sessions and ratcheting keys to protect ongoing conversations.
+Pairwise ratchets work well between two phones. Real messaging has people with several devices and groups of hundreds or thousands, which changes both the cost and the security trade-offs.
 
 ## Groups and multiple devices
 
@@ -15,20 +15,9 @@ End-to-end encryption keeps message-content keys at the communicating endpoints.
 
 **Small groups**: pairwise sessions for every message would cost O(n) encryptions per message, where n is the number of group members (assuming one device each; multiple devices add further sessions). **Sender Keys** (used by WhatsApp and Signal groups) give each sender a chain key, distributed once over pairwise sessions; messages are encrypted once and fanned out by the server. It has forward secrecy, but weaker post-compromise security: healing requires distributing new sender keys.
 
-**Large groups**: **MLS** (Messaging Layer Security, RFC 9420, 2023) arranges members' keys in a tree (TreeKEM), so a balanced populated tree can refresh a path of O(log n) nodes. For a balanced tree:
+**Large groups**: **MLS** (Messaging Layer Security, RFC 9420, 2023) arranges members' keys in a tree (TreeKEM). When a member refreshes their key, they replace the secrets on the path from their leaf to the root and encrypt each new secret once to the neighbouring subtree, instead of once to every member. In a balanced, fully populated tree the path length grows with the logarithm of the group size: each doubling of the group adds only about one node to the path, so a 10,000-member group has a path of at most 14 nodes, against 9,999 messages for pairwise re-keying.
 
-```formula
-L = ⌈log_2(N)⌉
-L = ⌈log_2(10,000)⌉ = ⌈13.29⌉ = 14
-where
-L: the maximum root-to-leaf depth of this balanced binary tree; individual member paths can be shorter
-N: the number of members, one per leaf
-log_2: logarithm base 2: the power 2 must be raised to (log_2(1,024) = 10)
-⌈ ⌉: ceiling: round up to the next whole number
-In words: each doubling of the group adds only one level, so a 10,000-member balanced tree has a maximum path depth of 14; this path-depth comparison does not count all update ciphertexts or all membership-change work.
-```
-
-Actual update size/work also depends on blank nodes, resolution sizes and members joining or leaving; the tree-depth example is not an unconditional total-cost bound.
+Actual update size and work also depend on blank nodes, resolution sizes and members joining or leaving, so the tree-depth comparison is a best case rather than an unconditional bound on the total work.
 
 ## Key takeaways
 - Device membership and session fan-out need authentication as well as content encryption.
@@ -36,5 +25,5 @@ Actual update size/work also depends on blank nodes, resolution sizes and member
 - Balanced MLS tree paths are logarithmic; actual update work also depends on tree state and resolution sizes.
 
 ## Further reading
-- [X3DH specification — Signal](https://signal.org/docs/specifications/x3dh/)
-- [Double Ratchet specification — Signal](https://signal.org/docs/specifications/doubleratchet/)
+- [RFC 9420: The Messaging Layer Security (MLS) Protocol](https://www.rfc-editor.org/rfc/rfc9420)
+- [Sesame specification — Signal](https://signal.org/docs/specifications/sesame/)

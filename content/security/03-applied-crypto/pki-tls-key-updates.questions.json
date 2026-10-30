@@ -3,27 +3,27 @@
     "id": "pki-tls-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "TLS 1.3 guidance limits AES-GCM to about roughly 23.7 million full-size (16 KiB) records per key. A video service streams about 50 MB/s (decimal) over a long-lived connection. Roughly how often must its sending direction rekey, and how?",
+    "prompt": "RFC 9846 allows about 24 million full-size (16 KiB) records, roughly 390 GB, under one AES-GCM key. A replication link keeps one TLS 1.3 connection open for weeks and sends several hundred gigabytes a day, and its TLS library does not send KeyUpdate automatically. What is the concern, and what is the right fix?",
     "options": [
       {
-        "text": "Every roughly 23.7 million bytes (about 24 MB), by opening a new TCP connection",
-        "explanation": "The limit is in records, not bytes. roughly 23.7 million records of 16 KiB each is around 390 GB."
+        "text": "No concern: the 64-bit sequence number will not wrap for centuries",
+        "explanation": "Sequence-number wrap-around is not the binding constraint for AES-GCM. The usage limit is reached long before the counter would wrap."
       },
       {
-        "text": "Never; the 64-bit sequence number cannot wrap",
-        "explanation": "Sequence wrap is not the constraint: this AEAD's usage bound is reached substantially before the record counter wraps."
+        "text": "The sending direction exceeds the AES-GCM usage limit within a day or two; send KeyUpdate before the limit (or reconnect), which ratchets that direction's traffic secret with HKDF",
+        "explanation": "Correct. RFC 9846 requires closing the connection or updating keys before reaching the limit. KeyUpdate rekeys in-band and restarts the sequence number with the new key."
       },
       {
-        "text": "About every 2 hours, by sending KeyUpdate, which ratchets the traffic secret with HKDF",
-        "explanation": "Correct. The full-size record allowance corresponds to roughly 389 GB. At the stated decimal rate this takes about 2.2 hours; the worked calculation below shows the units. KeyUpdate rekeys in-band."
+        "text": "Switch to a 4096-bit RSA certificate so the session keys last longer",
+        "explanation": "The certificate key only signs the handshake. Record-key usage limits depend on the AEAD and the amount of data, not on the certificate."
       },
       {
-        "text": "Every 2 hours, by doing a full new handshake with a new certificate",
-        "explanation": "A new handshake would work but is unnecessary; KeyUpdate exists for exactly this."
+        "text": "Restart the sequence number at zero every day while keeping the same key",
+        "explanation": "That repeats nonces under one key, which is far worse than exceeding the usage margin. A counter may restart only with a new key."
       }
     ],
-    "answer": 2,
-    "workedExample": "First the byte limit, then the time to reach it:\n\n```formula\nD = R_max × S_rec\nD = 2^{24.5} × 16,384 B\nD ≈ 3.887 × 10^{11} B\nt = D / v\nt ≈ 3.887 × 10^{11} B / (5 × 10^7 B/s)\nt ≈ 7,775 s ≈ 2.16 h\nwhere\nD: the data one AES-GCM key may protect, in bytes (B)\nR_max: the RFC 8446 limit, 2^24.5 ≈ 23.7 million full-size records per key\nS_rec: the content of one full-size record, 16 KiB = 16,384 bytes\nt: the time until the sending direction must rekey, in seconds (s)\nv: the streaming rate, 50 MB/s = 5 × 10^7 bytes per second\n≈: approximately equal to\nB: bytes\nB/s: bytes per second\ns: seconds\nh: hours; 1 h = 3,600 s\nIn words: about 389 GB fits under one key, and at 50 MB/s that takes a little over two hours.\n```\n\nSend KeyUpdate before the usage bound; it advances this direction's traffic secret with the \"traffic upd\" label, derives a new key/IV and resets its sequence number. The other direction updates separately. Check the library's actual key-usage enforcement rather than assuming automatic rekeying.",
+    "answer": 1,
+    "workedExample": "1. The limit is about the **amount of data per key**: roughly 390 GB of full records for AES-GCM under RFC 9846's chosen safety margin.\n2. Several hundred gigabytes a day means one direction reaches that within a day or two, so a weeks-long connection overshoots many times.\n3. The sequence counter is not the issue: it is 64 bits and does not need to wrap for the limit to matter.\n4. RFC 9846 says implementations must either close the connection or perform a key update before reaching the limit.\n5. KeyUpdate derives the next application traffic secret with HKDF (label \"traffic upd\"), then a new key and IV, and restarts that direction's counter. The other direction updates independently, although a KeyUpdate can ask the peer to update its own sending keys too.\n6. If the library will not send KeyUpdate, reconnect periodically (a fresh handshake gives fresh keys) and track bytes sent per key. Never restart the counter under an unchanged key.",
     "link": {
       "title": "RFC 9846: TLS 1.3",
       "url": "https://www.rfc-editor.org/rfc/rfc9846"

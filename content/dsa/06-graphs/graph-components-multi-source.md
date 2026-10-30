@@ -26,7 +26,7 @@ def components(n, adj):
     return count
 ```
 
-Total work is still O(n + m), with n vertices and m edges: each vertex and edge is handled once across all traversals. (In a directed graph this gives "reachability trees", not strongly connected components; see lesson 3.)
+Total work is still O(n + m), with n vertices and m edges: each vertex and edge is handled once across all traversals. (In a directed graph this gives "reachability trees", not strongly connected components; those come in the strong-components unit.)
 
 ## Flood fill
 
@@ -40,28 +40,13 @@ grid      islands
 ....#     ....D
 ```
 
-That grid has 4 islands. The code is the components loop over cells, with a 4-direction neighbour function (lesson 1). Use an explicit stack or BFS: a recursive flood fill on a 1000 × 1000 image can recurse a million deep.
+That grid has 4 islands. The code is the components loop over cells, with a 4-direction neighbour function like the one in the implicit-grid unit. Use an explicit stack or BFS: a recursive flood fill on a 1000 × 1000 image can recurse a million deep.
 
 ## Multi-source BFS
 
 Sometimes you want each vertex's distance to the *nearest* of several sources: the nearest exit, the nearest hospital, how many minutes until every orange in a crate rots.
 
-Running BFS from every source separately multiplies the work by the number of sources:
-
-```formula
-W_separate = O(k(n + m))
-W_multi = O(n + m)
-where
-W_separate: the work of k separate BFS runs, one per source
-W_multi: the work of a single multi-source BFS
-k: the number of sources (exits, hospitals, rotten oranges)
-n: the number of vertices
-m: the number of edges
-O(…): Big O: grows at most this fast, up to a constant factor
-In words: k separate searches cost k times as much as one, but a single search started from all sources at once costs the same as one ordinary BFS.
-```
-
-With 500 hospitals on an unweighted road graph, that is the difference between 500 traversals and one; unequal travel times require a weighted shortest-path method. So **put all sources in the queue at distance 0** and run one BFS.
+Running BFS from every source separately multiplies the work by the number of sources. A single search started from all sources at once costs the same as one ordinary BFS, O(n + m). With 500 hospitals on an unweighted road graph, that is the difference between 500 traversals and one; unequal travel times require a weighted shortest-path method. So **put all sources in the queue at distance 0** and run one BFS.
 
 ```python
 def nearest(adj, sources):
@@ -90,6 +75,13 @@ E . . .           0 1 2 2
 
 It works because it is equivalent to adding a virtual super-source joined to every real source by an edge, then doing ordinary BFS and subtracting one from every real vertex’s distance. The layers still expand in order.
 
+> [!analogy] Real-world analogy: several stones dropped in a pond at once
+> Drop a handful of stones into a still pond at the same moment. Each spot on the surface is first disturbed by the ripple from whichever stone landed nearest.
+>
+> **How it maps:** the stones are the sources, all starting at distance 0; each ripple ring is one BFS layer; and the moment a spot is first disturbed is its recorded distance to the nearest source. One spreading wave answers the question for every spot, instead of one pond per stone.
+>
+> **Where it stops:** ripples pass through each other and keep spreading. BFS records only the first arrival at each vertex and never processes it again, and it measures distance in edges, not straight-line distance across the water.
+
 ## Pitfalls
 
 - **Forgetting the visited set** on a graph with cycles: the traversal loops forever.
@@ -102,6 +94,6 @@ It works because it is equivalent to adding a virtual super-source joined to eve
 - Seed every source at distance zero to find the nearest one in a single BFS.
 
 ## Further reading
-- [Primary reference for this unit](https://networkx.org/documentation/stable/reference/algorithms/component.html)
+- [NetworkX docs: components](https://networkx.org/documentation/stable/reference/algorithms/component.html)
 - [Breadth-first search — Wikipedia](https://en.wikipedia.org/wiki/Breadth-first_search)
 - [Component (graph theory) — Wikipedia](https://en.wikipedia.org/wiki/Component_(graph_theory))

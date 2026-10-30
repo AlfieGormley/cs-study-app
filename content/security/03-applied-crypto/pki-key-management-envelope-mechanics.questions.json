@@ -33,30 +33,30 @@
     "id": "pki-key-management-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Using the lesson's `seal()` with a 32-byte DEK, 12-byte nonces and 16-byte GCM tags, how many bytes are the wrapped DEK and the data blob for a 1,000-byte record?",
+    "prompt": "A team adopts envelope encryption: each record gets a fresh DEK, the record is encrypted locally with AES-GCM, and KMS wraps the DEK. Because KMS calls were slowing reads, a developer also stores each record's **plaintext** DEK in a column next to the ciphertext and the wrapped DEK, \"for speed\". What does this change?",
     "options": [
       {
-        "text": "Wrapped DEK 32, blob 1,000",
-        "explanation": "This ignores the nonce stored by seal() and its 16-byte tag. GCM requires a nonce input but does not inherently prepend it to ciphertext."
+        "text": "Nothing important: the data is still AES-256-GCM encrypted and the wrapped DEK is still protected by KMS",
+        "explanation": "The encryption is only as strong as the custody of the key that opens it. With the plaintext DEK beside the ciphertext, nobody needs KMS at all."
       },
       {
-        "text": "Wrapped DEK 60, blob 1,028",
-        "explanation": "Correct. Wrapped: 12 + 32 + 16 = 60. Blob: 12 + 1,000 + 16 = 1,028."
+        "text": "Anyone who can read the database (an injection bug, a stolen backup, an over-privileged analyst) can decrypt every record without KMS permission or audit; keep only the wrapped DEK and cache unwrapped DEKs briefly in memory instead",
+        "explanation": "Correct. Envelope encryption works because the DEK at rest is wrapped and only KMS policy can unwrap it. Storing the plaintext DEK removes that boundary and the KMS audit trail. A short-lived in-memory cache trades some exposure for speed without persisting keys."
       },
       {
-        "text": "Wrapped DEK 48, blob 1,016",
-        "explanation": "This counts the tag but forgets the 12-byte nonce prepended to each."
+        "text": "It breaks decryption, because GCM refuses to decrypt when the key is stored in the same row",
+        "explanation": "GCM has no idea where keys are stored. Decryption works perfectly; that is the problem."
       },
       {
-        "text": "Wrapped DEK 60, blob 1,060",
-        "explanation": "The data blob does not contain the DEK; only the nonce and tag are added to the record."
+        "text": "It only matters if the KMS key is also leaked",
+        "explanation": "The KMS key is no longer needed to read the data: the stored plaintext DEK opens each record directly."
       }
     ],
     "answer": 1,
-    "workedExample": "AES-GCM ciphertext is as long as the plaintext, plus a 16-byte tag, and `seal()` also prepends the 12-byte nonce:\n\n```formula\nL_out = L_nonce + L_in + L_tag\nL_wrap = 12 + (32 + 16) = 60 B\nL_blob = 12 + (1000 + 16) = 1028 B\nwhere\nL_out: the length of one value stored by seal(), in bytes (B)\nL_nonce: the 12-byte nonce stored in front\nL_in: the plaintext length: 32 B for the DEK, 1,000 B for the record\nL_tag: the 16-byte GCM authentication tag\nL_wrap: the wrapped DEK: nonce n2 plus the DEK encrypted under the KEK\nL_blob: the data blob: nonce n1 plus the record encrypted under the DEK\nB: bytes\nIn words: each sealed value is its plaintext plus 28 bytes, so the wrapped DEK is 60 bytes and the 1,000-byte record becomes 1,028.\n```\n\nOverhead per record: 28 bytes, plus 60 for the wrapped DEK if each record has its own key. (A real AWS KMS wrapped key is larger, because it includes key metadata.)",
+    "workedExample": "1. Envelope encryption has two layers: the DEK encrypts the data, and the KEK inside KMS wraps the DEK. At rest you store the ciphertext and the **wrapped** DEK.\n2. To read, the application must ask KMS to unwrap the DEK, and KMS checks policy (and can log the call) each time.\n3. Storing the plaintext DEK beside the ciphertext puts the key under the doormat: whoever reads the row or a backup can decrypt it immediately, with no KMS permission and no unwrap event in the audit log.\n4. The per-record DEK still limits blast radius only if the DEKs themselves stay protected.\n5. Better ways to cut KMS calls: cache unwrapped DEKs in process memory for a short, bounded time (accepting that a memory compromise exposes those cached keys), or use a vetted data-key caching component, and never persist plaintext DEKs.",
     "link": {
-      "title": "NIST SP 800-38D: GCM and GMAC",
-      "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
+      "title": "AWS KMS cryptography essentials — AWS docs",
+      "url": "https://docs.aws.amazon.com/kms/latest/developerguide/kms-cryptography.html"
     }
   },
   {

@@ -7,7 +7,7 @@ sourceLesson: pki-mistakes-pq
 summary: Use a CSPRNG for secret material instead of Python’s simulation-oriented random module.
 ---
 
-Cryptographic security depends on the complete construction and its implementation, including key generation, message authentication and correct nonce handling.
+Every key, nonce and token is only as unpredictable as the generator that made it. Weak randomness has broken real systems without any weakness in the cipher.
 
 ## Mistake 3: weak randomness
 
@@ -19,7 +19,7 @@ Secret keys and unpredictable tokens need a **cryptographically secure** RNG. No
 
 Why does a shared prime matter so much? Factoring one 2,048-bit modulus is infeasible, but finding a common factor of two is fast, using Euclid's algorithm:
 
-```formula
+```formula reference
 n_1 = p × q_1
 n_2 = p × q_2
 gcd(n_1, n_2) = p   when q_1 ≠ q_2
@@ -41,5 +41,5 @@ With toy numbers, 3233 = 61 × 53 and 3599 = 61 × 59, so the GCD of 3233 and 35
 - A GCD of suitable distinct public moduli can reveal a shared prime without general-purpose factoring.
 
 ## Further reading
-- [Cryptographic storage guidance — OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html)
-- [NIST post-quantum project](https://csrc.nist.gov/projects/post-quantum-cryptography)
+- [secrets — Python docs](https://docs.python.org/3/library/secrets.html)
+- [Mining your Ps and Qs: weak keys in network devices](https://factorable.net/)

@@ -32,18 +32,7 @@ def has_cycle_undirected(n, adj):
     return False
 ```
 
-Two shortcuts. First, a connected undirected graph with no cycle is a tree, and a tree's edge count is fixed by its vertex count:
-
-```formula
-m = n − 1
-m = 10 − 1 = 9
-where
-n: the number of vertices in a connected undirected graph; 10 in the example
-m: the number of edges
-In words: a connected graph is acyclic exactly when it has one edge fewer than it has vertices; any extra edge must close a cycle.
-```
-
-So a connected graph with 10 vertices and 10 edges must contain a cycle. The test needs the graph to be connected: a triangle plus one separate, isolated vertex has 4 vertices and 3 edges, one fewer than the vertex count, yet it contains a cycle. Second, Union-Find (lesson 6) detects a cycle the moment an edge joins two vertices already in the same set. The code is presented for simple undirected graphs. In a recursive multigraph DFS, distinguish the particular parent edge by *edge id*: ignoring every edge to the parent can hide a genuine two-edge cycle.
+Two shortcuts. First, a connected undirected graph with no cycle is a tree, and a tree always has one edge fewer than it has vertices. So a connected graph is acyclic exactly when its edge count is one less than its vertex count; any extra edge must close a cycle. A connected graph with 10 vertices and 10 edges must contain a cycle. The test needs the graph to be connected: a triangle plus one separate, isolated vertex has 4 vertices and 3 edges, one fewer than the vertex count, yet it contains a cycle. Second, Union-Find (covered with minimum spanning trees) detects a cycle the moment an edge joins two vertices already in the same set. The code is presented for simple undirected graphs. In a recursive multigraph DFS, distinguish the particular parent edge by *edge id*: ignoring every edge to the parent can hide a genuine two-edge cycle.
 
 ## Pitfalls
 
@@ -57,5 +46,5 @@ So a connected graph with 10 vertices and 10 edges must contain a cycle. The tes
 - The edge-count tree test requires connected input.
 
 ## Further reading
-- [Primary reference for this unit](https://networkx.org/documentation/stable/reference/algorithms/cycles.html)
+- [NetworkX docs: cycles](https://networkx.org/documentation/stable/reference/algorithms/cycles.html)
 - [Cycle (graph theory) — Wikipedia](https://en.wikipedia.org/wiki/Cycle_(graph_theory))

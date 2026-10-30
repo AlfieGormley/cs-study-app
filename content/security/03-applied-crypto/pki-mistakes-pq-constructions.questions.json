@@ -3,7 +3,7 @@
     "id": "pki-mistakes-pq-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "An API authenticates each request with a tag that is a plain hash of the secret key followed by the request parameters:\n\n```formula\nt = SHA256(K ‖ m)\nwhere\nt: the tag sent with the request\nSHA256: the SHA-256 hash function\nK: the API's secret key\nm: the request parameters, as a string\n‖: concatenation: the key's bytes followed by the parameters' bytes\nIn words: the tag is the SHA-256 hash of the key and the parameters glued together.\n```\n\nAn attacker has one valid request with parameters `user=alice&amount=10` and its tag, but not the key. What can they do?",
+    "prompt": "An API authenticates each request with a tag that is simply the SHA-256 hash of the secret key followed by the request parameters (a secret-prefix hash, not HMAC). An attacker has one valid request with parameters `user=alice&amount=10` and its tag, but not the key. What can they do?",
     "options": [
       {
         "text": "Nothing; SHA-256 is preimage-resistant",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Merkle–Damgård hashes (MD5, SHA-1, SHA-256) output their full internal state.\n2. So the tag is SHA-256's internal state after processing the key, the parameters and SHA-256's own padding.\n3. Load that state and keep hashing extra data. The result equals the hash of key, parameters, padding and extra data (below).\n4. The attacker only needs to guess the key's length to construct the padding.\n5. The server parses the params; many parsers take the last `amount=`, so the attacker's value wins.\n6. Fix: HMAC-SHA256, which is immune by design. (SHA-3 and BLAKE2/3 are also not vulnerable, but use HMAC or another real message authentication code anyway.)\n\n```formula\nt = SHA256(K ‖ m)\nSHA256(K ‖ m ‖ P_m ‖ x) = SHA256_t(x)\nwhere\nt: the valid tag the attacker has\nSHA256: the SHA-256 hash function\nK: the secret key, unknown to the attacker\nm: the original parameters, \"user=alice&amount=10\"\nP_m: the padding SHA-256 adds after K ‖ m (a 1 bit, zeros and the length), computable once the key length is guessed\nx: the attacker's extra data, \"&amount=1000000\"\nSHA256_t: SHA-256 restarted from internal state t and run over x\n‖: concatenation\nIn words: resuming the hash from the published tag produces the correct tag for the longer message, without ever knowing K.\n```",
+    "workedExample": "1. Merkle–Damgård hashes (MD5, SHA-1, SHA-256) output their full internal state.\n2. So the tag is SHA-256's internal state after processing the key, the parameters and SHA-256's own padding.\n3. Load that state and keep hashing extra data such as `&amount=1000000`. The result equals the hash of key, parameters, SHA-256's padding and the extra data, which is exactly the tag the server will compute for the longer request.\n4. The attacker only needs to guess the key's length to construct the padding.\n5. The server parses the params; many parsers take the last `amount=`, so the attacker's value wins.\n6. Fix: HMAC-SHA256, which is immune by design. (SHA-3 and BLAKE2/3 are also not vulnerable, but use HMAC or another real message authentication code anyway.)",
     "link": {
       "title": "Length extension attack — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Length_extension_attack"

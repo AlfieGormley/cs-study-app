@@ -22,39 +22,22 @@ In the table, n is the number of vertices, m the number of edges and log the bas
 | n × BFS (unweighted) | O(n (n + m)) |
 | Johnson's, binary min-heaps | O(n(n + m) log(n + 1)) |
 
-On a **sparse** graph the edge count is a small multiple of the vertex count, and n Dijkstras win:
+On a **sparse** graph the edge count is a small multiple of the vertex count, and n Dijkstras win, because each run only touches the edges that exist while Floyd–Warshall pays for every triple of vertices:
 
-```formula
+```formula reference
 m ≈ cn
 n(n + m) log(n)
   ≈ (1 + c)n^2 log(n)
 where
 n: the number of vertices
 m: the number of edges
-c: a small constant, the average out-degree; 4 in the example below
+c: a small constant, the average out-degree
 log(n): the logarithm of n, base 2
 ≈: approximately equal to
 In words: on a sparse graph n Dijkstras cost about n² log n, which grows much more slowly than Floyd–Warshall's n³.
 ```
 
-For a road network with ten thousand vertices and forty thousand edges:
-
-```formula
-T_FW = n^3 = (10^4)^3 = 10^12
-T_D = n(n + m) log_2(n)
-T_D ≈ 10^4 × 5 × 10^4 × 13
-T_D ≈ 6.5 × 10^9
-where
-n: the number of vertices; 10^4
-m: the number of edges; 4 × 10^4
-log_2(n): the base-2 logarithm; log_2(10^4) ≈ 13.3
-T_FW: Floyd–Warshall's growth expression
-T_D: the growth expression for n runs of min-heap Dijkstra
-≈: approximately equal to
-In words: Floyd–Warshall's expression is about 150 times larger here.
-```
-
-The ratio of these growth expressions is roughly 150; it is not a measured speedup or a count of equivalent machine instructions. On a dense graph (m close to n²) the min-heap version becomes O(n³ log n), worse than Floyd–Warshall.
+For a road network with ten thousand vertices and forty thousand edges, Floyd–Warshall's growth expression is about 10¹², against about 6.6 × 10⁹ for ten thousand Dijkstra runs: roughly 150 times smaller. That is a ratio of growth expressions, not a measured speedup or a count of equivalent machine instructions. On a dense graph (m close to n²) the min-heap version becomes O(n³ log n), worse than Floyd–Warshall.
 
 You also often do not need *all* pairs. If you only need distances between 300 depots in a road graph with ten million vertices, run 300 Dijkstras (or a bidirectional/contraction-hierarchy query per pair) rather than any all-pairs algorithm over the whole road graph.
 
@@ -64,6 +47,5 @@ You also often do not need *all* pairs. If you only need distances between 300 d
 - Compute only the requested sources when a full table is unnecessary.
 
 ## Further reading
-- [Primary reference for this unit](https://networkx.org/documentation/stable/reference/algorithms/shortest_paths.html)
 - [Shortest paths — NetworkX docs](https://networkx.org/documentation/stable/reference/algorithms/shortest_paths.html)
 - [Floyd–Warshall algorithm — Wikipedia](https://en.wikipedia.org/wiki/Floyd%E2%80%93Warshall_algorithm)

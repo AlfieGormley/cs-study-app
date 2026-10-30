@@ -11,8 +11,12 @@ Encryption does not make a secret go away. It turns a big secret (a database, a 
 
 Key handling is a major source of encryption failures, alongside implementation errors and protocol misuse. Publicly exposed credentials must be treated as compromised.
 
-> [!note] Content gap
-> A percentage of failures attributed to key management, a universal time until leaked credentials are discovered and generic HSM throughput figures are omitted because no supporting measurement dataset was available.
+> [!analogy] Real-world analogy: The key under the doormat
+> A strong front door with an excellent lock is no protection if the key sits under the doormat. A burglar does not pick the lock; they lift the mat.
+>
+> **How it maps:** AES-256 is the excellent lock and the encrypted database is the house. Storing the key in a config file beside the data, in source code, or in the same backup is the doormat: anyone who gets the data store gets the key with it, and the strength of the cipher no longer matters.
+>
+> **Where it stops:** A house key is a physical object that can be in only one place. A digital key can be copied silently, any number of times, without the owner noticing, so you cannot tell that it has gone; that is why exposed keys must be treated as compromised and replaced.
 
 ## The key lifecycle
 
@@ -26,7 +30,7 @@ A typical key lifecycle includes these stages, and each one has its own failure 
 6. **Revoke and destroy** when it is no longer needed, including in backups.
 
 > [!tip] One key, one job
-> Never use the same key for encryption and signing, or for two different applications. If one use leaks the key, or interacts badly with another (for example, an RSA key used for both decryption and signatures), both are compromised. Derive separate keys with a KDF if you must start from one secret.
+> NIST SP 800-57 says that, in general, a single key should be used for only one purpose: encryption, integrity authentication, key wrapping, random bit generation or digital signatures. Using one key for two processes can weaken one or both, and it widens the damage if the key leaks. An RSA key used for both decryption and signing is a classic case: the ROBOT researchers showed that a padding oracle in a TLS server's RSA decryption also lets an attacker create signatures with that server's private key. If you must start from one secret, derive separate keys with a KDF and a different label for each purpose.
 
 ## Where keys can live
 
@@ -47,5 +51,5 @@ Hardware isolation can strengthen key custody; a software service can also hide 
 - A secrets manager delivers plaintext secrets to authorised processes; storage controls do not defeat a compromised authorised caller.
 
 ## Further reading
-- [AWS KMS cryptographic details](https://docs.aws.amazon.com/kms/latest/developerguide/kms-cryptography.html)
-- [NIST key-management guidance](https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final)
+- [NIST SP 800-57 Part 1: Recommendation for Key Management](https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final)
+- [Key Management Cheat Sheet — OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Key_Management_Cheat_Sheet.html)

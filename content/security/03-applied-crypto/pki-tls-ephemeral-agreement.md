@@ -2,7 +2,7 @@
 id: pki-tls-ephemeral-agreement
 title: TLS primitives and ephemeral key agreement
 level: intermediate
-minutes: 3
+minutes: 4
 sourceLesson: pki-tls
 summary: Certificate-authenticated TLS combines key agreement, authentication, derivation and authenticated record encryption.
 ---
@@ -37,8 +37,15 @@ That "thrown away" is the point. TLS 1.2 also allowed **RSA key transport**: the
 
 TLS 1.3 removed RSA key transport entirely. Certificate-authenticated handshakes use ephemeral (EC)DH, providing **forward secrecy** when ephemeral secrets are securely erased: stealing the certificate key tomorrow does not decrypt today's traffic.
 
+> [!analogy] Real-world analogy: One padlock for every letter versus a lock per conversation
+> Suppose everyone who writes to a company locks their letters in boxes that open with the company's one permanent key. Someone who photographs every box in the post for years, then steals that key, can open them all. Now suppose instead that each conversation uses a fresh lock whose key is melted down when the conversation ends.
+>
+> **How it maps:** The permanent key is the server's long-term RSA key under RSA key transport: every recorded session depends on it. The per-conversation lock is ephemeral ECDHE: each handshake makes fresh key pairs and erases them, so a later theft of the certificate key finds nothing to open past sessions. That property is forward secrecy.
+>
+> **Where it stops:** In TLS the certificate key is still used, but only to sign the handshake (authentication), not to protect the session secret. Forward secrecy also depends on actually erasing the ephemeral secrets and any session keys or resumption state derived from them.
+
 > [!note] Hybrid post-quantum key exchange
-> A future quantum computer could solve the discrete-log problem behind X25519, and traffic recorded now could be decrypted then ("harvest now, decrypt later"). Chrome introduced **X25519MLKEM768** in version 131: an X25519 share and an ML-KEM-768 share in one key-share entry (about 1.2 KB from the client). Both shared secrets feed the key schedule. With the specified combiner and correct implementations, either component remaining secure protects the combined exchange. Chrome announced the transition from its earlier Kyber draft to ML-KEM in September 2024.
+> A future quantum computer could solve the discrete-log problem behind X25519, and traffic recorded now could be decrypted then ("harvest now, decrypt later"). Chrome introduced **X25519MLKEM768** in version 131: an X25519 share and an ML-KEM-768 share in one key-share entry (about 1.2 KB from the client). Both shared secrets feed the TLS 1.3 key schedule. With the specified combiner and correct implementations, either component remaining secure protects the combined exchange. Chrome announced the transition from its earlier Kyber draft to ML-KEM in September 2024; deployment details keep changing, so check current browser and server documentation.
 
 ## Key takeaways
 - Certificate-authenticated TLS combines key agreement, authentication, derivation and authenticated record encryption.

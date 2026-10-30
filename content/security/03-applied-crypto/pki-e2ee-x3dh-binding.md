@@ -9,7 +9,7 @@ summary: X3DH combines three or four DH results with different identity and ephe
 
 Alice has Bob’s X3DH prekey bundle: his identity public key, its signed prekey, and an optional one-time prekey. She verifies the signed prekey, creates an ephemeral key pair and computes the DH contributions below. Public bundle keys have private halves retained by their owners.
 
-```formula
+```formula essential
 DH1 = DH(IK_A, SPK_B)
 DH2 = DH(EK_A, IK_B)
 DH3 = DH(EK_A, SPK_B)
@@ -34,7 +34,7 @@ In words: Alice combines four pairings of her keys with Bob's, and hashes all fo
 
 Each one has a job:
 
-- **DH1 and DH2** each involve one party's identity key, binding the exchange to those identity keys. This provides **mutual authentication of keys** under the protocol’s assumptions; establishing that those keys belong to the intended people requires authenticated key comparison or another trusted binding.
+- **DH1 and DH2** each involve one party's identity key, binding the exchange to those identity keys. This provides **mutual authentication of keys** under the protocol’s assumptions; establishing that those keys belong to the intended people requires an authenticated comparison of the keys (such as safety numbers) or another trusted binding.
 - **DH3 and DH4** involve Alice's ephemeral key, which she deletes afterwards. That gives **forward secrecy**: stealing both identity keys later does not reveal SK.
 - **The one-time prekey**, with its private half deleted after successful use, prevents reusing that prekey to accept the initial exchange again and strengthens protection against later compromise of SPK_B. If the server has run out, X3DH works without DH4, with slightly weaker guarantees.
 
@@ -50,4 +50,5 @@ Alice sends her first message encrypted under a key derived from SK, together wi
 
 ## Further reading
 - [X3DH specification — Signal](https://signal.org/docs/specifications/x3dh/)
-- [Double Ratchet specification — Signal](https://signal.org/docs/specifications/doubleratchet/)
+- [PQXDH specification — Signal](https://signal.org/docs/specifications/pqxdh/)
+- [Quantum Resistance and the Signal Protocol — Signal blog](https://signal.org/blog/pqxdh/)

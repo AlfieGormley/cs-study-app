@@ -2,12 +2,12 @@
 id: pki-certificates-path-validation
 title: Building and validating certificate paths
 level: intermediate
-minutes: 2
+minutes: 4
 sourceLesson: pki-certificates
 summary: Path building chooses an issuer chain; validation checks signatures, dates, constraints and application identity policy.
 ---
 
-Certificates bind names to public keys through trusted issuers. A valid signature is only one part of deciding whether an application should accept that binding.
+A client receiving a certificate must decide two separate things: is this certificate genuinely issued under a root I trust, and is it a certificate for the server I meant to reach? Skipping either check defeats TLS.
 
 ## How a client validates a chain
 
@@ -37,13 +37,34 @@ def check_links(chain):
               iss.subject.rfc4514_string())
 ```
 
-For a root, intermediate and leaf, this prints `CN=shop.test <- CN=Toy Issuing CA` then `CN=Toy Issuing CA <- CN=Toy Root`. `verify_directly_issued_by` checks issuer/subject name agreement and signature validity; this loop does not check dates, hostname, CA constraints, trust, revocation or CT. Use a maintained validator and configure the required policy. `cryptography.x509.verification.PolicyBuilder` can build a server certificate verifier with hostname/path checks, but does **not** automatically perform live revocation or browser CT enforcement.
+For a root, intermediate and leaf, this prints `CN=shop.test <- CN=Toy Issuing CA` then `CN=Toy Issuing CA <- CN=Toy Root`. `verify_directly_issued_by` checks issuer/subject name agreement and signature validity; this loop does not check dates, hostname, CA constraints, trust, revocation or CT. Use a maintained validator and configure the required policy. `cryptography.x509.verification.PolicyBuilder` can build a server certificate verifier with hostname/path checks, but has no input for live revocation data or browser CT enforcement.
+
+## The hostname check is half of authentication
+
+A valid chain only proves that *some* trusted CA issued the certificate to *somebody*. Anyone can obtain a perfectly valid certificate for a domain they control, such as `attacker.example`. If the client never compares the certificate's names with the name it set out to reach, an attacker on the network can present that genuine certificate and the handshake succeeds.
+
+RFC 9525 describes the check. The client builds its **reference identifier** from what the user or configuration asked for (the hostname in the URL, not a name supplied by the server) and compares it with the DNS names in the certificate's SAN. The Common Name must not be used, a wildcard matches exactly one leftmost label, and an automated client should abort on a mismatch rather than ask anyone.
+
+This failure is easy to create by accident, because many TLS APIs separate the two checks:
+
+- In Python's `ssl` module, `CERT_REQUIRED` validates the chain but *does not* match hostnames; `check_hostname` must also be on. `ssl.create_default_context()` enables both. Code that sets `check_hostname = False` "to fix a test" removes server authentication while still showing an encrypted connection.
+- Disabling verification entirely (`verify=False`, `CERT_NONE`, `InsecureSkipVerify: true`) removes both checks at once.
+
+> [!analogy] Real-world analogy: A genuine passport for the wrong person
+> You are meeting a solicitor called Priya Patel. Someone hands you a real, government-issued passport and you check every security feature carefully, but you never read the name on it. It belongs to a stranger.
+>
+> **How it maps:** Checking the passport's security features is chain validation: the certificate really was issued under a trusted root. Reading the name and comparing it with "Priya Patel" is the hostname check: comparing the certificate's SAN with the name you intended to reach. Skipping it accepts any genuine certificate, including one the attacker obtained for their own domain.
+>
+> **Where it stops:** A person can be questioned further, and a passport has one name. A certificate may list many names, and must also be backed by proof that the server holds the matching private key during the handshake; the comparison is an exact rule set (RFC 9525), not a judgement call.
 
 ## Key takeaways
 - Path building chooses an issuer chain; validation checks signatures, dates, constraints and application identity policy.
-- A direct issuer-signature loop does not establish hostname validity, trusted roots, revocation or CT.
+- A trusted chain without a hostname match authenticates nobody in particular; keep hostname checking on.
 - Serve required intermediates and allow valid alternative paths when cross-signed roots expire.
 
 ## Further reading
 - [X.509 certificate profile — RFC 5280](https://www.rfc-editor.org/rfc/rfc5280)
-- [ACME — RFC 8555](https://www.rfc-editor.org/rfc/rfc8555)
+- [Service identity in TLS — RFC 9525](https://www.rfc-editor.org/rfc/rfc9525)
+- [ssl — TLS/SSL wrapper — Python docs](https://docs.python.org/3/library/ssl.html)
+- [X.509 verification — pyca/cryptography docs](https://cryptography.io/en/latest/x509/verification/)
+- [DST Root CA X3 expiration (September 2021) — Let's Encrypt](https://letsencrypt.org/docs/dst-root-ca-x3-expiration-september-2021/)

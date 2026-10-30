@@ -6,7 +6,7 @@
     "prompt": "A service generates password-reset tokens with `random.choice(string.ascii_letters)` repeated 32 times. What is wrong, and what should it use?",
     "options": [
       {
-        "text": "Nothing; 54,294,967,296 possibilities is far too many to guess",
+        "text": "Nothing; with about 182 bits of possible tokens, guessing is hopeless",
         "explanation": "The space is large, but the generator is predictable. An attacker doesn't guess randomly; they reconstruct the generator's internal state."
       },
       {
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "The token space itself is enormous:\n\n```formula\nN = 52^{32} ≈ 8.2 × 10^{54}\nH = 32 × log_2(52) ≈ 182 bits\nwhere\nN: the number of possible 32-letter tokens using 52 letters (a–z and A–Z)\nH: the entropy, in bits, if every letter were truly random\nlog_2: logarithm base 2: the number of bits needed to pick one of 52 options (about 5.7)\n≈: approximately equal to\nbits: binary digits, the unit of entropy; each extra bit doubles the number of possibilities\nIn words: a truly random token like this would carry about 182 bits, far beyond any brute-force guessing.\n```\n\nBut the letters are not truly random. MT19937 is not a cryptographic generator. A suitable sequence of 624 full 32-bit outputs allows state cloning; random.choice tokens expose partial outputs through rejection sampling, so that simple count is not an exact recovery guarantee for this API. Predictability risk is sufficient reason to use secrets.token_urlsafe(32), backed by the operating system CSPRNG.",
+    "workedExample": "If every letter were truly random, a 32-letter token drawn from 52 letters would carry about 182 bits of entropy, far beyond brute-force guessing. The problem is not the size of the space but the generator.\n\n1. `random` is MT19937 (Mersenne Twister), designed for simulations, not secrets. Its output is a deterministic function of an internal state.\n2. An attacker who observes enough outputs can reconstruct that state and predict later outputs. With 624 consecutive full 32-bit outputs this is straightforward; `random.choice` exposes only partial outputs (it uses rejection sampling), so recovery takes more analysis, but predictability is the risk.\n3. Making the token longer or hashing it does not help: a predictable input gives a predictable output.\n4. Fix: `secrets.token_urlsafe(32)`, backed by the operating system's CSPRNG.",
     "link": {
       "title": "secrets — Python docs",
       "url": "https://docs.python.org/3/library/secrets.html"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "```formula\nn_1 = p × q_1\nn_2 = p × q_2\ngcd(n_1, n_2) = p   when q_1 ≠ q_2\nwhere\nn_1: the first device's public RSA modulus\nn_2: the second device's public RSA modulus\np: the prime both devices generated\nq_1: the first device's other prime\nq_2: the second device's other prime\ngcd: greatest common divisor: the largest number dividing both exactly, found quickly by Euclid's algorithm\nIn words: a prime shared by two public moduli is their greatest common divisor, so it falls out of a cheap calculation without factoring either one.\n```\n\nDividing each modulus by the shared prime yields the remaining factors. Batch-GCD techniques scale this check to collections of public keys. Insufficient entropy can cause shared factors; a universal microsecond or multi-hour runtime is omitted because no benchmark setup is specified.",
+    "workedExample": "1. Two RSA moduli that share one prime have that prime as their greatest common divisor (GCD).\n2. Euclid's algorithm computes a GCD quickly without factoring either modulus, and batch-GCD techniques check whole collections of public keys at once.\n3. Dividing each modulus by the shared prime gives the other prime, so both private keys follow.\n4. Independently generated large primes essentially never coincide, so shared primes are a symptom of broken randomness: here, devices generating keys at first boot before collecting enough entropy.\nA universal attack runtime is omitted because it depends on the number of keys and the implementation.",
     "link": {
       "title": "Mining your Ps and Qs: weak keys in network devices",
       "url": "https://factorable.net/"

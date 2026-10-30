@@ -7,7 +7,7 @@ summary: A hidden sender can interfere at a receiver it cannot hear directly.
 sourceLesson: wm-wifi
 ---
 
-This unit focuses on hidden and exposed terminals. It builds on the earlier units in this module; the examples below state their additional assumptions.
+Carrier sense assumes that if the channel sounds quiet to you, it is quiet at your receiver. Two failure patterns break that assumption in opposite directions: a sender you cannot hear (hidden) and a sender you can hear but need not wait for (exposed).
 
 ## The hidden terminal problem and RTS/CTS
 
@@ -27,6 +27,13 @@ A and C both sense an idle channel and transmit at once. Their frames can interf
 2. The AP replies **Clear To Send**, carrying the remaining protected exchange time.
 3. C cannot hear A's RTS, but it *can* hear the AP's CTS, so it sets its NAV and stays quiet.
 4. A sends its data; the AP ACKs.
+
+> [!analogy] Real-world analogy: Two people either side of a hedge
+> Alice and Carol stand on opposite sides of a tall hedge, each talking to Bob, who stands in a gap in the middle. Neither can hear the other, so both start talking at once and Bob hears a jumble. The fix is for Alice to ask "Bob, may I talk for ten seconds?" and for Bob to answer aloud "Go ahead, Alice, ten seconds". Carol cannot hear Alice's question, but she hears Bob's answer and waits.
+>
+> **How it maps:** Alice and Carol are the hidden stations A and C, Bob is the AP, and the jumble is a collision at the receiver that neither sender can hear. Alice's question is the RTS, Bob's answer is the CTS, and Carol waiting for the stated time is setting her NAV.
+>
+> **Where it stops:** Bob could call out that he heard a jumble; an access point sends no such warning, so Wi-Fi senders only infer a collision from a missing ACK. A station that misses the CTS, or interference from a non-Wi-Fi source, still causes losses, and the exchange costs extra airtime on every protected transmission.
 
 This reduces the chance of wasting a long data transmission on a hidden-terminal collision. Missed CTS frames, other interferers and overlapping reservations still permit data/ACK loss. The cost is two extra frames and gaps per exchange, so implementations can select protection using an **RTS threshold** and other policies; defaults are device-specific. Wi-Fi 6 also uses RTS/CTS-style protection automatically in some situations, such as before multi-user transmissions.
 

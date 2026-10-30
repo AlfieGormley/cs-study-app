@@ -15,22 +15,20 @@ Dijkstra settles vertices by distance from the source; obstacles, weights and co
 
 A* orders the min-heap by a priority that adds a guess of the remaining distance to the distance already travelled:
 
-```formula
+```formula essential
 f(v) = g(v) + h(v)
-f(v) = 6 + 4 = 10
 where
 v: a vertex waiting in the min-heap
-g(v): the known cost from the start to v (Dijkstra's dist); 6 in the example
-h(v): the heuristic: an estimate of the remaining cost from v to the goal; 4 in the example
+g(v): the known cost from the start to v (Dijkstra's dist)
+h(v): the heuristic: an estimate of the remaining cost from v to the goal
 f(v): the estimated total cost of the best path through v; the min-heap pops the smallest
 In words: A* expands the vertex that looks cheapest overall, counting both the distance already travelled and a guess at the distance still to go.
 ```
 
-A vertex six steps from the start and estimated four from the goal has priority ten, so it is expanded before one three steps from the start and estimated nine from the goal (priority twelve). On a grid the usual estimate is the Manhattan distance, the number of up/down/left/right steps ignoring walls:
+A vertex six steps from the start and estimated four from the goal has priority ten, so it is expanded before one three steps from the start and estimated nine from the goal (priority twelve). On a grid the usual estimate is the Manhattan distance, the number of up/down/left/right steps ignoring walls. From row 2, column 7 to a goal at row 5, column 3 that is 3 rows plus 4 columns: 7 moves.
 
-```formula
+```formula reference
 h(p) = |r_p − r_goal| + |c_p − c_goal|
-h(p) = |2 − 5| + |7 − 3| = 3 + 4 = 7
 where
 p: the current cell
 r_p, c_p: p's row and column
@@ -39,6 +37,13 @@ r_goal, c_goal: the goal's row and column
 h(p): the estimated remaining cost, in moves
 In words: count the rows and the columns you still have to cross; walls can only make the real path longer.
 ```
+
+> [!analogy] Real-world analogy: a walker heading for a hilltop mast
+> A walker trying to reach a mast on a distant hill picks, at each junction, the path that looks best overall: how far they have already walked plus how far the mast still looks as the crow flies.
+>
+> **How it maps:** distance already walked is g, the crow-flies distance to the mast is the heuristic h, and choosing the junction with the smallest total is popping the smallest f. The estimate pulls the search towards the goal instead of spreading evenly in every direction like Dijkstra.
+>
+> **Where it stops:** the walker commits to one route. A* keeps every partly explored route in its min-heap and can switch back to an older one when a wall or river makes the current direction more expensive than it looked, which is what keeps it optimal with a suitable heuristic.
 
 ```python
 def astar(grid, start, goal):
@@ -87,5 +92,5 @@ def astar(grid, start, goal):
 - Manhattan distance fits four-way unit-cost movement.
 
 ## Further reading
-- [Primary reference for this unit](https://ai.stanford.edu/~nilsson/OnlinePubs-Nils/PublishedPapers/astar.pdf)
+- [A* search algorithm — Wikipedia](https://en.wikipedia.org/wiki/A*_search_algorithm)
 - [Introduction to A* — Red Blob Games](https://www.redblobgames.com/pathfinding/a-star/introduction.html)

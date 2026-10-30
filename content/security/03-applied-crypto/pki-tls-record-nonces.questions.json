@@ -33,27 +33,27 @@
     "id": "pki-tls-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A TLS 1.3 connection uses the IV `5d313eb2671276ee13000b30`. Each record's nonce is the IV XORed with the 64-bit record sequence number, right-aligned. What is the nonce for record number 2?",
+    "prompt": "A team builds its own encrypted record protocol for IoT sensors, copying TLS 1.3's design: AES-GCM, a static 12-byte IV and a nonce computed as the IV XORed with a record counter. To avoid a handshake, each sensor loads the same long-term key and IV from flash at every boot, and the counter (kept in RAM) starts at 0 after each reboot. What is wrong?",
     "options": [
       {
-        "text": "`5d313eb2671276ee13000b30`",
-        "explanation": "That is the nonce for record 0. Reusing it for record 2 would be a catastrophic AEAD nonce reuse."
+        "text": "Nothing: XORing a counter into the IV is exactly how TLS 1.3 makes nonces unique",
+        "explanation": "The construction gives unique nonces only while each key's counter never restarts. TLS derives fresh traffic keys in every handshake, so its counter restarting at 0 is harmless; here the key does not change."
       },
       {
-        "text": "`5d313eb2671276ee13000b32`",
-        "explanation": "Correct. Only the last byte changes: 0x30 XOR 0x02 is 0x32."
+        "text": "After every reboot the sensor reuses nonces under the same key, so records with the same counter value share a keystream and GCM authentication can be forged",
+        "explanation": "Correct. Record 0 after a reboot has the same key and nonce as record 0 before it. Nonce reuse exposes the XOR of plaintexts and lets an observer attack GCM's authentication. Derive a fresh session key per boot or connection (or persist a never-repeating counter)."
       },
       {
-        "text": "`5d313eb2671276ee13000b2e`",
-        "explanation": "This subtracts 2. The operation is XOR, not arithmetic: 0x30 XOR 0x02 is 0x32."
+        "text": "The nonce should be sent in each record header so the receiver can check it",
+        "explanation": "Sending the nonce would not stop it repeating. TLS deliberately keeps it implicit; the flaw is the restart under one key."
       },
       {
-        "text": "A random 12-byte value sent in the record header",
-        "explanation": "TLS 1.3 never sends the nonce. Both sides compute it from the IV and their record sequence number."
+        "text": "AES-GCM needs a 16-byte nonce, so the 12-byte IV is too short",
+        "explanation": "GCM is designed for 96-bit (12-byte) nonces, which TLS uses. The length is fine; the uniqueness is not."
       }
     ],
     "answer": 1,
-    "workedExample": "The nonce is the IV XORed with the sequence number, padded on the left with zero bytes to the IV's 12 bytes:\n\n```formula\nN = IV ⊕ S\nIV = 0x5d313eb2671276ee13000b30\nS = 0x000000000000000000000002\nN = 0x5d313eb2671276ee13000b32\nwhere\nN: the 12-byte nonce for this record, never sent on the wire\nIV: the static 12-byte IV from the key schedule\nS: the record sequence number, here 2, written as 12 bytes with zeros on the left\n⊕: XOR (exclusive OR), byte by byte: an output bit is 1 when the input bits differ\nIn words: XORing with zero leaves a byte unchanged, so only the IV's last byte changes for record 2.\n```\n\nThe last byte in binary:\n\n```formula\n0x30 = 0011 0000\n0x02 = 0000 0010\n0x30 ⊕ 0x02 = 0011 0010 = 0x32\nwhere\n⊕: XOR, bit by bit: 1 where the two bits differ, 0 where they match\nIn words: the 2 sets one extra bit in 0x30, giving 0x32.\n```",
+    "workedExample": "1. In TLS 1.3 each record's nonce is the static IV XORed with the record sequence number. That gives distinct nonces **for one key** because the counter only increases.\n2. TLS never restarts a counter under an old key: every handshake derives new traffic keys and IVs, and KeyUpdate resets the counter only together with a new key.\n3. The sensor restarts its counter at 0 on every boot but keeps the same key and IV, so the first record after each reboot uses exactly the same key and nonce as the first record before it.\n4. In GCM, a repeated key and nonce means a repeated keystream (the XOR of the two plaintexts leaks) and equations in the authentication subkey that can enable tag forgery.\n5. Fixes: derive a fresh key (and IV) per boot or session from a key exchange or a KDF with fresh randomness, persist a counter that never repeats across reboots, or use a nonce-misuse-resistant mode such as AES-GCM-SIV while still avoiding repeats.",
     "link": {
       "title": "RFC 9846: TLS 1.3",
       "url": "https://www.rfc-editor.org/rfc/rfc9846"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. The server sends records with sequence numbers 5, 6 and 7. The attacker removes record 6.\n2. The client receives what it believes is record 6 and builds its nonce from sequence number 6.\n3. The record was actually sealed with the nonce for sequence number 7:\n\n```formula\nN_client = IV ⊕ 6\nN_server = IV ⊕ 7\nwhere\nN_client: the nonce the client uses to open the record\nN_server: the nonce the server used to seal it\nIV: the static 12-byte IV both sides derived from the traffic secret\n⊕: XOR (exclusive OR), applied to the sequence number written as 12 bytes\nIn words: the two nonces differ, so the record cannot be opened with the nonce the client expects.\n```\n\n4. Wrong nonce means the AEAD tag check fails, and TLS sends a `bad_record_mac` alert and closes.\n5. Cutting the stream off at the *end* is handled separately: TLS requires a `close_notify` alert, so a cut-off connection is distinguishable from a clean close.",
+    "workedExample": "1. The server sends records with sequence numbers 5, 6 and 7. The attacker removes record 6.\n2. The client receives what it believes is record 6 and builds its nonce from sequence number 6.\n3. The record was actually sealed with the nonce built from sequence number 7. XORing a different sequence number into the same IV gives a different nonce, so the client's nonce (from 6) does not match the server's (from 7).\n4. Wrong nonce means the AEAD tag check fails, and TLS sends a `bad_record_mac` alert and closes.\n5. Cutting the stream off at the *end* is handled separately: TLS requires a `close_notify` alert, so a cut-off connection is distinguishable from a clean close.",
     "link": {
       "title": "RFC 9846: TLS 1.3",
       "url": "https://www.rfc-editor.org/rfc/rfc9846"

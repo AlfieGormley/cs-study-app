@@ -9,7 +9,7 @@ summary: Matrices trade quadratic storage for constant-time edge lookup.
 
 Adjacency lists store neighbours explicitly; an adjacency matrix instead allocates a cell for each ordered pair. Here n counts vertices and m counts edges.
 
-## Representation 2: adjacency matrix
+## Adjacency matrix
 
 For a simple unweighted graph, `M[u][v]` is 1 for an edge and 0 otherwise. For shortest-path weights, use infinity for absence so zero-weight edges remain distinguishable; initialise diagonal distances with the minimum of zero and any graph self-loop weight. A single cell cannot preserve multiple parallel-edge identities without additional data.
 
@@ -27,35 +27,21 @@ An undirected graph gives a symmetric matrix. The matrix has n rows and n column
 - **Edge lookup:** O(1), a single array index.
 - **Iterate neighbours of u:** O(n), because you must scan the whole row, even if u has one neighbour.
 
-> [!warning] The n² trap
-> A matrix for 1,000,000 vertices has 10¹² cells. Even at one bit per cell that is about 125 GB. A packed CSR representation of 5 million undirected edges using 32-bit neighbour IDs and offsets needs about 44 MB for those arrays. A Python dictionary of lists has substantial additional object overhead.
+> [!analogy] Real-world analogy: the mileage chart in a road atlas
+> Many road atlases print a triangular chart with every town along the top and down the side. To find the distance between two towns you read a single cell where the row and column meet.
 >
-> Content gap: no measured Python-memory footprint or traversal timing is supplied; the packed-array calculation is not a benchmark.
+> **How it maps:** towns are vertices and the cell for a pair is `M[u][v]`. Looking up one pair is instant, which is the matrix's O(1) edge test, and the chart's size grows with the square of the number of towns.
+>
+> **Where it stops:** a mileage chart fills every cell with a road distance, even for towns with no direct road. An adjacency matrix records only direct edges, so in a sparse graph most of its cells say "no edge", and a directed graph's matrix need not be symmetric, so you cannot print half of it.
 
-The two numbers in that warning come from these sums:
+> [!warning] The n² trap
+> A matrix for 1,000,000 vertices has 10¹² cells. Even at one bit per cell that is about 125 GB (decimal gigabytes). A packed CSR representation (described below) of 5 million undirected edges, using 4-byte neighbour IDs and offsets, needs about 44 MB for its two arrays: about a million offsets plus 10 million neighbour entries, since each undirected edge is stored at both ends. A Python dictionary of lists adds substantial object overhead on top of the raw entries.
 
-```formula
-B_mat = (n^2 / 8) B
-B_mat = ((10^6)^2 / 8) B
-B_mat = 1.25 × 10^11 B
-B_csr = (4(n + 1) + 8m) B
-B_csr = (4 × 1000001 + 4 × 10^7) B
-B_csr ≈ 4 MB + 40 MB = 44 MB
-where
-n: the number of vertices; 10^6 (a million) here
-m: the number of undirected edges; 5 × 10^6 here, each stored twice in CSR
-B_mat: bytes for a bit-packed adjacency matrix: one bit per cell, 8 bits per byte
-B_csr: bytes for CSR: an offsets array of n + 1 entries and a neighbours array of 2 × m entries, 4 bytes each
-B: byte, 8 bits
-MB: megabyte, 10^6 bytes
-In words: the matrix grows with the square of the vertex count whatever the edges, while CSR grows with vertices plus edges.
-```
+The matrix grows with the square of the vertex count whatever the edges, while list-style storage grows with vertices plus edges. The matrix cost does not fall at all if the graph has few edges, which is why it only pays off when the graph is small or dense. These are sizes of packed arrays, not measured memory or speed.
 
-The bit-packed matrix needs about 125 GB (gigabytes), nearly 3,000 times the CSR array figure. A decimal gigabyte is one billion bytes. The matrix cost does not fall at all if the graph has few edges, which is why it only pays off when the graph is small or dense.
+Matrices win for small or dense graphs, for algorithms built around them (Floyd–Warshall), and for linear algebra on graphs. For example, multiplying an unweighted adjacency matrix by itself counts walks:
 
-Matrices win for small or dense graphs, for algorithms built around them (Floyd–Warshall), and for linear algebra on graphs. Multiplying an unweighted adjacency matrix by itself counts walks:
-
-```formula
+```formula reference
 W_k(u, v) = (A^k)[u][v]
 where
 A: the adjacency matrix: entry [u][v] is 1 if there is an edge u→v, else 0
@@ -67,7 +53,7 @@ W_k(u, v): the number of different walks of exactly k edges from u to v
 In words: the entry in row u, column v of the k-th power of the adjacency matrix is the number of k-step walks from u to v.
 ```
 
-For instance, if 0→1→0 and 0→2→0 are the only two-step round trips from vertex 0, the row-zero, column-zero entry of the squared matrix is two. PageRank instead iterates a normalised random-surfer model with damping and handling for vertices without outgoing edges.
+For instance, if 0→1→0 and 0→2→0 are the only two-step walks that leave vertex 0 and return to it, the row-zero, column-zero entry of the squared matrix is two. These are walks, which may repeat vertices, not simple paths. PageRank instead iterates a normalised random-surfer model with damping and handling for vertices without outgoing edges.
 
 ## Real-world representations
 
@@ -81,7 +67,7 @@ For instance, if 0→1→0 and 0→2→0 are the only two-step round trips from 
 - Matrix powers count walks, not necessarily simple paths.
 
 ## Further reading
-- [Primary reference for this unit](https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csr_matrix.html)
+- [SciPy docs: scipy.sparse.csr_matrix](https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csr_matrix.html)
 - [Adjacency matrix — Wikipedia](https://en.wikipedia.org/wiki/Adjacency_matrix)
 - [Adjacency list — Wikipedia](https://en.wikipedia.org/wiki/Adjacency_list)
 - [Neo4j store formats](https://neo4j.com/docs/operations-manual/current/database-internals/store-formats/)

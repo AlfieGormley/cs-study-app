@@ -29,6 +29,13 @@ Leaf: shop.example.com + public key
 
 Trust follows a **valid certification path**, not signatures alone: validity, constraints, permitted uses and relying-party policy must also pass. A correctly configured server sends the leaf and required intermediates; the client already has the trust anchor.
 
+> [!analogy] Real-world analogy: A passport and the issuing government
+> A border officer has never met you, but accepts your passport because it was issued by a government the officer recognises, using security features the officer knows how to check. The officer then compares the name and photo with the person standing there.
+>
+> **How it maps:** The passport is the certificate: it binds a name to something only the holder can produce (here, signatures from the private key). The government is the CA, and the officer's list of recognised governments is the trust store of root CAs. A passport office acting for the government resembles an intermediate CA, and the officer's checks of validity dates and restrictions resemble path validation.
+>
+> **Where it stops:** A passport photo is matched by eye, while a certificate is checked by verifying signatures and then proving possession of the private key in a protocol such as TLS; a photocopied certificate is useless without that key. Certificates also carry machine-checked limits (Basic Constraints, key usage, name constraints) that have no clean passport equivalent.
+
 Why not let roots sign leaves directly? Replacing a widely distributed trust anchor can be operationally difficult because many relying parties need updated trust stores. So roots live in hardware security modules, often in offline vaults, and come out only to sign a new intermediate or a revocation list. If an intermediate is compromised, the root revokes it and signs a new one.
 
 ## Inside an X.509 certificate
@@ -48,7 +55,7 @@ After the TBS bytes come the signature algorithm and the CA's signature over the
 
 The **extensions** carry most of the security meaning:
 
-- **Subject Alternative Name (SAN)**: the DNS names (or IPs) the certificate is valid for, such as `shop.example.com` and `*.cdn.example.com`. Browsers match only against SAN; the old Common Name is ignored.
+- **Subject Alternative Name (SAN)**: the DNS names (or IPs) the certificate is valid for, such as `shop.example.com` and `*.cdn.example.com`. Browsers match only against SAN; RFC 9525 says the Common Name must not be used to identify a service, and a wildcard matches exactly one leftmost label.
 - **Basic Constraints**: `CA:TRUE` or `CA:FALSE`, plus an optional `pathLenConstraint` limiting the number of non-self-issued intermediate CA certificates below it in a valid path (not leaf certificates).
 - **Key Usage / Extended Key Usage**: what the key may do, such as `keyCertSign` for a CA, or `serverAuth` and `clientAuth` for leaves.
 - **Name Constraints**: limits a CA to certain namespaces, for example only names under `.corp.example.com`.
@@ -66,4 +73,4 @@ The **extensions** carry most of the security meaning:
 
 ## Further reading
 - [X.509 certificate profile — RFC 5280](https://www.rfc-editor.org/rfc/rfc5280)
-- [ACME — RFC 8555](https://www.rfc-editor.org/rfc/rfc8555)
+- [Service identity in TLS — RFC 9525](https://www.rfc-editor.org/rfc/rfc9525)

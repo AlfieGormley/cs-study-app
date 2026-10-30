@@ -34,6 +34,13 @@ Three ideas:
 2. **Logically central control.** A controller can coordinate a broader view than one device, though observations can be incomplete or stale. Logical centralisation does not require one server or guarantee that a particular implementation is replicated.
 3. **Programmability.** Network behaviour is software, so it can be versioned, tested and changed through APIs rather than by logging into boxes.
 
+> [!analogy] Real-world analogy: Restaurant kitchens and a head office
+> In a group of independently run restaurants, each kitchen's head chef decides the recipes, swapping notes with nearby kitchens, and the cooks follow them. A centrally run chain instead has head office write every recipe and send it to all kitchens, which then cook exactly as instructed.
+>
+> **How it maps:** Cooking each order is the data plane forwarding each packet. Deciding the recipes is the control plane, and chefs swapping notes is distributed routing protocols. Head office pushing recipes is an SDN controller programming switches through a southbound API, and keeping recipes in a central, version-controlled book is programmability.
+>
+> **Where it stops:** Kitchens keep cooking from their last recipes if head office goes quiet, and switches likewise keep forwarding on installed rules, but a new kind of order that needs head office's decision must wait for a reply. Real controllers are usually replicated, and many SDN designs leave some decisions (such as fast local failover) in the switches.
+
 ## Where SDN won
 
 - **Hyperscale WANs.** Google's **B4**, described in a 2013 paper, connects its data centres with a centrally controlled traffic-engineering system. The paper reports high utilisation for its controlled workload and traffic-engineering design. This is a historical deployment result, not a universal target or comparison for every WAN; measurement, failure headroom and traffic priorities matter.

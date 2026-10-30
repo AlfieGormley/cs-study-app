@@ -3,27 +3,27 @@
     "id": "wm-datacentre-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Two large backup flows leave the same leaf, which has 4 equal-cost uplinks and chooses by hashing. Assuming the hash spreads flows uniformly and independently, what is the chance both flows land on the same uplink?",
+    "prompt": "Two large nightly backup flows leave the same leaf, which has 4 equal-cost uplinks and picks one per flow by hashing the 5-tuple. Monitoring shows one uplink saturated by both backups while the other three carry little. What explains this, and what would actually help?",
     "options": [
       {
-        "text": "0%: ECMP never puts two flows on one path while others are free",
-        "explanation": "The stipulated uniform independent hash does not account for current link load. Two flows can choose the same path."
+        "text": "A switch fault: ECMP never puts two flows on one path while others are free",
+        "explanation": "ECMP hashing is load-unaware. Two flows land on the same uplink one time in four with a uniform hash, so this needs no fault."
       },
       {
-        "text": "1/16",
-        "explanation": "1/16 is the chance that both land on one *specific* uplink. Any of the four will do for a collision."
+        "text": "Spanning Tree has blocked three of the uplinks",
+        "explanation": "In a routed leaf-spine fabric the uplinks are layer 3 ECMP paths, and the other uplinks are still carrying some traffic. STP blocking does not explain one uplink being shared by both flows."
       },
       {
-        "text": "1/4",
-        "explanation": "Correct. Whatever uplink the first flow picks, the second picks the same one with probability 1/4."
+        "text": "A hash collision: the flows happened to hash to the same uplink. Congestion-aware or flowlet load balancing, or splitting each backup across several connections, can spread them",
+        "explanation": "Correct. Flow hashing chooses blindly, so a few elephant flows easily collide. Load-aware balancing, flowlets with a valid delay bound, or more parallel connections give the hash more chances to spread the load."
       },
       {
-        "text": "1/2",
-        "explanation": "With 4 uplinks, the second flow has 4 equally likely choices, only one of which collides."
+        "text": "The backups should use UDP, because ECMP only hashes TCP flows",
+        "explanation": "ECMP commonly hashes UDP 5-tuples too. Changing transport does not stop two flows hashing to one path."
       }
     ],
     "answer": 2,
-    "workedExample": "1. Flow 1 lands somewhere; call it uplink X.\n2. Flow 2 independently picks one of 4 uplinks, each equally likely.\n\n```formula\nP_same = 1 / N = 1 / 4\nP_same = 4 / (4 × 4) = 4 / 16 = 1 / 4\nwhere\nP_same: the probability that both flows choose the same uplink\nN: the number of equal-cost uplinks, 4\nIn words: whatever uplink flow 1 takes, flow 2 matches it one time in four; equivalently, 4 of the 16 equally likely pairs of choices put both flows together.\n```\n\nWhen they collide, both compete for one link, potentially sharing it unevenly, while three of the four links carry neither backup flow. With many elephants the chance of perfect balance collapses:\n\n```formula\nP_even = n! / n^n\nP_even = 40,320 / 16,777,216 ≈ 0.24%\nwhere\nP_even: the probability that n flows on n paths land exactly one per path\nn: the number of flows and of paths, 8 here\nn!: n factorial, 1 × 2 × … × n; 8! = 40,320\nn^n: n to the power n; 8^8 = 16,777,216 possible combinations of choices\n≈: approximately equal to\nIn words: eight flows spread perfectly over eight paths only about once in 400 tries.\n```",
+    "workedExample": "1. ECMP picks an uplink from a hash of each flow's headers. The choice is stable per flow and ignores current link load.\n2. With 4 uplinks and a uniform hash, whatever uplink the first backup gets, the second matches it one time in four. Collisions between a few big flows are routine, not a fault.\n3. When they collide, both compete for one link while three uplinks carry none of the backup traffic.\n4. Remedies attack the blindness or the lumpiness: congestion-aware load balancing in the fabric, flowlet switching (with a valid path-delay bound), packet spraying with reordering-tolerant transports, or splitting each transfer into several connections so the hash spreads the pieces.",
     "link": {
       "title": "Equal-cost multi-path routing — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Equal-cost_multi-path_routing"
@@ -33,27 +33,27 @@
     "id": "wm-datacentre-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Uniform hash values select next-hop labels [0,1,2,3] by taking each hash's remainder after dividing by 4. Link 3 fails; the surviving ordered labels [0,1,2] then use the remainder after dividing by 3. What fraction of flows previously on healthy links change physical uplink?",
+    "prompt": "A leaf uses simple modulo ECMP over 4 uplinks: each flow's uplink is its hash's remainder after dividing by 4. Uplink 3 fails, and the leaf now divides by 3 across the surviving uplinks 0, 1 and 2. What happens to flows that were on the **healthy** uplinks?",
     "options": [
       {
-        "text": "None; only flows on the failed link move",
-        "explanation": "An appropriately configured resilient-hashing implementation can preserve healthy assignments on removal. Simple modulo hashing does not; resilient implementations also have bucket and rebalancing policies."
+        "text": "They stay put; only flows from the failed uplink move",
+        "explanation": "That is what resilient hashing aims for. Simple modulo hashing changes the divisor, so most remainders change too."
       },
       {
-        "text": "About two-thirds of them",
-        "explanation": "Correct. Only about 25% of all flows keep their uplink. The flows that were on the healthy links are 75% of the total, so about two-thirds of those move."
+        "text": "Most of them, about two-thirds, move to a different uplink even though their link never failed",
+        "explanation": "Correct. Only hash values whose remainders agree under both divisors keep their uplink: a quarter of all flows. Of the three-quarters that were on healthy links, about two-thirds move."
       },
       {
-        "text": "About one-quarter of them",
+        "text": "Exactly a quarter of them move, matching the one failed uplink in four",
         "explanation": "A quarter is the share of all flows that *keep* their uplink, not the share of healthy-link flows that move."
       },
       {
-        "text": "All of them",
-        "explanation": "Some flows happen to get the same index from division by four and division by three, so not all move."
+        "text": "All of them move, because every remainder changes",
+        "explanation": "Some hash values give the same remainder under 4 and 3 (for example 0, 1 and 2), so not every flow moves."
       }
     ],
     "answer": 1,
-    "workedExample": "Before the failure a flow's uplink is its hash's remainder after dividing by 4; afterwards, the remainder after dividing by 3. Check one full cycle of hash values (12 is the lowest common multiple of 4 and 3, so the pattern repeats every 12):\n\n```formula\ni_old = h mod 4\ni_new = h mod 3\nf_keep = 3 / 12 = 1/4\nf_move = (9 − 3) / 9 = 6/9 = 2/3\nwhere\ni_old: the uplink index before the failure (0 to 3)\ni_new: the uplink index after the failure (0 to 2)\nh: the flow's hash value, a whole number\nmod: modulo, the remainder after whole-number division; 7 mod 4 = 3\nf_keep: the fraction of all flows that keep the same uplink\nf_move: the fraction of healthy-link flows that move: 9 of every 12 flows were on healthy links, and only 3 of those stay\nIn words: only hash values 0, 1 and 2 in each block of 12 give the same index both ways, so two thirds of the flows that were on healthy links get moved.\n```\n\n```\nh     0 1 2 3 4 5 6 7 8 9 10 11\nold   0 1 2 3 0 1 2 3 0 1 2  3\nnew   0 1 2 0 1 2 0 1 2 0 1  2\nsame  y y y . . . . . . . .  .\n```\n\n1. Only the first three hash values (zero through two) keep the same uplink: 3 out of 12 = 25% of flows.\n2. Flows on the failed uplink (old index 3) are 3 of the 12 and must move.\n3. Healthy-link flows: 9 of 12. Of those, 3 stay and 6 move: two-thirds.\n4. Moved flows can see reordering, and stateful middleboxes may lose connection state unless it is shared or reconstructable. Resilient hashing can minimise movement, with exact behaviour depending on bucket and rebalancing policy.",
+    "workedExample": "1. Before the failure a flow's uplink is its hash mod 4; afterwards it is its hash mod 3.\n2. List one repeating block of 12 hash values (12 is the smallest number both 4 and 3 divide):\n\n```\nh     0 1 2 3 4 5 6 7 8 9 10 11\nmod4  0 1 2 3 0 1 2 3 0 1 2  3\nmod3  0 1 2 0 1 2 0 1 2 0 1  2\n```\n\n3. Only h = 0, 1 and 2 give the same uplink both ways: 3 of 12, a quarter of all flows.\n4. Flows that were on the failed uplink 3 are 3 of the 12; the other 9 were on healthy links. Of those 9, only 3 stay, so 6 of 9 (two-thirds) move.\n5. Moved flows can see reordering, and stateful devices behind ECMP may lose connection state. Resilient hashing can limit movement to the failed path's flows, depending on its bucket and rebalancing policy.",
     "link": {
       "title": "RFC 2992: Analysis of an Equal-Cost Multi-Path Algorithm",
       "url": "https://www.rfc-editor.org/rfc/rfc2992"
@@ -86,7 +86,7 @@
       0,
       1
     ],
-    "workedExample": "With uniform hashes and stable member ordering, simple modulo remapping from 8 members to 7 keeps very few assignments:\n\n```formula\nf_keep = 1 / N = 1 / 8\nf_healthy = 1 − 1/8 = 7/8\nf_move = (7/8 − 1/8) / (7/8) = 6/7\nwhere\nf_keep: the fraction of all flows whose member is unchanged when each flow's hash mod 8 becomes hash mod 7 (mod: the remainder after whole-number division)\nN: the number of members before the failure, 8\nf_healthy: the fraction of flows that were on surviving members\nf_move: the fraction of those healthy-member flows that are moved anyway\nIn words: only 1 flow in 8 keeps its member, so about 6 of every 7 flows on healthy members land on a member without their state.\n```\n\nResilient network hashing reduces unnecessary movement. A load-balancer design can also make moved traffic recoverable through consistent backend selection and the required state mechanism. Maglev combines hashing and connection tracking; it is not proof that hashing alone fixes every stateful load balancer.",
+    "workedExample": "1. With simple modulo ECMP and uniform hashes, removing one of 8 members means switching from dividing by 8 to dividing by 7. Only about 1 flow in 8 keeps its member.\n2. The flows that were on the 7 healthy members are seven-eighths of the total, and only one-eighth stays put, so about 6 of every 7 healthy-member flows land on a member that has no state for them.\n3. Resilient hashing on the switches attacks the cause: on a simple removal it can move only the failed member's flows.\n4. A load-balancer design can also make moved traffic recoverable, through consistent backend selection plus shared or reconstructable connection/NAT state. Maglev combines hashing with connection tracking; hashing alone does not fix every stateful load balancer.\n5. Per-packet spraying breaks flow affinity entirely, and fewer, bigger members still lose state on failure.",
     "link": {
       "title": "Equal-cost multi-path routing — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Equal-cost_multi-path_routing"

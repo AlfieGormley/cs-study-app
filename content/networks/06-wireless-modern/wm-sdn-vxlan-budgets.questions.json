@@ -3,27 +3,27 @@
     "id": "wm-sdn-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "VXLAN carries untagged inner Ethernet with no inner FCS over IPv4 without options. UDP and VXLAN headers are 8 bytes each. The underlay IP MTU is fixed at 1,500 bytes, with no other encapsulation. What is the largest inner IP packet that fits without fragmentation?",
+    "prompt": "Tenant VMs move onto a VXLAN overlay (outer IPv4 without options, UDP, VXLAN, untagged inner Ethernet) running over an underlay whose IP MTU is 1,500 bytes. The VMs keep an MTU of 1,500. Pings and logins work, but large HTTP responses hang. Which fix addresses the cause?",
     "options": [
       {
-        "text": "1,500 bytes",
-        "explanation": "The inner IP packet plus 50 bytes of headers must fit the underlay IP MTU. A 1,500-byte inner IP packet needs 1,550 outer IP bytes; the outer Ethernet header is additional."
+        "text": "Increase the VNI range so more segments are available",
+        "explanation": "The VNI identifies the tenant segment; it has nothing to do with packet size."
       },
       {
-        "text": "1,450 bytes",
-        "explanation": "Correct. The physical MTU limits the outer IP packet, which contains outer IPv4 (20) + UDP (8) + VXLAN (8) + the inner Ethernet header (14) + the inner IP packet. 50 bytes of headers plus the inner packet must fit in 1,500 bytes, so the inner packet can be at most 1,450 bytes."
+        "text": "Lower the tenant MTU to at most 1,450 bytes, or raise the underlay IP MTU to at least 1,550 bytes",
+        "explanation": "Correct. Encapsulation adds 50 bytes inside the outer IP packet (20 outer IPv4 + 8 UDP + 8 VXLAN + 14 inner Ethernet). Full-size 1,500-byte tenant packets become 1,550-byte outer packets that the 1,500-byte underlay cannot carry."
       },
       {
-        "text": "1,472 bytes",
-        "explanation": "1,472 is the largest ICMP echo payload in a 1,500-byte packet (1,500 − 20 − 8). It is unrelated to VXLAN overhead."
+        "text": "Enable jumbo frames of 9,000 bytes everywhere; nothing smaller can work",
+        "explanation": "A 9,000-byte MTU would also work, but it is not required: an underlay IP MTU of 1,550 bytes is enough for 1,500-byte tenant packets under these assumptions."
       },
       {
-        "text": "1,492 bytes",
-        "explanation": "1,492 is the usual PPPoE MTU (8 bytes of PPPoE overhead), not VXLAN."
+        "text": "Use a fixed outer UDP source port so all packets follow one path",
+        "explanation": "The source port affects ECMP path spreading, not the size of the packets. One path would still have a 1,500-byte MTU."
       }
     ],
     "answer": 1,
-    "workedExample": "The physical MTU limits the **outer IP packet**, which must hold every header plus the inner IP packet:\n\n```formula\nH = 20 + 8 + 8 + 14 = 50 B\nH + X ≤ MTU_u\n50 + X ≤ 1,500, so X ≤ 1,450 B\nwhere\nH: the overhead inside the outer IP packet, in bytes (B): outer IPv4 (20), outer UDP (8), VXLAN (8) and inner Ethernet (14) headers\nX: the size of the inner IP packet, in bytes\nMTU_u: the underlay IP MTU, 1,500 B\n≤: less than or equal to\nB: byte\nIn words: 50 bytes of encapsulation leave at most 1,450 bytes for the tenant's IP packet.\n```\n\n(The 14-byte outer Ethernet header is not counted in the MTU, but the inner Ethernet header is, which is why the total overhead still comes to 50.)\n\nFor this fixed underlay use an inner MTU no larger than 1,450. In a different deployment an underlay IP MTU of at least 1,550 would accommodate 1,500 inner bytes under these assumptions; 9,000 is not required. Do not infer a cloud provider’s own encapsulation from its advertised instance MTU.",
+    "workedExample": "1. Symptom pattern: small packets work, full-size packets fail. That points to a size limit, not reachability.\n2. VXLAN wraps each tenant packet in outer IPv4 (20 bytes), UDP (8), VXLAN (8) and the inner Ethernet header (14): 50 extra bytes inside the outer IP packet. The outer Ethernet header sits outside the IP MTU.\n3. A 1,500-byte tenant packet therefore needs a 1,550-byte outer IP packet, which a 1,500-byte underlay cannot carry. If the 'too big' feedback is lost or filtered, the large transfers simply stall.\n4. Fix one side of the budget: tenant MTU at most 1,450, or underlay IP MTU at least 1,550 (jumbo frames also work but are not required).\n5. Tags, outer IPv6 or extra tunnels change the numbers, and a cloud provider's own encapsulation should not be inferred from its advertised instance MTU.",
     "link": {
       "title": "RFC 7348: VXLAN",
       "url": "https://www.rfc-editor.org/rfc/rfc7348"

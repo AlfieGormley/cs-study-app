@@ -7,7 +7,7 @@ summary: Measure varying capacity, queueing and interruptions rather than assign
 sourceLesson: wm-cellular
 ---
 
-This unit focuses on mobile performance, slicing and edge computing. It builds on the earlier units in this module; the examples below state their additional assumptions.
+Mobile paths change capacity from second to second, hide some losses behind link-layer retries, and can queue data deeply under load. Apps that assume a steady fast connection feel broken on a train; apps designed for variation feel fine.
 
 ## Performance characteristics to design for
 
@@ -23,7 +23,7 @@ This unit focuses on mobile performance, slicing and edge computing. It builds o
 
 With standalone 5G, an operator can create **network slices**: logical networks with selected capabilities and policies; actual end-to-end guarantees require provisioned resources, isolation, admission control and an enforceable service agreement, for example one for low-latency industrial control and one for ordinary broadband, on the same infrastructure.
 
-**Multi-access edge computing** (MEC) can place application compute nearer access networks, potentially reducing the path to a distant cloud region. Placement is not necessarily beside a UPF, and a nearby server alone does not guarantee low end-to-end latency.
+**Multi-access edge computing** (MEC) can place application compute nearer access networks, potentially reducing the path to a distant cloud region. Placement is not necessarily beside a UPF, and a nearby server alone does not guarantee low latency for the application.
 
 > [!note] Evidence limits
 > Fixed handover success speeds, radio-state timings, spectrum-wide range figures, operator market shares and guaranteed energy/latency improvements are omitted because no deployment evidence establishes them here. Complete release-specific band tables and advanced inactive-state data procedures are outside this lesson. No cellular modem or operator-network experiment was run.

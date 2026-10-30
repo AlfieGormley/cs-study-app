@@ -29,10 +29,14 @@ The security goal is called **existential unforgeability under chosen-message at
 | Signature verifier can check without signing power | No (shared key) | Yes |
 | Speed | Usually lower computational cost | Cost depends on scheme and operation |
 
-Signatures can support evidence of origin because verification need not grant signing authority. Attribution also needs trustworthy identity binding, key custody and protocol context.
+Signatures can support evidence of origin because verification need not grant signing authority. Attribution also needs trustworthy identity binding, key custody and protocol context. This lesson makes no legal claim: a valid signature alone does not prove that a particular person acted, and its weight in a dispute depends on the jurisdiction and the other evidence.
 
-> [!note] Content gap: legal effect
-> This lesson supplies no jurisdiction-specific legal assessment. It does not claim a signature alone proves a person acted, guarantees admissibility or determines a dispute.
+> [!analogy] Real-world analogy: A shared office stamp versus a signet ring
+> Two business partners share one rubber stamp. A stamped letter shows that one of them stamped it, but not which one. Compare that with a signet ring that only one person wears, where everybody has been given a reference impression of the ring to compare against.
+>
+> **How it maps:** The shared stamp is a MAC key: every holder can both create and check a tag, so the tag cannot single out its maker. The ring is the private signing key and the reference impression is the public verification key: checking a signature never gives you the power to make one.
+>
+> **Where it stops:** A wax impression can be copied onto another letter and judged by eye. A digital signature covers the exact bytes it was made over, so changing a single bit makes verification fail, and the check is mathematical rather than visual. You must also trust that the reference impression really belongs to the ring's owner, which is the job of certificates.
 
 > [!warning] Signing is not encrypting
 > A signature alone does nothing for confidentiality: its message may remain readable unless separately encrypted. If both are needed, use a suitable authenticated-encryption protocol. TLS certificate handshakes use signatures for authentication; Signal's message protection is not simply a publicly verifiable signature on every message.

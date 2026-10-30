@@ -7,7 +7,7 @@ summary: Highest matching priority selects an OpenFlow entry; instructions and a
 sourceLesson: wm-sdn
 ---
 
-This unit focuses on OpenFlow tables and reactive flow setup. It builds on the earlier units in this module; the examples below state their additional assumptions.
+An SDN switch is programmed with tables of rules: if a packet matches these header fields, do this. Knowing how those tables choose a rule, and what happens when nothing matches, is enough to predict where any packet goes and where reactive designs fail under load.
 
 ## OpenFlow: match-action tables
 

@@ -7,7 +7,7 @@ sourceLesson: graph-mst
 summary: Inverse-Ackermann amortised cost is not a four-instruction per-call promise.
 ---
 
-The DSU class from the previous unit provides find and union with rank and path compression. Kruskal’s input tuples are (weight, start, end), with numbered vertices. Here n counts vertices and m counts edges except where a card explicitly uses m for operation count.
+The DSU class from the previous unit provides find and union with rank and path compression. Kruskal’s input tuples are (weight, start, end), with numbered vertices. Here n counts vertices and m counts edges, except in the Union-Find cost card, where m counts operations.
 
 ## Kruskal's algorithm
 
@@ -32,9 +32,9 @@ The only hard part is the cycle test: "are u and v already connected by chosen e
 
 ### Inverse Ackermann
 
-Initialising n singleton sets costs O(n). With rank and compression, the total cost is:
+Initialising n singleton sets costs O(n). With rank and compression together, a long sequence of finds and unions costs, on average, an almost constant amount per operation. The bound involves the inverse Ackermann function α, which grows so slowly that it is at most about 4 for any input that fits in a real computer:
 
-```formula
+```formula reference
 T = O(n + m α(n))
 where
 n: the number of elements (vertices)
@@ -42,8 +42,7 @@ m: the number of find and union operations; in Kruskal, about two finds per edge
 α(n): the inverse Ackermann function: a function of n that grows so slowly it stays at most about 4 for any n that fits in a real computer (the exact constant depends on the definition used)
 T: the total time for initialisation plus all m operations
 O(…): Big O: grows at most this fast, up to a constant factor
-≤: is at most
-In words: after setting up the n sets, each operation costs a tiny, effectively constant amount on average.
+In words: after setting up one set per element, each find or union costs a tiny, effectively constant amount on average.
 ```
 
 So a million operations on a million elements cost on the order of a few million steps in total. Inverse-Ackermann definitions vary by small constants; the function grows extremely slowly. This is an amortised growth bound, not a claim that each call performs at most four instructions. Individual calls can take O(log n).
@@ -72,24 +71,7 @@ def kruskal(n, edges):  # (w, u, v)
     return total, tree
 ```
 
-**Time:** sorting dominates:
-
-```formula
-T = O(n + m log(m + 1) + m α(n))
-m ≤ n^2   so   log(m + 1) = O(log(n + 1))
-T = O(m log(n))
-where
-n: the number of vertices
-m: the number of edges
-log: the logarithm (base 2)
-α(n): the inverse Ackermann function, at most about 4 in practice
-T: Kruskal's total running time
-O(…): Big O: grows at most this fast, up to a constant factor
-≤: is at most
-In words: sorting m edges costs about m log m, Union-Find adds almost nothing, and since a simple graph has at most n² edges, log m is at most about twice log n.
-```
-
-The last line holds for connected simple graphs. For a million edges, the base-two logarithm of the edge count is about twenty, giving a sorting growth expression of twenty million; this is not an exact comparison count.
+**Time:** sorting dominates. Sorting the m edges costs O(m log m); the Union-Find work adds only an almost-constant amount per edge, plus O(n) set-up. In a simple graph m is at most about n², so log m is at most about twice log n, and for connected simple graphs the total is conventionally written O(m log n). With a million edges the sort's growth expression is about twenty million; that is a scale, not an exact comparison count.
 
 ## Key takeaways
 - Inverse-Ackermann amortised cost is not a four-instruction per-call promise.
@@ -97,5 +79,5 @@ The last line holds for connected simple graphs. For a million edges, the base-t
 - Disconnected input yields a forest.
 
 ## Further reading
-- [Primary reference for this unit](https://algs4.cs.princeton.edu/15uf/)
+- [Sedgewick and Wayne, Algorithms 4th ed.: 1.5 Union-Find](https://algs4.cs.princeton.edu/15uf/)
 - [Disjoint-set data structure — Wikipedia](https://en.wikipedia.org/wiki/Disjoint-set_data_structure)

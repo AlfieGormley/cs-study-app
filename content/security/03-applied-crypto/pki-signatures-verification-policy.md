@@ -2,12 +2,12 @@
 id: pki-signatures-verification-policy
 title: Using signatures safely in applications
 level: basic
-minutes: 2
+minutes: 3
 sourceLesson: pki-signatures
 summary: Use the exact signed bytes after verification, including in structured document handlers.
 ---
 
-A signature verifier checks a message and signature against a trusted public key. The preceding units separated that verification authority from private-key signing authority.
+A signature check answers one narrow question: were these exact bytes signed by the private key matching this public key? Most real failures come from the code around that check.
 
 ## Where signatures are used
 
@@ -25,17 +25,29 @@ A signature verifier checks a message and signature against a trusted public key
 - **A signature proves the key, not the person.** Binding a public key to an identity is a separate problem, solved by certificates.
 - **Compromised keys can create new forgeries.** Trusted timestamps or other reliable prior records can help distinguish older signatures. Whether an old artifact remains acceptable depends on the earliest plausible compromise, trust-chain validation and policy, not a universal timestamp rule.
 
+> [!analogy] Real-world analogy: A pass that tells the guard how to check it
+> Imagine a building pass with a printed note: "Holder of this pass needs no photo check." A guard who follows instructions printed on the pass itself will wave through anyone who prints that note on a home-made card.
+>
+> **How it maps:** A JWT's `alg` header is that printed note. A verifier that reads `alg` from the token lets the attacker choose `none`, or choose HMAC and use the published RSA public key as the shared secret. A guard with a fixed procedure for each kind of pass is a verifier configured with the allowed algorithm for each key.
+>
+> **Where it stops:** A guard can use judgement and spot an odd-looking pass. Software does exactly what the code says, so the protection must be an explicit allow-list in the verification call, not an expectation that bad tokens will look suspicious.
+
+## Verifying a JWT safely
+
+RFC 8725 (the JWT Best Current Practices) turns these failures into rules. A relying service should:
+
+1. **Fix the algorithm per key.** The library must let the caller list the allowed algorithms and must reject anything else; each key is used with exactly one algorithm. `none` should never be accepted for a token that is meant to be signed.
+2. **Choose the key from its own configuration**, not from the token. A `kid` header may select among keys you already trust, but must be validated before it is used in a lookup. Do not follow a `jku` or `x5u` URL from the token without an allow-list of locations; fetching arbitrary URLs invites server-side request forgery.
+3. **Check the claims after the signature**: the issuer (`iss`) must own the verifying key, the audience (`aud`) must be this service, and the expiry (`exp`) must not have passed.
+4. **Remember a signed token is readable.** A JWS payload is only encoded, so never put secrets in it.
+
 ## Key takeaways
 - Use the exact signed bytes after verification, including in structured document handlers.
-- Enforce the expected algorithm and trusted key instead of accepting attacker-chosen JWT algorithms.
+- Enforce the expected algorithm and trusted key, then check issuer, audience and expiry, instead of trusting token headers.
 - Key identity, compromise timing and relying-party policy remain separate from signature mathematics.
 
 ## Further reading
-- [RSA signature schemes — RFC 8017](https://www.rfc-editor.org/rfc/rfc8017)
-- [EdDSA — RFC 8032](https://www.rfc-editor.org/rfc/rfc8032)
-- [Deterministic ECDSA — RFC 6979](https://www.rfc-editor.org/rfc/rfc6979)
-- [Digital signature — Wikipedia](https://en.wikipedia.org/wiki/Digital_signature)
-- [RFC 8032: Edwards-Curve Digital Signature Algorithm (EdDSA)](https://www.rfc-editor.org/rfc/rfc8032)
-- [RFC 6979: Deterministic Usage of DSA and ECDSA](https://www.rfc-editor.org/rfc/rfc6979)
-- [Ed25519 signing — pyca/cryptography docs](https://cryptography.io/en/latest/hazmat/primitives/asymmetric/ed25519/)
+- [RFC 8725: JSON Web Token Best Current Practices](https://www.rfc-editor.org/rfc/rfc8725)
 - [Critical vulnerabilities in JSON Web Token libraries — Auth0](https://auth0.com/blog/critical-vulnerabilities-in-json-web-token-libraries/)
+- [SAML Security Cheat Sheet — OWASP](https://cheatsheetseries.owasp.org/cheatsheets/SAML_Security_Cheat_Sheet.html)
+- [Digital signature — Wikipedia](https://en.wikipedia.org/wiki/Digital_signature)

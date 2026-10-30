@@ -7,7 +7,7 @@ sourceLesson: pki-signatures
 summary: Ed25519 signing is deterministic and needs no fresh random per-signature nonce.
 ---
 
-A signature verifier checks a message and signature against a trusted public key. The preceding units separated that verification authority from private-key signing authority.
+The RSA and ECDSA units showed two ways a signature scheme can be misused: raw encodings and bad nonces. Newer designs try to remove those choices from the developer altogether.
 
 ## Ed25519: designed to be hard to misuse
 
@@ -60,6 +60,5 @@ Sizes depend on encoding: DER ECDSA signatures vary, commonly around 70–72 byt
 - Compare protocol support, validated implementations and actual encodings rather than key sizes alone.
 
 ## Further reading
-- [RSA signature schemes — RFC 8017](https://www.rfc-editor.org/rfc/rfc8017)
 - [EdDSA — RFC 8032](https://www.rfc-editor.org/rfc/rfc8032)
-- [Deterministic ECDSA — RFC 6979](https://www.rfc-editor.org/rfc/rfc6979)
+- [Ed25519 signing — pyca/cryptography docs](https://cryptography.io/en/latest/hazmat/primitives/asymmetric/ed25519/)

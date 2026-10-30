@@ -39,7 +39,7 @@ Why it works: the vertex that finishes last lies in a "source" SCC of the conden
 
 One DFS pass. Each vertex gets an index `idx` (discovery order) and a `low` value: the smallest index reachable from its subtree using tree edges plus at most one edge to a vertex still on the SCC stack. This separate stack can include vertices whose recursive calls have already returned; it is not the grey recursion stack. Vertices are pushed onto a separate stack as discovered. When a vertex finishes with `low[u] == idx[u]`, it is the root of an SCC: pop the stack down to u. In symbols, the code updates `low` like this:
 
-```formula
+```formula reference
 low(u) = min(idx(u), low(c), idx(w))
 where
 u: the vertex DFS is currently finishing
@@ -49,7 +49,7 @@ low(c): the low value already computed for that child
 w: any vertex still on the SCC stack that u has a direct edge to
 low(u): the smallest discovery number u's subtree can reach this way
 min(…): the smallest of the values listed, taken over every child c and every such w
-In words: u's low value is the earliest-discovered vertex that u or its descendants can jump back to while staying inside an unfinished component.
+In words: a vertex's low value is the discovery number of the earliest vertex that it or its descendants can jump back to while staying inside an unfinished component.
 ```
 
 If even that earliest reachable vertex is u itself (the equality tested in the code), nothing in u's subtree escapes to an older open vertex, so u and everything above it on the stack form one SCC.
@@ -111,7 +111,7 @@ On the example it returns [5, 4, 3], then [2, 1, 0], then [7, 6]. Tarjan emits S
 - Tarjan’s SCC stack differs from the recursion stack.
 
 ## Further reading
-- [Primary reference for this unit](https://algs4.cs.princeton.edu/42digraph/)
+- [Sedgewick and Wayne, Algorithms 4th ed.: 4.2 Directed graphs](https://algs4.cs.princeton.edu/42digraph/)
 - [Strongly connected components — cp-algorithms](https://cp-algorithms.com/graph/strongly-connected-components.html)
 - [Strongly connected component — Wikipedia](https://en.wikipedia.org/wiki/Strongly_connected_component)
 - [Tarjan's strongly connected components algorithm — Wikipedia](https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm)

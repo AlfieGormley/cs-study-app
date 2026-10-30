@@ -42,19 +42,17 @@ def floyd_warshall(n, edges):
     return d, nxt
 ```
 
-A single matrix updated in place is safe: during round k, row k and column k do not change, because going through k to reach k adds nothing:
+A single matrix updated in place is safe: during round k, row k and column k do not change, because going through k to reach k adds nothing. So it does not matter whether a later update reads an old or a new value from that row or column.
 
-```formula
+```formula reference
 d[i][k] + d[k][k] = d[i][k] + 0 = d[i][k]
 where
 i: any start vertex
 k: the vertex unlocked this round
 d[i][k]: the current best distance from i to k
 d[k][k]: the distance from k to itself, 0 when there are no negative cycles
-In words: the entries in row k and column k can't improve in round k, so reading old or new values gives the same answer.
+In words: the row and column of the vertex being unlocked cannot improve during its own round, so reading their old or new values gives the same answer.
 ```
-
-So it does not matter whether you read old or new values.
 
 - **Time:** O(m + n³), including edge initialisation, for n vertices and m edges; O(n³) for simple graphs. Skipping rows i that have no route to k can reduce actual iterations.
 - **Space:** O(n²).
@@ -69,6 +67,6 @@ So it does not matter whether you read old or new values.
 - In-place updates preserve the recurrence when shortest distances are finite.
 
 ## Further reading
-- [Primary reference for this unit](https://algs4.cs.princeton.edu/44sp/)
+- [Sedgewick and Wayne, Algorithms 4th ed.: 4.4 Shortest paths](https://algs4.cs.princeton.edu/44sp/)
 - [Floyd–Warshall algorithm — Wikipedia](https://en.wikipedia.org/wiki/Floyd%E2%80%93Warshall_algorithm)
 - [Floyd–Warshall — cp-algorithms](https://cp-algorithms.com/graph/all-pair-shortest-path-floyd-warshall.html)

@@ -7,17 +7,17 @@ sourceLesson: pki-e2ee
 summary: Separate HMAC labels derive a message key and the next chain key.
 ---
 
-End-to-end encryption keeps message-content keys at the communicating endpoints. Signal’s protocol family uses uploaded prekeys to start sessions and ratcheting keys to protect ongoing conversations.
+X3DH gives Alice and Bob one shared secret at the start of a conversation. If every message were encrypted under that one key, stealing it once would expose the whole history. The Double Ratchet keeps changing the key instead.
 
 ## The Double Ratchet
 
-X3DH gives a shared secret once. The **Double Ratchet** then updates the keys continuously, with two interlocking mechanisms.
+The **Double Ratchet** updates the keys continuously, with two interlocking mechanisms. This unit covers the first.
 
 ### The symmetric ratchet: a key per message
 
 Each direction has a **chain key**. Every message turns the chain once with a KDF, producing a fresh **message key** and the next chain key, and the old chain key is deleted. Signal's specification recommends HMAC with two different one-byte inputs:
 
-```formula
+```formula essential
 mk_i = HMAC(ck_i, 0x01)
 ck_{i+1} = HMAC(ck_i, 0x02)
 where
@@ -30,33 +30,16 @@ HMAC: hash-based message authentication code, here with SHA-256: a keyed hash wh
 In words: the same chain key is hashed with two different labels, giving one key to use now and one to carry forward; because HMAC is one-way, neither output reveals the chain key that made it.
 ```
 
-In code:
+Each message key encrypts one message and is then deleted. Because HMAC cannot be run backwards, a thief who steals today's chain key cannot compute yesterday's message keys or chain keys. That is per-message forward secrecy.
 
-```python
-import hmac, hashlib
+> [!analogy] Real-world analogy: A ratchet spanner
+> A ratchet spanner turns a bolt in one direction only; the mechanism clicks forward and will not turn back.
+>
+> **How it maps:** Each message turns the chain forward one click: the current chain key produces this message's key and the next chain key, and the old chain key is deleted. Like the spanner, the chain moves only forwards, so the current position does not reveal earlier ones.
+>
+> **Where it stops:** A spanner can be taken off and turned back by hand. A KDF chain cannot be reversed at all, because going back would mean inverting HMAC. But anyone who copies the current position can keep clicking forwards, which is exactly the weakness below.
 
-def step(ck):
-    # one turn of the symmetric ratchet
-    # Label 1 makes this message’s key.
-    mk = hmac.new(ck, b"\x01",
-                  hashlib.sha256).digest()
-    # Label 2 advances the secret chain.
-    nxt = hmac.new(ck, b"\x02",
-                   hashlib.sha256).digest()
-    return nxt, mk
-
-ck = bytes(32)  # really: from the root KDF
-for n in range(3):
-    ck, mk = step(ck)
-    # Show an index and 8-byte key prefix.
-    print(n, mk.hex()[:16])
-    # encrypt message n with mk,
-    # then forget mk
-```
-
-This prints three unrelated-looking keys: `3d7afb663124ecbf`, `e43cd1fae55cf944`, `7718295d45e4164b` (first 8 bytes of each). HMAC is one-way, so a thief who steals today's chain key cannot run it backwards to yesterday's message keys. That is per-message forward secrecy.
-
-What it does not give is recovery: from the current chain key, the thief can compute every *future* key in this chain.
+What it does not give is healing: from the current chain key, the thief can compute every *future* key in this chain. The next unit adds the second ratchet to fix that.
 
 ## Key takeaways
 - Separate HMAC labels derive a message key and the next chain key.

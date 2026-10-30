@@ -7,7 +7,7 @@ sourceLesson: pki-key-management
 summary: Least privilege, quorum and witnessed ceremonies constrain sensitive key operations.
 ---
 
-Envelope encryption separates a locally used data encryption key (DEK) from the key encryption key (KEK) protecting it. Key custody and application authorisation remain essential.
+Once keys live in a KMS or HSM, the remaining risks are about people and operations: who may use a key, how a key is kept from being lost or misused, and what happens when the KMS itself is unavailable.
 
 ## Controlling who can use keys
 
@@ -31,11 +31,6 @@ Envelope encryption separates a locally used data encryption key (DEK) from the 
 - Test durable key recovery and account for service outages, quotas, logs and plaintext copies.
 
 ## Further reading
-- [AWS KMS cryptographic details](https://docs.aws.amazon.com/kms/latest/developerguide/kms-cryptography.html)
-- [NIST key-management guidance](https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final)
-- [AWS KMS concepts: envelope encryption — AWS docs](https://docs.aws.amazon.com/kms/latest/developerguide/kms-cryptography.html)
-- [Encryption at rest in Google Cloud](https://cloud.google.com/docs/security/encryption/default-encryption)
-- [Hardware security module — Wikipedia](https://en.wikipedia.org/wiki/Hardware_security_module)
-- [NIST SP 800-57 Part 1: Recommendation for Key Management](https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final)
-- [Root KSK Ceremonies — IANA](https://www.iana.org/dnssec/ceremonies)
 - [Key Management Cheat Sheet — OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Key_Management_Cheat_Sheet.html)
+- [Root KSK Ceremonies — IANA](https://www.iana.org/dnssec/ceremonies)
+- [Deleting AWS KMS keys — AWS docs](https://docs.aws.amazon.com/kms/latest/developerguide/deleting-keys.html)

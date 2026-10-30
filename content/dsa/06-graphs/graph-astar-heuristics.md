@@ -7,13 +7,13 @@ sourceLesson: graph-shortest-paths
 summary: Admissibility and consistency make different guarantees.
 ---
 
-A* ranks vertices using known cost plus a heuristic estimate; these quantities and edge weights share one cost unit. A heuristic’s guarantee depends on the graph and movement rules, not its name alone.
+A* ranks vertices using known cost plus a heuristic estimate; these quantities and edge weights are measured in the same units. A heuristic’s guarantee depends on the graph and movement rules, not its name alone.
 
 ### Heuristic quality
 
-For finite graphs with non-negative edge costs, a zero heuristic at the reachable goal, and a heuristic expressed in the same cost units, two properties matter:
+For finite graphs with non-negative edge costs, a zero heuristic at the reachable goal, and a heuristic expressed in the same units as the edge costs, two properties matter:
 
-```formula
+```formula essential
 h(v) ≤ h*(v)
 h(u) ≤ w(u, v) + h(v)
 where
@@ -42,29 +42,25 @@ For example, Manhattan distance on a 4-way grid with cost-1 moves is consistent:
 > [!tip] Trading optimality for speed
 > **Weighted A* search** inflates the heuristic to search more greedily towards the goal. It can reduce expansions, but a speedup is not guaranteed. The price is a bounded loss of optimality, shown below.
 
-On a finite graph with non-negative costs, an admissible heuristic that is zero at the goal, reopening on improved known cost, and stopping when the goal is popped, weighted A* returns a cost within a known factor of the best:
+On a finite graph with non-negative costs, with an admissible heuristic that is zero at the goal, reopening on improved known cost, and stopping when the goal is popped, weighted A* returns a cost within a known factor of the best: inflate the heuristic by 1.5 and the path found costs at most 1.5 times the optimum.
 
-```formula
+```formula reference
 f(v) = g(v) + λ h(v)
 C ≤ λ C*
-C ≤ 1.5 × 100 = 150
 where
 v: a vertex in the min-heap
 f(v): its priority; the min-heap pops the smallest
 g(v): the known cost from the start to v
 h(v): the heuristic estimate of the remaining cost to the goal
-λ: the inflation weight, greater than 1; 1.5 in the example
+λ: the inflation weight, greater than 1
 C: the cost of the path weighted A* returns
-C*: the cost of the true shortest path; 100 in the example
-In words: weighting the heuristic by λ can make the answer at most λ times the optimum.
+C*: the cost of the true shortest path
+In words: multiplying an admissible heuristic by an inflation weight trades optimality for greed, and the path found costs at most that weight times the best possible.
 ```
 
-With an inflation factor of 1.5 and a true shortest cost of 100, the path found costs at most 150.
+So with an inflation factor of 1.5 and a true shortest cost of 100, the path found costs at most 150. Whether it is found faster depends on the graph; the guarantee is only about cost.
 
-Route-planning methods include contraction hierarchies and landmark heuristics (ALT).
-
-> [!note] Content gap
-> Product-specific implementations and millisecond/vertex-count performance claims are omitted: no identified dataset, implementation and reproducible measurement support them here.
+Large-scale route planning also uses preprocessing methods such as contraction hierarchies and landmark heuristics (ALT).
 
 ## Key takeaways
 - Admissibility and consistency make different guarantees.
@@ -72,7 +68,6 @@ Route-planning methods include contraction hierarchies and landmark heuristics (
 - Weighted A* trades an optimality bound for more goal-directed ordering.
 
 ## Further reading
-- [Primary reference for this unit](https://ai.stanford.edu/~nilsson/OnlinePubs-Nils/PublishedPapers/astar.pdf)
 - [Admissible heuristic — Wikipedia](https://en.wikipedia.org/wiki/Admissible_heuristic)
 - [A* search algorithm — Wikipedia](https://en.wikipedia.org/wiki/A*_search_algorithm)
 - [Thayer and Ruml: Faster Than Weighted A*](https://cdn.aaai.org/ICAPS/2008/ICAPS08-044.pdf)

@@ -9,7 +9,7 @@ sourceLesson: wm-debugging
 
 “The network is down” or “the network is slow” needs a precise symptom before it can guide diagnosis. Good network debugging is mostly method: pin down the symptom, find which layer and which part of the path it lives in, and test a hypothesis with the right tool.
 
-Start with a repeatable method and use ping as one limited end-to-end measurement. The following units add path, DNS, timing and packet evidence before examining recurring failure patterns.
+Start with a repeatable method and use ping as one limited end-to-end measurement. The following lessons add path, DNS, timing and packet evidence before examining recurring failure patterns.
 
 ## The method
 

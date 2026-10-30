@@ -13,41 +13,24 @@ The preceding unit defined residual edges: unused edge capacity in the forward d
 
 **Ford–Fulkerson** is the method: while an augmenting path exists, push its bottleneck edge capacity along it.
 
-- With integer capacities each augmentation adds at least 1, so the number of augmentations is at most the answer itself:
-
-```formula
-A ≤ |f*|
-T = O(m |f*|)
-A = 2 × 10^6
-where
-A: the number of augmentations
-|f*|: the value of the maximum flow; 2 × 10^6 in the bad case
-m: edges in the flow-relevant subgraph; isolated vertices can be removed so a search is O(m)
-T: Ford–Fulkerson's running time with integer capacities
-O(…): Big O: grows at most this fast, up to a constant factor
-≤: is at most
-In words: each path adds at least one unit, so you may need as many searches as the size of the answer.
-```
-
-  That can be awful if capacities are large: in the classic bad case, paths alternate back and forth across a middle edge with edge capacity 1, needing two million augmentations when the other capacities are a million.
+- With integer capacities each augmentation adds at least 1, so the number of augmentations is at most the value of the maximum flow, and each search costs O(m). That can be awful if capacities are large: in the classic bad case, paths alternate back and forth across a middle edge with edge capacity 1, needing two million augmentations when the other capacities are a million.
 - With irrational capacities a bad path choice may never terminate.
 
-**Edmonds–Karp** fixes the choice: always use the **shortest** augmenting path (fewest edges), found by BFS. That bounds the number of augmentations, whatever the capacities:
+**Edmonds–Karp** fixes the choice: always use the **shortest** augmenting path (fewest edges), found by BFS. That bounds the number of augmentations by the size of the graph, whatever the capacities:
 
-```formula
+```formula reference
 A = O(nm)
 T = O(nm) × O(m) = O(nm^2)
-nm^2 = 10^3 × (10^4)^2 = 10^11
 where
-n: the number of vertices; 1,000 in the example
-m: the number of edges; 10,000 in the example
+n: the number of vertices
+m: the number of edges
 A: the number of augmenting paths Edmonds–Karp uses
 T: total running time on the flow-relevant subgraph, where each BFS costs O(m)
 O(…): Big O: grows at most this fast, up to a constant factor
-In words: at most about n × m shortest paths, each found by a BFS over m edges.
+In words: the number of shortest augmenting paths grows at most with vertices times edges, and each is found by one BFS over the edges, so the total does not depend on the capacities.
 ```
 
-So the total is **O(n m²)**, in the unit-cost arithmetic model, independent of how large the edge capacities are. The 10¹¹ figure is a worst-case growth expression; real runs usually need far fewer augmentations. Integer bit lengths and floating-point error require separate consideration.
+So the total is **O(n m²)**, in the unit-cost arithmetic model, independent of how large the edge capacities are. This is a worst-case bound; real runs usually need far fewer augmentations. Integer bit lengths and floating-point error require separate consideration.
 
 ```python
 from collections import deque, defaultdict
@@ -112,6 +95,6 @@ A useful fact: with integer capacities there is always an **integer** maximum fl
 - Exact integer capacities avoid the floating-point complications omitted here.
 
 ## Further reading
-- [Primary reference for this unit](https://algs4.cs.princeton.edu/64maxflow/)
+- [Sedgewick and Wayne, Algorithms 4th ed.: 6.4 Maximum flow](https://algs4.cs.princeton.edu/64maxflow/)
 - [Max-flow min-cut theorem — Wikipedia](https://en.wikipedia.org/wiki/Max-flow_min-cut_theorem)
 - [Ford–Fulkerson algorithm — Wikipedia](https://en.wikipedia.org/wiki/Ford%E2%80%93Fulkerson_algorithm)

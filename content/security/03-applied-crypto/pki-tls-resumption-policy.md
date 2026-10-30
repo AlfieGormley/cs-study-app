@@ -7,7 +7,7 @@ sourceLesson: pki-tls
 summary: PSK-only resumption loses forward secrecy against later PSK exposure.
 ---
 
-In a certificate-authenticated TLS 1.3 connection, ephemeral key agreement, signatures, HKDF and AEAD have separate jobs. This unit examines one part of that composition.
+A full handshake costs a round trip and public-key operations, so TLS 1.3 lets a client resume with a secret from an earlier connection. Resumption is where forward secrecy is most easily lost.
 
 ## Resumption and its trade-offs
 
@@ -18,8 +18,7 @@ The **resumption master secret** derives a PSK for each ticket. The ticket is an
 
 For stateless tickets, compromise of a key that exposes PSKs breaks recorded PSK-only resumed sessions. Fresh DH in `psk_dhe_ke` protects its 1-RTT traffic, but 0-RTT traffic still depends only on the PSK. Limit ticket lifetime and key exposure according to the implementation and threat model.
 
-> [!note] Content gap
-> Fleet-wide ticket-key reuse measurements and a universal hourly rotation rule are omitted: no reproducible deployment evidence or universally applicable policy was available for this review.
+There is no single correct rotation period for ticket keys. The design choice is how much recorded traffic one stolen ticket key would expose: one key shared by every server in a fleet for a month exposes every `psk_ke` session resumed under it during that month.
 
 ## Putting it together
 
@@ -44,7 +43,7 @@ Each piece protects another: the signature authenticates the ECDH values, transc
 - **Turning off verification.** The cryptography is useless if the client skips certificate or hostname checks; ECDH then happily agrees a key with the attacker.
 - **Re-enabling old versions.** TLS 1.0 and 1.1 are deprecated. Enabling them exposes clients that permit those versions; it does not automatically downgrade clients that enforce a newer minimum. Keep TLS 1.2 as the floor and prefer ECDHE with AEAD suites there.
 - **Long-lived ticket keys** and **0-RTT without application-level replay safety** both trade away guarantees for speed.
-- **Terminating TLS early.** TLS protects only hop to hop. Traffic decrypted at a load balancer and forwarded in plaintext is exposed on that internal hop. A historical intelligence-programme attribution is omitted here because the review did not obtain a reliable primary record supporting the specific claim.
+- **Terminating TLS early.** TLS protects only hop to hop. Traffic decrypted at a load balancer and forwarded in plaintext is exposed on that internal hop.
 
 ## Key takeaways
 - PSK-only resumption loses forward secrecy against later PSK exposure.
@@ -53,10 +52,8 @@ Each piece protects another: the signature authenticates the ECDH values, transc
 
 ## Further reading
 - [TLS 1.3 — RFC 9846](https://www.rfc-editor.org/rfc/rfc9846)
-- [TLS example traces — RFC 8448](https://www.rfc-editor.org/rfc/rfc8448)
-- [RFC 9846: The Transport Layer Security (TLS) Protocol Version 1.3](https://www.rfc-editor.org/rfc/rfc8446)
-- [RFC 8448: Example Handshake Traces for TLS 1.3](https://www.rfc-editor.org/rfc/rfc8448)
+- [Example handshake traces for TLS 1.3 — RFC 8448](https://www.rfc-editor.org/rfc/rfc8448)
+- [HKDF — RFC 5869](https://www.rfc-editor.org/rfc/rfc5869)
 - [The Illustrated TLS 1.3 Connection](https://tls13.xargs.org/)
-- [RFC 5869: HMAC-based Extract-and-Expand Key Derivation Function (HKDF)](https://www.rfc-editor.org/rfc/rfc5869)
 - [The ROBOT Attack](https://robotattack.org/)
 - [Chrome transition to ML-KEM](https://security.googleblog.com/2024/09/a-new-path-for-kyber-on-web.html)

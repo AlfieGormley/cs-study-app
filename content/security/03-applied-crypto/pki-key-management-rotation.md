@@ -7,45 +7,33 @@ sourceLesson: pki-key-management
 summary: KEK version rotation can leave earlier wrapped keys readable under retained material.
 ---
 
-Envelope encryption separates a locally used data encryption key (DEK) from the key encryption key (KEK) protecting it. Key custody and application authorisation remain essential.
+"Rotate your keys" sounds like one action, but in an envelope system it means two different things with different purposes, and neither one undoes a key that has already leaked.
 
-## Rotation
+## Two things to rotate
 
 Rotating a key means new data is protected by new key material. In envelope systems there are two separate things to rotate:
 
-- **KEK rotation**: for AWS-generated symmetric encryption keys, AWS KMS keeps every previous version of a key's material, wraps new DEKs with the latest, and still unwraps old ones automatically. The key's identifier does not change, and nothing is re-encrypted. Once enabled, automatic rotation runs yearly by default (configurable down to 90 days).
-- **DEK rotation**: generate fresh DEKs for new data. With AES-GCM and random 96-bit nonces, NIST limits a key to 4,294,967,296 encryptions, so a DEK shared by billions of records must be replaced.
+- **KEK rotation**: for AWS-generated symmetric encryption keys, AWS KMS keeps every previous version of a key's material, wraps new DEKs with the latest, and still unwraps old ones automatically. The key's identifier does not change, and nothing is re-encrypted. Automatic rotation runs every 365 days by default once enabled; a custom period between 90 and 2,560 days can be set, and on-demand rotation is also available (as documented in October 2026).
+- **DEK rotation**: generate fresh DEKs for new data. This is about how much data one key protects.
 
-Where does 4,294,967,296 come from? With random nonces the danger is two encryptions picking the same nonce by chance, which breaks GCM. The birthday approximation gives the chance of any repeat:
+## Why DEKs must not be used for ever
 
-```formula
-P ≈ q(q − 1) / (2^{b+1})
-P ≈ 2^{32} × 2^{32} / 2^{97} = 2^{−33}
-where
-P: the probability that at least two of the q nonces are equal
-q: the number of encryptions under one key; here the NIST limit, 2^32 ≈ 4.3 billion
-b: the nonce length in bits; 96 for GCM
-≈: approximately equal to; the approximation is accurate while P is small
-In words: the chance of a repeated nonce grows with the square of the number of messages; at 2^32 messages it is about 1 in 8.6 billion, inside NIST SP 800-38D's requirement that the chance of any repeat stay at or below 2^−32, NIST separately specifies the conservative 2^32 invocation cap for this construction; the approximation illustrates its margin rather than deriving that exact cap.
-```
+With AES-GCM and random 96-bit nonces, the danger is two encryptions under one key picking the same nonce by chance, which breaks GCM's confidentiality and authentication. Every pair of encryptions is a chance for a match, so the risk grows with the square of the number of messages: double the messages and the risk roughly quadruples. (The crypto basics lesson on GCM nonce limits shows this birthday calculation.)
 
-The square is the "birthday" effect: every pair of encryptions is a chance for a match, the number of pairs grows with the square of the number of messages, and each pair matches with probability 1 in roughly 79 octillion. Double the messages and the risk quadruples. For example, at 10 million encryptions a day one key reaches the limit in:
+NIST SP 800-38D therefore caps a key used with random 96-bit nonces at 2^32 encryptions, about 4.3 billion. That sounds huge, but a service encrypting 10 million rows a day under one key reaches it in a little over a year, and the count is **per key, across everything that uses it**: twenty servers or a thousand devices sharing one key all add to the same total, even if each one only encrypts a little.
 
-```formula
-t = q_max / r
-t = 4,294,967,296 / 10,000,000 ≈ 429.5 d
-where
-t: the time until the key must be retired, in days (d)
-q_max: the NIST limit, 2^32 = 4,294,967,296 encryptions per key
-r: the encryption rate, 10 million per day
-≈: approximately equal to
-d: days
-In words: at 10 million encryptions a day, one random-nonce GCM key lasts about 14 months.
-```
+A fresh DEK per object keeps each key far below the random-nonce bound. A deterministic nonce construction with guaranteed uniqueness avoids random collisions, but must also obey its own invocation, length and authentication limits.
 
-A fresh DEK per object keeps each key far below the random-IV invocation bound. A deterministic IV construction with guaranteed uniqueness avoids random collisions, but must also obey its own invocation, length and authentication limits. Count use across every device sharing a key.
+> [!analogy] Real-world analogy: A new master key with the old ones kept in a drawer
+> A building manager replaces the master key every year, but keeps all the old master keys in a drawer, because old storage boxes were locked with them. New boxes get the new key; old boxes still open.
+>
+> **How it maps:** That is versioned KEK rotation in a KMS: new DEKs are wrapped under the newest key material, and older material is retained so existing wrapped DEKs still unwrap. Nothing already stored is re-locked.
+>
+> **Where it stops:** If a thief copied last year's master key, the yearly change does not help with the boxes locked under it, and the copies of old boxes the thief already took stay readable for ever. In cryptography, the fix is to re-encrypt data under new DEKs and keys the attacker never had.
 
-Rotation limits how much data one key protects; it does *not* fix a compromise on its own. If a KEK leaked, old versions can still unwrap old DEKs. After a real compromise you must re-encrypt the data under keys the attacker never had.
+## Rotation is not compromise response
+
+Rotation limits how much data one key protects; it does *not* fix a compromise on its own. If a KEK leaked, its old versions can still unwrap old DEKs, and the attacker may have copied wrapped DEKs and ciphertexts already. After a real compromise, re-encrypt the affected data under fresh DEKs and keys the attacker never had, and accept that copies the attacker already took remain exposed.
 
 ## Key takeaways
 - KEK version rotation can leave earlier wrapped keys readable under retained material.
@@ -53,5 +41,5 @@ Rotation limits how much data one key protects; it does *not* fix a compromise o
 - Exposure recovery needs uncompromised keys and, where DEKs may be known, data re-encryption.
 
 ## Further reading
-- [AWS KMS cryptographic details](https://docs.aws.amazon.com/kms/latest/developerguide/kms-cryptography.html)
-- [NIST key-management guidance](https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final)
+- [Rotating AWS KMS keys — AWS docs](https://docs.aws.amazon.com/kms/latest/developerguide/rotate-keys.html)
+- [NIST SP 800-38D: GCM and GMAC](https://csrc.nist.gov/pubs/sp/800/38/d/final)

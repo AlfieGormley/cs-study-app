@@ -33,27 +33,27 @@
     "id": "wm-wifi-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Use the specified DCF model. The contention window starts at 15 slots and, after each failed acknowledged transmission, grows as:\n\n```formula\nCW_new = min(2(CW_old + 1) − 1, 1023)\nwhere\nCW_old: the contention window before the failure, in slots\nCW_new: the window for the next attempt\nmin: the minimum function: the smaller of its two values\nIn words: the window roughly doubles after each failure, up to a cap of 1023 slots.\n```\n\nThe retry limit permits another attempt. After three failures, what range supplies attempt four’s backoff?",
+    "prompt": "In the simplified DCF model, a station on a crowded channel has three transmissions in a row fail with no ACK. The retry limit still allows another attempt. What happens to its next attempt, and what does that mean for the user?",
     "options": [
       {
-        "text": "[0, 15]",
-        "explanation": "That is the window for the first attempt only. Every missing ACK doubles the window, roughly."
+        "text": "It retries immediately, so a failed frame costs almost no extra time",
+        "explanation": "Retrying at once would just collide again with the other contenders. DCF draws a new random backoff from a larger window after each failure."
       },
       {
-        "text": "[0, 63]",
-        "explanation": "That is the window for the third attempt (after two failures). Count the failures carefully: there have been three."
+        "text": "Its contention window resets to the starting value, so the retry is no slower than a fresh frame",
+        "explanation": "The window resets after a success (or after the frame is dropped), not after a failure. Each failure widens the window."
       },
       {
-        "text": "[0, 127]",
-        "explanation": "Correct. 15 → 31 after the first failure, 31 → 63 after the second, 63 → 127 after the third. The fourth attempt draws from [0, 127]."
+        "text": "It draws its backoff from a window roughly twice the previous one, so the expected wait grows and delay becomes larger and more variable",
+        "explanation": "Correct. The window goes 15, 31, 63, then 127 slots in this example. Spreading retries more widely reduces repeat collisions but adds waiting, so loaded Wi-Fi shows longer and jumpier delay."
       },
       {
-        "text": "[0, 1023]",
-        "explanation": "1023 is the cap the window can grow to, not where it jumps after a few failures."
+        "text": "Every other station on the channel also doubles its window, so the channel becomes quiet",
+        "explanation": "Only the station whose own transmission failed widens its window. Other stations follow their own retry state."
       }
     ],
     "answer": 2,
-    "workedExample": "Apply the growth rule once per failure:\n\n```formula\nCW_new = min(2(CW_old + 1) − 1, 1023)\nCW_2 = 2 × (15 + 1) − 1 = 31\nCW_3 = 2 × (31 + 1) − 1 = 63\nCW_4 = 2 × (63 + 1) − 1 = 127\nT_max = 127 × 9 µs ≈ 1.143 ms\nwhere\nCW_old: the contention window before a failed attempt, in slots; 15 for attempt 1\nCW_new: the contention window for the next attempt, in slots\nCW_2: the window for attempt 2, after the first failure\nCW_3: the window for attempt 3, after the second failure\nCW_4: the window for attempt 4, after the third failure\nmin: the minimum function: the smaller of its two values, so the window never exceeds the 1023-slot cap\nT_max: the longest possible countdown on attempt 4, ignoring time spent frozen while the channel is busy\nµs: microsecond, one millionth of a second\nms: millisecond, one thousandth of a second\n≈: approximately equal to\nIn words: each failure roughly doubles the window, so after three failures attempt 4 draws its backoff from 0 to 127 slots.\n```\n\nSo the station picks a random number of slots from 0 to 127. Busy-channel freezes and interframe waits can make elapsed time longer. The window grows for this contending station; not every other station necessarily changes its window.",
+    "workedExample": "1. No ACK is taken as a sign of collision or corruption, so the station must try again.\n2. Each failure roughly doubles its contention window: 15 → 31 → 63 → 127 slots after three failures in this example, capped at 1023.\n3. It draws a random count from 0 up to that window and counts down only while the channel is idle, freezing while others transmit.\n4. A wider range means a longer expected wait, so this frame is delayed further. Across a crowded channel this shows up as falling throughput and latency spikes.\n5. If the retry limit is reached the frame is dropped; after a success the window returns to its starting value.",
     "link": {
       "title": "Carrier-sense multiple access with collision avoidance — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Carrier-sense_multiple_access_with_collision_avoidance"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "For the specified timings, DIFS is SIFS plus two slots:\n\n```formula\nDIFS = SIFS + 2t_slot\nDIFS = 16 µs + 2 × 9 µs = 34 µs\nwhere\nDIFS: the DCF interframe space a contending station waits after the channel goes idle, in microseconds (µs)\nSIFS: the short interframe space before an immediate reply such as an ACK, 16 µs here\nt_slot: the slot time, 9 µs for 5 GHz OFDM\nµs: microsecond, one millionth of a second\nIn words: a contender must see 18 µs more idle time than the receiver needs before its ACK, so the ACK starts first.\n```\n\nA receiver starting its ACK after 16 µs gains priority over compliant contenders that sense it and require 34 µs of idle time. This protects the exchange under those conditions; it is not an atomic guarantee against all other transmissions. Other PHYs and EDCA categories use different parameters.",
+    "workedExample": "1. In this 5 GHz OFDM DCF example, SIFS is 16 µs and DIFS is SIFS plus two 9 µs slots, 34 µs.\n2. A receiver that has just received a frame carrying data starts its ACK after only 16 µs of idle time.\n3. A compliant contender that sensed that frame needs 34 µs of idle time before it may even begin its backoff, so the ACK is already on the air.\n4. This gives the immediate reply priority under those sensing conditions. It is not an absolute guarantee: hidden senders and interference can still corrupt the ACK, and other PHYs and EDCA categories use different parameters.",
     "link": {
       "title": "Carrier-sense multiple access with collision avoidance — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Carrier-sense_multiple_access_with_collision_avoidance"

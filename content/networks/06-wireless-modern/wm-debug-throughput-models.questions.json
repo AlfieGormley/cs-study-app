@@ -3,27 +3,27 @@
     "id": "wm-debugging-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "In the ideal Reno Mathis model, a TCP flow's throughput is:\n\n```formula\nX ≈ (MSS / RTT)(1.22 / √(p))\nwhere\nX: the flow's throughput, in bits per second (bit/s)\nMSS: maximum segment size, 1,460 bytes (convert to bits by multiplying by 8)\nRTT: round-trip time, 20 ms = 0.02 s\np: the loss probability as a fraction, 0.001 (0.1%)\n√: square root\nbit/s: bits per second\nms: millisecond\ns: second\n≈: approximately equal to\nIn words: one segment per round trip, multiplied by a factor that grows as loss becomes rarer.\n```\n\nWhat rate does the formula return?",
+    "prompt": "In the ideal Reno Mathis model, a TCP flow's throughput is:\n\n```formula\nX ≈ (MSS / RTT)(1.22 / √(p))\nwhere\nX: the flow's long-run throughput, in bits per second (bit/s)\nMSS: maximum segment size, in bits\nRTT: round-trip time, in seconds (s)\np: the loss probability as a fraction\n√: square root\n≈: approximately equal to\nIn words: one segment per round trip, multiplied by a factor that grows as loss becomes rarer.\n```\n\nA long-distance backup flow is loss-limited. You can afford one change: halve the RTT (by moving the backup target closer) or halve the loss rate (by fixing a noisy link). Which raises this model's throughput more?",
     "options": [
       {
-        "text": "About 0.58 Mbit/s",
-        "explanation": "That is only one segment per round trip (MSS divided by RTT). The loss factor, 1.22 divided by the square root of 0.001 (about 38.6), still has to be multiplied in."
+        "text": "Halving the loss rate, because throughput is proportional to the loss rate",
+        "explanation": "Throughput depends on the square root of the loss rate, not the loss rate itself. Halving loss raises it by only about 1.41 times."
       },
       {
-        "text": "About 22.5 Mbit/s",
-        "explanation": "Correct. 1,460 × 8 bits ÷ 0.02 s = 584,000 bit/s, and multiplying by about 38.6 gives about 22.5 Mbit/s."
+        "text": "Halving the RTT: throughput doubles, while halving loss raises it only about 1.41 times",
+        "explanation": "Correct. RTT appears directly in the denominator, so halving it doubles the model's throughput. Loss enters through its square root, and the square root of 2 is about 1.41."
       },
       {
-        "text": "About 712 Mbit/s",
-        "explanation": "This divides 1.22 by the loss rate itself (giving 1,220) instead of by its square root (giving about 38.6)."
+        "text": "Both give exactly the same improvement",
+        "explanation": "RTT and loss enter the model differently: one directly, one through a square root."
       },
       {
-        "text": "About 2.2 Mbit/s",
-        "explanation": "About 2.25 Mbit/s would result from using a loss rate of 0.1 (10%), whose square root is ten times that of 0.001. Using 1% loss would give a different value, about 7.12 Mbit/s."
+        "text": "Neither helps, because TCP throughput depends only on link capacity",
+        "explanation": "A single loss-limited flow can run far below link capacity; this model describes exactly that case."
       }
     ],
     "answer": 1,
-    "workedExample": "```formula\nMSS / RTT = 1460 × 8 bit / 0.020 s\nMSS / RTT = 584,000 bit/s\n√(p) = √(0.001) ≈ 0.0316\n1.22 / 0.0316 ≈ 38.6\nX ≈ 584,000 × 38.6 ≈ 22.5 Mbit/s\nwhere\nMSS: maximum segment size, 1,460 bytes = 11,680 bits\nRTT: round-trip time, 0.020 seconds (s)\np: the loss probability, 0.001\n√: square root\nX: the model throughput\nbit: one binary digit\nbit/s: bits per second\nMbit/s: megabits per second, one million bits per second\ns: second\n≈: approximately equal to\nIn words: one 1,460-byte segment every 20 ms is 584 kbit/s, and 0.1% loss lets the window grow to about 38.6 times that.\n```\n\nThis is a model result for the supplied Reno assumptions, not a universal loss-based TCP ceiling or a prediction obtained from ping alone.",
+    "workedExample": "1. Read the shape of the model rather than plugging in numbers: RTT divides the whole expression, and the loss rate appears under a square root.\n2. Halving RTT therefore doubles throughput: the average window, which the loss rate sets, stays the same size, but each window is delivered twice as often.\n3. Halving the loss rate multiplies the loss factor by the square root of 2, about 1.41: the window gets somewhat larger before each cut.\n4. So in this model, distance matters more than modest loss improvements; moving data closer, or using more parallel flows, often beats chasing small loss reductions.\n5. This is a Reno model result. CUBIC and BBR respond differently, and real paths have other limits.",
     "link": {
       "title": "TCP congestion control — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/TCP_congestion_control"
@@ -33,27 +33,27 @@
     "id": "wm-debugging-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "A single backlogged TCP flow has a measured effective flight-window limit of 4,000,000 bytes and a fixed 80 ms RTT. Assume sufficient link capacity and no tighter bottleneck. What limit does the window-divided-by-RTT model give?",
+    "prompt": "A single backlogged TCP flow over a 10 Gbit/s path with a fixed 80 ms RTT reaches only about 400 Mbit/s. There is no loss, the link is otherwise idle, and `ss` shows the flight window pinned at about 4 MB, set by the receiver's maximum receive buffer. Which change would raise this flow's throughput?",
     "options": [
       {
-        "text": "10 Gbit/s, since there is no loss",
-        "explanation": "Without loss, the limit is the window divided by the RTT. A 4 MB window cannot keep a 10 Gbit/s × 80 ms pipe full."
+        "text": "Upgrade the path to 100 Gbit/s",
+        "explanation": "The flow is not using the existing capacity. It is limited to one 4 MB window per 80 ms round trip, whatever the link speed."
       },
       {
-        "text": "About 400 Mbit/s",
-        "explanation": "Correct. 4 MB × 8 = 32 Mbit per round trip; 32 Mbit / 0.08 s = 400 Mbit/s."
+        "text": "Raise the receiver's maximum receive buffer (and so its window) towards the bandwidth-delay product",
+        "explanation": "Correct. With no loss, throughput is about one window per round trip: 4 MB per 80 ms is about 400 Mbit/s. Filling 10 Gbit/s at 80 ms needs about 100 MB in flight."
       },
       {
-        "text": "About 50 Mbit/s",
-        "explanation": "This forgets to convert bytes to bits (4 MB / 0.08 s = 50 MB/s = 400 Mbit/s)."
+        "text": "Switch congestion control to a loss-based algorithm",
+        "explanation": "There is no loss and the limit is the receiver's window, not congestion control's response to loss."
       },
       {
-        "text": "About 4 Gbit/s",
-        "explanation": "This divides by 8 ms rather than 80 ms."
+        "text": "Reduce packet loss on the path",
+        "explanation": "There is no loss to reduce; the window, not loss, is the binding limit."
       }
     ],
     "answer": 1,
-    "workedExample": "1. A sender can have at most one window of unacknowledged data in flight per round trip.\n\n```formula\nX_max = (8W) / RTT\nX_max = 8 × 4,000,000 B / 0.080 s\nX_max = 32,000,000 bit / 0.080 s\nX_max = 400,000,000 bit/s = 400 Mbit/s\nwhere\nX_max: the window-limited throughput, in bits per second (bit/s)\nW: the effective flight window, 4,000,000 bytes (B)\nRTT: the round-trip time, 80 ms = 0.080 seconds (s)\nB: byte, 8 bits\nbit: one binary digit\nbit/s: bits per second\nMbit/s: megabits per second\ns: second\nIn words: 32 megabits per 80 ms round trip is 400 megabits per second, whatever the link speed.\n```\n\n2. To fill the link you need the bandwidth-delay product:\n\n```formula\nBDP = (R RTT) / 8\nBDP = 10^10 bit/s × 0.080 s / 8\nBDP = 100,000,000 B = 100 MB\nwhere\nBDP: the bandwidth-delay product, the data needed in flight to keep the link busy, in bytes (B)\nR: the link rate, 10 Gbit/s = 10^10 bits per second (bit/s)\nRTT: the round-trip time, 0.080 seconds (s)\nB: byte\nMB: megabyte, 10^6 bytes\nbit/s: bits per second\ns: second\nIn words: a 10 Gbit/s, 80 ms path needs 100 MB in flight, 25 times this flow's window.\n```\n\n3. Identify which measured limit is binding before changing configuration. Socket-memory limits, advertised receive window and cwnd are distinct. The model alone does not prescribe a buffer increase or parallel streams.",
+    "workedExample": "1. With no loss, a sender can have at most one window of unacknowledged data in flight and must wait about a round trip for acknowledgments. So the limit is roughly one window per round trip.\n2. 4 MB per 80 ms round trip is about 400 Mbit/s, matching the measurement, so the window is the bottleneck.\n3. Keeping a 10 Gbit/s, 80 ms path full would need about 100 MB in flight (the bandwidth-delay product), 25 times this window.\n4. Since `ss` shows the receiver's buffer limit setting the window, raising that limit (for example receive-buffer autotuning maxima) is the change that helps. A faster link or loss fixes change nothing while the window is the binding limit.\n5. Socket-memory limits, advertised receive window and cwnd are distinct, so confirm which one is binding before changing configuration.",
     "link": {
       "title": "TCP congestion control — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/TCP_congestion_control"

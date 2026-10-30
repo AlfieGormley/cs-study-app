@@ -2,12 +2,12 @@
 id: pki-key-management-envelope-tradeoffs
 title: Envelope scaling and crypto-shredding
 level: intermediate
-minutes: 2
+minutes: 3
 sourceLesson: pki-key-management
 summary: Per-object data encryption keys reduce a leaked DEK’s scope and keep bulk data away from the KMS API.
 ---
 
-Envelope encryption separates a locally used data encryption key (DEK) from the key encryption key (KEK) protecting it. Key custody and application authorisation remain essential.
+The previous unit showed how envelope encryption works. This one asks why large storage systems almost all use it, and what it makes possible, such as erasing data you cannot physically reach.
 
 ### Why the envelope pays off
 
@@ -17,6 +17,13 @@ Envelope encryption separates a locally used data encryption key (DEK) from the 
 - **Cheap rotation**: moving DEKs to a new uncompromised KEK can require only re-wrapping. Automatic version rotation may retain old wraps unchanged; compromise recovery can require fresh DEKs and data re-encryption.
 - **Crypto-shredding**: destroy every usable copy of the relevant keys and wrapped-key recovery paths to make remaining ciphertext unrecoverable, assuming sound encryption and no retained plaintext copies.
 
+> [!analogy] Real-world analogy: Destroying the only key to an archive box
+> Old records sit in locked boxes in an off-site warehouse you cannot visit or empty. If each customer's papers are in their own locked box, destroying that box's only key makes those papers unreadable, even though the box is still on the shelf.
+>
+> **How it maps:** The warehouse is an immutable backup or a replicated store; the boxes are ciphertexts, each under its own DEK. Crypto-shredding destroys every usable copy of the DEK (or of its wrapped form), so the ciphertext remains but cannot be read.
+>
+> **Where it stops:** A physical key is easy to count. Digital keys may survive in caches, logs, key-table backups or a plaintext copy someone exported, and every one of those must be gone. The protection also relies on the cipher staying unbroken for as long as the ciphertext exists.
+
 This is how S3 server-side encryption with KMS, EBS volumes, Google Cloud's default encryption at rest and some database transparent-data-encryption designs work; details vary by service. Google's stack goes one level further: DEKs wrapped by KEKs wrapped by a root KMS key, with the root material held in a small number of hardware-protected locations.
 
 ## Key takeaways
@@ -25,5 +32,5 @@ This is how S3 server-side encryption with KMS, EBS volumes, Google Cloud's defa
 - Cryptographic erasure requires removing every usable key recovery path and retained plaintext, including backup paths.
 
 ## Further reading
-- [AWS KMS cryptographic details](https://docs.aws.amazon.com/kms/latest/developerguide/kms-cryptography.html)
-- [NIST key-management guidance](https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final)
+- [Encryption at rest in Google Cloud](https://cloud.google.com/docs/security/encryption/default-encryption)
+- [Crypto-shredding — Wikipedia](https://en.wikipedia.org/wiki/Crypto-shredding)

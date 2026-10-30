@@ -43,6 +43,13 @@ For an IP session, session establishment selects/allocates addressing and user-p
 
 The P-GW or anchor UPF is the **session anchor**: to the Internet, your phone lives there. During a supported handover that preserves the session anchor/address, user-plane paths can be updated while the application retains its IP address. Connections can survive, but radio interruption, loss, session changes or timeout can still break them; no particular vehicle speed guarantees continuity.
 
+> [!analogy] Real-world analogy: A fixed postal address with forwarding
+> You keep one published address at a central sorting office while you travel. Letters always go there first, and the office forwards each one to wherever you are staying this week; when you move on, you tell the office and it updates the forwarding instruction. Your correspondents never need to know you moved.
+>
+> **How it maps:** The published address is the phone's IP address, the sorting office is the session anchor (P-GW or anchor UPF), and the forwarding instruction is the GTP-U tunnel towards the current base station. A handover updates that tunnel, so servers keep sending to the same address.
+>
+> **Where it stops:** Forwarding happens per packet in milliseconds, not per letter in days, and the network coordinates the update rather than the traveller writing in. Letters in transit during a move can be lost or delayed, just as packets can be during a handover, and a different provider's network (such as home Wi-Fi) has no arrangement with this sorting office.
+
 Moving to an independently addressed Wi-Fi path commonly changes the effective endpoint address. Keeping the old path alive, provider-integrated access, tunnels or mobility-capable transports can change the outcome.
 
 ## Key takeaways

@@ -7,7 +7,7 @@ sourceLesson: graph-advanced
 summary: Flow respects capacities and conservation at interior vertices.
 ---
 
-This lesson covers three ideas that turn up in real systems and senior interviews: how much can a network carry (**max flow**), how to pair things up optimally (**graph matching**), and which single link or vertex would break a network if it failed (**bridges and articulation points**).
+The last units of this module cover three ideas that turn up in real systems and senior interviews: how much a network can carry (**max flow**), how to pair things up optimally (**graph matching**), and which single link or vertex would break a network if it failed (**bridges and articulation points**). This unit sets up the flow model and the residual graph, the idea every flow algorithm is built on.
 
 ## Network flow
 
@@ -15,7 +15,7 @@ This lesson covers three ideas that turn up in real systems and senior interview
 
 A **flow network** is a directed graph where each edge has an **edge capacity**: the most it can carry, in litres per second, Gbit/s, lorries per day. There is a **source vertex** s where everything starts and a distinct **sink** t where it ends. Assume finite capacities. A **flow assignment** assigns an amount to each edge, obeying two rules:
 
-```formula
+```formula essential
 0 ≤ f(u, v) ≤ c(u, v)
 Σ_x f(x, v) = Σ_y f(v, y)
   for v ≠ s and v ≠ t
@@ -70,25 +70,31 @@ Edges s→a, s→b, a→b, a→t, b→t, each with edge capacity 1. If greedy fi
 
 The fix is to allow **undoing** flow. The following card describes one original edge’s residual contributions, assuming no original opposite-direction edge. With antiparallel edges, add the contributions in each direction:
 
-```formula
+```formula essential
 r(u, v) = c(u, v) − f(u, v)
 r(v, u) = f(u, v)
-r(u, v) = 10 − 6 = 4,  r(v, u) = 6
 where
 u, v: the ends of an original edge u→v
-c(u, v): its edge capacity; 10 in the example
-f(u, v): the flow it currently carries; 6 in the example
-r(u, v): this edge’s **forward residual** contribution: unused capacity on u→v; the displayed card assumes no original v→u edge
+c(u, v): its edge capacity
+f(u, v): the flow it currently carries
+r(u, v): this edge’s **forward residual** contribution: unused edge capacity on u→v; the displayed card assumes no original v→u edge
 r(v, u): this edge’s **backward residual** contribution: how much u→v flow you may cancel along v→u
 In words: you can push up to the unused edge capacity forwards, and you can push up to the current flow backwards, which undoes it.
 ```
 
-So:
+For example, an edge with an edge capacity of 10 carrying 6 units has 4 units of forward residual and 6 units of backward residual. So:
 
 - the **forward residual** u→v is the unused edge capacity;
 - this edge contributes a **backward residual** on v→u equal to its flow, meaning “you may cancel up to that many units”. With an original antiparallel edge, aggregate residual capacity also includes that opposite edge’s unused edge capacity.
 
 An **augmenting path** is any s→t path in this residual graph. In the example, after the bad first path, the residual has s→b (1), the backward edge b→a (1), and a→t (1). Pushing along s→b→a→t cancels the a→b flow and reroutes it, giving 2.
+
+> [!analogy] Real-world analogy: cancelling a booked delivery
+> A haulier books lorries one route at a time. After an early booking, a later request finds no free route, until the dispatcher notices that cancelling part of the earlier booking would let both deliveries go by different roads.
+>
+> **How it maps:** booked lorries are flow, a road's spare lorries are its forward residual, and "you may cancel up to what you booked" is the backward residual. An augmenting path that uses a backward edge is a plan that cancels part of an earlier booking and reroutes it.
+>
+> **Where it stops:** cancelling a real booking may cost money or time. In a flow network cancellation is free and only the final totals on each edge matter, so the algorithm can undo earlier choices as often as it needs.
 
 ## Key takeaways
 - Flow respects capacities and conservation at interior vertices.
@@ -96,6 +102,6 @@ An **augmenting path** is any s→t path in this residual graph. In the example,
 - Account for original antiparallel edges when aggregating residual capacities.
 
 ## Further reading
-- [Primary reference for this unit](https://algs4.cs.princeton.edu/64maxflow/)
+- [Sedgewick and Wayne, Algorithms 4th ed.: 6.4 Maximum flow](https://algs4.cs.princeton.edu/64maxflow/)
 - [Ford–Fulkerson algorithm — Wikipedia](https://en.wikipedia.org/wiki/Ford%E2%80%93Fulkerson_algorithm)
 - [Edmonds–Karp — cp-algorithms](https://cp-algorithms.com/graph/edmonds_karp.html)

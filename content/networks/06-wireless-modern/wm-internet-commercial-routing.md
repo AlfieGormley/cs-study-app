@@ -52,12 +52,19 @@ A common economic routing model prefers customer routes over peer/provider route
 
 Under these model assumptions, networks do not offer transit between peers/providers. This produces **valley-free** paths: up through providers, at most one peering link across, then down through customers. Real agreements and traffic engineering can deviate from the model. Policy-selected paths need not minimise distance or latency.
 
+> [!analogy] Real-world analogy: A national courier and a neighbourly swap
+> A small shop pays a national courier to deliver its parcels anywhere in the country. It also agrees with the shop next door to hand over parcels for each other's own local customers for free. It would never agree to carry the neighbour's parcels to a third town for free: that is exactly the service the courier charges for.
+>
+> **How it maps:** The paid courier is a transit provider, and the free swap is settlement-free peering, limited to each other's own customers. Refusing to carry the neighbour's parcels onward unpaid is the export rule that peer routes go only to paying customers, which produces valley-free paths.
+>
+> **Where it stops:** Networks swap reachability announcements, not physical parcels, and real contracts include paid peering, partial transit and selective exports. Peering is free of traffic charges but not of costs: ports, circuits and colocation still cost money.
+
 > [!warning] Route leaks and hijacks
 > BGP trusts announcements by default. In 2008 Pakistan Telecom announced a more specific prefix for YouTube, intended for local blocking; it leaked to its upstream and took YouTube offline for much of the world for hours. In 2019 a small network leaked routes it had learned from one provider to its other provider, Verizon, which accepted them, and significant traffic for Cloudflare and others was drawn through a tiny network. **RPKI route origin validation** checks prefix/origin authorisation against validated ROA information; it does not authenticate the whole AS path or detect every route leak. Local rejection policy, customer prefix filters, relationship-aware controls and monitoring provide complementary defences.
 
 ## Forwarding chooses the longest installed prefix
 
-BGP route selection and destination lookup are separate steps. After routes have been accepted and installed, ordinary IP forwarding chooses the most specific matching destination prefix. For example, an installed route for `192.0.2.0/24` is preferred for a destination in that range over a covering `192.0.0.0/22`, even if the larger block has a shorter AS-path attribute. Prefix and origin filtering determine whether the advertisement is accepted in the first place.
+Choosing among BGP routes and looking up a destination are separate steps. After routes have been accepted and installed, ordinary IP forwarding chooses the most specific matching destination prefix. For example, an installed route for `192.0.2.0/24` is preferred for a destination in that range over a covering `192.0.0.0/22`, even if the larger block has a shorter AS-path attribute. Prefix and origin filtering determine whether the advertisement is accepted in the first place.
 
 The addresses here are a hypothetical routing example, not an instruction to announce address space.
 

@@ -9,7 +9,7 @@ summary: Initialise isolates and sinks before adding edges.
 
 Earlier units established direction, paths and density. Here n counts vertices and m counts edges; deg(u) is vertex u’s degree.
 
-## Representation 1: adjacency list
+## Adjacency list
 
 For each vertex, store a list of its neighbours. In Python, a dict of lists (or a list of lists when vertices are numbered 0..n−1).
 
@@ -39,21 +39,9 @@ def build_adj(vertices, edges,
     return adj
 ```
 
-Pass every vertex explicitly, including isolates and directed sinks; each edge endpoint must belong to that set. Complexity assumes constant-size labels and expected O(1) dictionary/set operations. For a weighted graph, store pairs: `adj[u].append((v, w))`.
+Pass every vertex explicitly, including isolates and directed sinks; each edge endpoint must belong to that set. Complexity assumes constant-size labels and expected O(1) dictionary and set lookups. For a weighted graph, store pairs: `adj[u].append((v, w))`.
 
-The memory is one slot per vertex plus one list entry per edge end:
-
-```formula
-S = n + 2m
-S = 4 + 2 × 4 = 12
-where
-S: the number of stored items (dictionary keys plus list entries) in an undirected adjacency list
-n: the number of vertices
-m: the number of edges; each undirected edge is stored in both endpoints' lists
-In words: the storage grows with the vertex count plus twice the edge count; for a directed graph it is n + m.
-```
-
-The example has four vertices and four edges: four keys plus eight neighbour entries, twelve items in all. In the costs below, n is the number of vertices, m the number of edges and deg(u) the degree of vertex u. O(…) is Big O notation: how the cost grows as the graph grows, ignoring constant factors.
+The memory is one slot per vertex plus one list entry per edge end. The example has four vertices and four edges: four keys plus eight neighbour entries, because each undirected edge appears in both endpoints' lists. A directed edge appears once. In the costs below, n is the number of vertices, m the number of edges and deg(u) the degree of vertex u. O(…) is Big O notation: how the cost grows as the graph grows, ignoring constant factors.
 
 - **Space:** O(n + m). Each undirected edge is stored twice, each directed edge once.
 - **Iterate neighbours of u:** O(1 + deg(u)), which is exactly what BFS, DFS and Dijkstra need.
@@ -61,7 +49,7 @@ The example has four vertices and four edges: four keys plus eight neighbour ent
 
 This is the default for almost every algorithm in this module.
 
-## Representation 3: edge list
+## Edge list
 
 Just a list of `(u, v)` or `(u, v, w)` tuples.
 
@@ -77,6 +65,13 @@ Here m is the number of edges.
 - Perfect when an algorithm processes edges as a whole: **Kruskal's** MST sorts the edges, and **Bellman–Ford** relaxes every edge each round.
 
 It is also how graphs usually arrive: a CSV of flights, a table of `follower_id, followee_id` rows. You read the edge list, then build whatever structure the algorithm needs.
+
+> [!analogy] Real-world analogy: address books versus a call log
+> Every person keeps an address book listing the people they know. A phone company instead keeps one long call log: a row for each call, saying who called whom and for how long.
+>
+> **How it maps:** each person's address book is one vertex's adjacency list, so "who does Ana know?" means opening one book. The call log is an edge list of (caller, callee, duration) rows: easy to sort by duration, but answering "who did Ana call?" means reading the whole log.
+>
+> **Where it stops:** a friendship written in Ana's book does not automatically appear in Ben's; in an undirected adjacency list your code must add both directions itself. And a call log naturally repeats the same pair many times, which a graph may or may not want as parallel edges.
 
 ## Comparison
 
@@ -103,6 +98,6 @@ Traversing all vertices costs O(n + m) with adjacency lists and O(n²) with a ma
 - Use lists to scan neighbours and an edge list to process edges globally.
 
 ## Further reading
-- [Primary reference for this unit](https://networkx.org/documentation/stable/reference/classes/digraph.html)
+- [NetworkX docs: DiGraph](https://networkx.org/documentation/stable/reference/classes/digraph.html)
 - [Adjacency list — Wikipedia](https://en.wikipedia.org/wiki/Adjacency_list)
 - [Kruskal's algorithm — Wikipedia](https://en.wikipedia.org/wiki/Kruskal%27s_algorithm)

@@ -7,22 +7,21 @@ summary: A stable hash and stable next-hop mapping keep a flow on one selected p
 sourceLesson: wm-datacentre
 ---
 
-This unit focuses on ECMP and stable per-flow selection. It builds on the earlier units in this module; the examples below state their additional assumptions.
+A leaf-spine fabric has several equally good paths between racks. Using them all without scrambling the order of each connection's packets is the job of equal-cost multi-path forwarding, and the way it chooses a path explains both its strengths and its blind spots.
 
 ## ECMP: using all the paths
 
 With routing, a leaf sees, say, four routes to the destination rack's prefix, all with the same cost. **Equal-cost multi-path** (ECMP) can install multiple eligible next hops, subject to configuration and implementation limits. The forwarding lookup selects a next hop for each packet, commonly using a flow-stable hash.
 
-Choosing per *packet* can reorder TCP segments, which TCP treats as possible loss. A common policy therefore selects per **packet flow**: they hash header fields, usually the 5-tuple, and use the hash to pick a next hop. The simplest mapping takes the remainder after dividing by the number of paths:
+Choosing per *packet* can reorder TCP segments, which TCP treats as possible loss. Implementations therefore commonly select per **packet flow**: they hash header fields, usually the 5-tuple, and use the hash to pick a next hop. The simplest mapping takes the remainder after dividing by the number of paths:
 
-```formula
+```formula essential
 i = h mod N
-h = 1,000,003, N = 4:  i = 3
 where
 i: the index of the chosen next hop (uplink), from 0 to N − 1
 h: the flow's hash: a large whole number computed from its 5-tuple, the same for every packet of the flow
 N: the number of equal-cost next hops
-mod: modulo: the remainder after whole-number division, so 1,000,003 mod 4 = 3 because 1,000,003 = 4 × 250,000 + 3
+mod: modulo: the remainder after whole-number division, so 11 mod 4 = 3 because 11 = 4 × 2 + 3
 In words: every packet of a flow has the same hash, so it always gets the same remainder and the same uplink.
 ```
 
@@ -49,7 +48,7 @@ print([pick_uplink(f, 4) for f in flows])
 # [1, 3, 2, 2, 3, 1]
 ```
 
-With unchanged inputs and next-hop mapping, a flow selects the same next hop. This avoids reordering caused by this path selector but does not guarantee no reordering elsewhere or during changes. Distinct flows can have different keys and still collide. Note that uplink 0 got nothing here: hashing is statistical, not a perfect balance.
+With unchanged inputs and next-hop mapping, a flow selects the same next hop. This avoids reordering caused by this path selector but does not guarantee no reordering elsewhere or during changes. Distinct flows can have different keys and still collide. Note that uplink 0 got nothing here: hashing is statistical, not a perfect balance. The selector also ignores load: it does not know whether the chosen uplink is already busy. The next lesson looks at what that costs.
 
 ## Key takeaways
 - A stable hash and stable next-hop mapping keep a flow on one selected path.

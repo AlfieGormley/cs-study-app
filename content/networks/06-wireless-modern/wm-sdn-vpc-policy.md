@@ -7,7 +7,7 @@ summary: Valid security-group tracking permits replies without a separate revers
 sourceLesson: wm-sdn
 ---
 
-This unit focuses on stateful groups, stateless ACLs and VPC connections. It builds on the earlier units in this module; the examples below state their additional assumptions.
+AWS gives a VPC two packet-filtering layers that look similar but behave very differently: one remembers connections and one does not. Mixing them up is a common cause of outages, as is assuming that connected VPCs can reach each other through a middle one.
 
 ## Security groups versus NACLs
 

@@ -7,7 +7,7 @@ summary: Shared public addresses complicate rate limiting and inbound reachabili
 sourceLesson: wm-cellular
 ---
 
-This unit focuses on mobile addressing, translation and path changes. It builds on the earlier units in this module; the examples below state their additional assumptions.
+A phone's address is not like a home broadband address: it is often shared with thousands of other subscribers, may be IPv6-only, and changes completely when the phone switches to Wi-Fi. Each of these breaks assumptions that servers and apps commonly make.
 
 ## Addresses, NAT and IPv6
 
@@ -41,3 +41,5 @@ Ways to cope:
 - [464XLAT — Wikipedia](https://en.wikipedia.org/wiki/464XLAT)
 - [Supporting IPv6-only networks — Apple Developer](https://developer.apple.com/support/ipv6/)
 - [RFC 6877: 464XLAT](https://www.rfc-editor.org/rfc/rfc6877)
+- [RFC 6146: Stateful NAT64](https://www.rfc-editor.org/rfc/rfc6146)
+- [RFC 6147: DNS64](https://www.rfc-editor.org/rfc/rfc6147)

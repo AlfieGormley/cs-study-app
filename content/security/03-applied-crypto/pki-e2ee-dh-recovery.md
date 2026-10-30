@@ -7,11 +7,11 @@ sourceLesson: pki-e2ee
 summary: New peer ratchet keys trigger root-key updates for receiving and sending chains.
 ---
 
-End-to-end encryption keeps message-content keys at the communicating endpoints. Signal’s protocol family uses uploaded prekeys to start sessions and ratcheting keys to protect ongoing conversations.
+The symmetric ratchet protects old messages, but a thief who copies the current chain key can follow every later message in that chain. The second ratchet brings in fresh Diffie–Hellman secrets so the conversation can heal.
 
 ### The DH ratchet: healing after compromise
 
-So every message also carries the sender's current **ratchet public key**. On receiving a new peer ratchet key, it first combines that key with its existing private ratchet key to derive the receiving chain, then generates a new local key pair and combines it with the peer key to derive the sending chain. The output is mixed into a **root key**, which produces brand-new chain keys:
+Every message also carries the sender's current **ratchet public key**. On receiving a new peer ratchet key, a device first combines that key with its existing private ratchet key to derive the receiving chain, then generates a new local key pair and combines it with the peer key to derive the sending chain. The output is mixed into a **root key**, which produces brand-new chain keys:
 
 ```
 Alice's view, root key chain:
@@ -27,7 +27,7 @@ B0 = Bob's signed prekey
 
 Each arrow is a root-KDF step: the DH output and the current root key go in, and a new root key and chain key come out:
 
-```formula
+```formula reference
 RK', CK = KDF_RK(RK, DH(a, B))
 where
 RK: the current root key, 32 bytes
@@ -41,6 +41,13 @@ In words: every new DH result is stirred into the root key, which then hands out
 ```
 
 An attacker who stole the state at one point, but is not actively intercepting, does not know the private half of the next fresh ratchet key. Security recovers once fresh DH contributions unknown to the attacker are mixed in and delivered. The exact moment of recovery depends on whose state was stolen and which messages arrive; it is not an unconditional one-round-trip promise. That is **post-compromise security**, also called break-in recovery.
+
+> [!analogy] Real-world analogy: Changing the locks after a break-in
+> A burglar copied your house key. Changing the locks does not undo what they already saw, but once the new locks are in and the burglar no longer has access, their copied key is useless.
+>
+> **How it maps:** The copied key is stolen ratchet state. Each DH ratchet step is a lock change: both sides mix a fresh Diffie–Hellman secret, which the attacker could not compute, into the root key, so later chains are out of the attacker's reach.
+>
+> **Where it stops:** You change your locks once, deliberately. The DH ratchet changes them automatically, every time the conversation turns round. And it works only if the burglar is truly out: malware still on the phone sees each new key as it is made, and an attacker who actively impersonates both sides with the stolen keys can keep up.
 
 The combination is why it is called the *double* ratchet: a DH ratchet on receipt of a new peer ratchet public key, and a symmetric ratchet for each message in between.
 

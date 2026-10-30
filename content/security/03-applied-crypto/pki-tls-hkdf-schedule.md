@@ -7,11 +7,11 @@ sourceLesson: pki-tls
 summary: HKDF separates client/server and handshake/application secrets with specified labels and contexts.
 ---
 
-In a certificate-authenticated TLS 1.3 connection, ephemeral key agreement, signatures, HKDF and AEAD have separate jobs. This unit examines one part of that composition.
+One ECDH result has to become many keys: separate keys for each direction, for the handshake and for application data, plus secrets for resumption and exporters. TLS 1.3 derives all of them with HKDF, the extract-then-expand key derivation function from the crypto basics module.
 
 ## Job 3: from one secret to many keys with HKDF
 
-The ECDH output is raw shared keying material, not a set of independently derived traffic keys. TLS 1.3 runs it through a **key schedule** built entirely from HKDF:
+The ECDH output is raw shared keying material, not a set of independently derived traffic keys. It goes through the **TLS 1.3 key schedule**, built entirely from HKDF:
 
 ```
 PSK or 0 --Extract--> Early Secret
@@ -33,26 +33,7 @@ PSK or 0 --Extract--> Early Secret
 - **Keys are separated by purpose and direction.** Distinct labels derive client/server and handshake/application traffic secrets. A leaked key for one direction and phase need not reveal sibling keys, but a parent secret can reveal its derived keys and a current application traffic secret can derive its future updates. Separation prevents simple reflection between directions under the cryptographic assumptions.
 - **Traffic secrets bind selected transcript prefixes.** The Early, Handshake and Master Secret extraction steps are not themselves all transcript-dependent. Derived traffic secrets use the appropriate handshake prefix, while signatures and Finished cover later messages. Tampering with a protected transcript is detected.
 
-Under the hood both steps are just HMAC, the keyed hash from the previous module. HKDF-Extract, and the first output block of HKDF-Expand (all TLS 1.3 needs for keys of 32 bytes or fewer), are:
-
-```formula
-PRK = HMAC(salt, IKM)
-T_1 = HMAC(PRK, info ‖ 0x01)
-OKM = trunc_L(T_1)
-where
-PRK: the pseudorandom key: Extract's output, 32 bytes when the hash is SHA-256
-HMAC: hash-based message authentication code: HMAC(key, data) is a keyed hash of the data; with SHA-256 the output is 32 bytes
-salt: the HMAC key input to Extract; generic HKDF permits a public salt, but TLS 1.3 uses a secret derived from the previous stage at later stages, and zeros at the start
-IKM: input keying material: the raw secret being condensed, such as the ECDH shared secret
-T_1: the first 32-byte output block of Expand
-info: context bytes that name the output: in TLS 1.3, the output length, the label (such as "tls13 key") and a context value (a transcript hash for traffic secrets; empty for the final key and IV)
-‖: concatenation: the bytes of one value followed directly by the bytes of the next
-0x01: a single byte with value 1, the block counter; a longer output would continue with HMAC(PRK, T_1 ‖ info ‖ 0x02) and so on
-OKM: output keying material: the derived key, IV or secret
-trunc_L: keep only the first L bytes
-L: the number of bytes wanted: 16 for an AES-128 key, 12 for an IV, 32 for a SHA-256 traffic secret
-In words: Extract squeezes an unevenly distributed secret into one pseudorandom key under HKDF’s assumptions; Expand runs HMAC again over a label, so every purpose gets its own independent-looking key from the same secret.
-```
+Under the hood both steps are HMAC, the keyed hash from the previous module. Extract runs HMAC with a salt (zeros at the start, then a secret derived from the previous stage) as the key; Expand runs HMAC again, keyed with that result, over the wanted length, a label and a context value (often a transcript hash), so every purpose gets its own independent-looking key from the same secret. With SHA-256, an output of 32 bytes or fewer needs only one HMAC block.
 
 From each traffic secret, two more expansions produce the actual AEAD key and a 12-byte IV. Here is that last step, checked against the published RFC 8448 example handshake:
 

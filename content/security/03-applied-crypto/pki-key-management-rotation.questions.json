@@ -3,27 +3,27 @@
     "id": "pki-key-management-q7",
     "level": "intermediate",
     "type": "single",
-    "prompt": "An application encrypts every row of a large table with one long-lived AES-256-GCM key and a fresh random 96-bit nonce per row. It writes about 10 million rows a day. Roughly when does it hit NIST's limit for random nonces, and why does the limit exist?",
+    "prompt": "A fleet of 2,000 sensors all share one AES-256-GCM key and each picks a fresh random 96-bit nonce per message. A reviewer notes NIST's cap of 2^32 (about 4.3 billion) encryptions per key for random nonces. The team replies: \"Each sensor sends only about 3 million messages a year, nowhere near 4.3 billion.\" What is wrong with that reasoning?",
     "options": [
       {
-        "text": "After about 430 days, at 4,294,967,296 encryptions, to keep the chance of a nonce collision negligible",
-        "explanation": "Correct: 4,294,967,296 is about 4.29 billion encryptions, and at 10 million a day that takes about 429.5 days. Nonce reuse repeats the GCM encryption stream and undermines authentication; exact authentication-key recovery depends on the available messages and tags."
+        "text": "Nothing: the limit applies to each device's own random number generator",
+        "explanation": "The collision risk is between any two encryptions under the same key, whichever device made them. The NIST cap counts all invocations with that key."
       },
       {
-        "text": "Never; 96-bit nonces have roughly 79 octillion possibilities",
-        "explanation": "The limit is set by the birthday bound, which is about the square root of the nonce space, and NIST adds a wide safety margin."
+        "text": "The cap is per key across all users: 2,000 sensors at about 3 million messages each make about 6 billion encryptions a year under one key, past the cap within about nine months, so nonce collisions become a real risk; use per-device (or per-session) keys",
+        "explanation": "Correct. Random nonces from different devices can collide just as easily as nonces from one device. Giving each device or session its own key, derived with a KDF or a key exchange, keeps every key far below the bound."
       },
       {
-        "text": "After 281 trillion rows, when the key wears out",
-        "explanation": "Keys do not 'wear out'. The constraint is collision probability between random nonces."
+        "text": "The real limit is GCM's internal block counter, so the cap is irrelevant",
+        "explanation": "GCM's internal 32-bit block counter limits how long a single message can be (about 64 GiB), not how many messages a key may encrypt. The NIST cap exists because random 96-bit nonces from separate encryptions can collide."
       },
       {
-        "text": "After one day, because keys must be rotated daily",
-        "explanation": "There is no daily requirement; the bound depends on volume."
+        "text": "AES-256 keys do not have usage limits; only AES-128 keys do",
+        "explanation": "The limit comes from GCM's nonce size and the birthday effect, not the AES key length."
       }
     ],
-    "answer": 0,
-    "workedExample": "For random 96-bit IVs, SP 800-38D limits total invocations under the key to 4,294,967,296. At 10 million a day:\n\n```formula\nt = q_max / r\nt = 4,294,967,296 / 10,000,000 ≈ 429.5 d\nwhere\nt: the time until the key reaches the limit, in days (d)\nq_max: the NIST limit, 2^32 = 4,294,967,296 encryptions per key\nr: the write rate, 10 million rows (encryptions) per day\n≈: approximately equal to\nd: days\nIn words: one key reaches NIST's random-nonce limit after about 430 days of writes.\n```\n\nThe standard explicitly sets this conservative invocation cap. The birthday approximation illustrates the repeated-nonce risk:\n\n```formula\nP ≈ q(q − 1) / (2^{b+1})\nP ≈ 2^{32} × 2^{32} / 2^{97} = 2^{−33}\nwhere\nP: the probability that any two of the q random nonces are equal\nq: the number of encryptions under the key, here 2^32\nb: the nonce length, 96 bits\n≈: approximately equal to\nIn words: at 2^32 encryptions the chance of any repeated nonce is about 2^−33 (1 in 8.6 billion), below NIST's 2^−32 design target.\n```\n\nReuse reveals overlapping plaintext XORs and can enable tag forgery. A fresh key per object reduces invocations per key; it does not excuse nonce reuse if that key is used again.",
+    "answer": 1,
+    "workedExample": "1. With random nonces, the danger is any two encryptions under one key picking the same nonce. Every pair of encryptions is a chance, so the risk grows with the square of the total number of encryptions under that key.\n2. NIST SP 800-38D therefore limits the **total** number of encryptions with one key, across all devices and instances, to 2^32 when random 96-bit nonces are used.\n3. 2,000 sensors sending about 3 million messages a year each add up to about 6 billion encryptions a year under the shared key, so the fleet passes the cap within about nine months even though no single sensor comes close.\n4. A repeated nonce in GCM exposes the XOR of two plaintexts and can enable tag forgery.\n5. Fix: give each device (or each session) its own key, derived from a master secret with a KDF and a device-specific label or from a key exchange, and rotate keys well before the bound. Sharing one key across a fleet also means one stolen device exposes everyone's traffic.",
     "link": {
       "title": "NIST SP 800-38D: GCM and GMAC",
       "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"

@@ -58,30 +58,17 @@ def kuhn(left, adj):
 
 With Ann→{X, Y}, Bob→{X}, Cat→{Y, Z}: Ann takes X. Bob wants X, so Ann is asked to move, and moves to Y. Cat tries Y: Ann would have to move back to X, which would need Bob to move, and Bob has nowhere else to go. That fails, so Cat takes Z. Result: 3 pairs.
 
-With n vertices and m edges in the bipartite graph:
+> [!analogy] Real-world analogy: making room on a crowded bench
+> A newcomer wants a seat on a bench. If a seat they are happy with is free, they sit. Otherwise they ask someone in a seat they would like whether that person could move to another seat that suits them, and that person may in turn ask someone else to shuffle along.
+>
+> **How it maps:** people are left vertices, seats are right vertices and "happy with" is an edge. The chain of polite requests is an augmenting path: it ends at a free seat, and everyone along it moves one place, so one more person is seated and nobody loses a seat.
+>
+> **Where it stops:** real people may refuse or have preferences between seats. Kuhn's search tries every acceptable option in turn and treats all of them as equally good; choosing the best pairing by cost needs the weighted methods below.
 
-```formula
-T_K = O(n_L + m + n_L m)
-T_HK = O((n + m) √n)
-T_K ≈ 10^5 × 10^6 = 10^11
-T_HK ≈ 1.2 × 10^6 × √(2 × 10^5)
-T_HK ≈ 5.4 × 10^8
-where
-n: the number of vertices; 2 × 10^5 in the example
-n_L: the number of left vertices; 10^5 in the example
-m: the number of edges; 10^6 in the example
-T_K: Kuhn's running-time growth, including scanning left vertices and adjacency; one search per left vertex
-T_HK: Hopcroft–Karp: O(√n) phases of O(n + m) each
-√: the square root
-≈: approximately equal to
-O(…): Big O: grows at most this fast, up to a constant factor
-In words: Hopcroft–Karp needs only about √n rounds instead of one per vertex, which here is nearly two hundred times less work.
-```
+With n vertices and m edges in the bipartite graph, the costs differ in how many augmenting-path searches they need:
 
-Kuhn's bound counts one search per left vertex; these are growth expressions, not measured times.
-
-- Kuhn: O(n_L + m + n_L m), where n_L counts left vertices and m counts eligible pairs. Including the input scan keeps the bound meaningful when there are no edges.
-- **Hopcroft–Karp**: finds many shortest augmenting paths per phase, O((n + m) √n), conventionally O(m √n) after isolated vertices are removed.
+- Kuhn: one augmenting-path search per left vertex, each of which may scan every edge, so the worst case grows with the number of left vertices times the number of eligible pairs (plus the cost of reading the input).
+- **Hopcroft–Karp**: finds many shortest augmenting paths per phase, so it needs only about as many phases as the square root of the vertex count, instead of one search per left vertex: O((n + m) √n), conventionally O(m √n) after isolated vertices are removed. These are worst-case growth bounds, not measured times.
 - **Weighted assignment** (minimise total cost while assigning every item on the required side, e.g. driver ETA, the estimated time of arrival): the **Hungarian algorithm**, O(n³) for an n × n assignment, or min-cost flow. Without a required cardinality, an empty matching can minimise non-negative cost.
 
 > [!tip] König's theorem
@@ -93,7 +80,7 @@ Kuhn's bound counts one search per left vertex; these are growth expressions, no
 - König’s vertex-cover equality is specific to bipartite graphs.
 
 ## Further reading
-- [Primary reference for this unit](https://algs4.cs.princeton.edu/65reductions/)
+- [Sedgewick and Wayne, Algorithms 4th ed.: 6.5 Reductions](https://algs4.cs.princeton.edu/65reductions/)
 - [Maximum flow problem — Wikipedia](https://en.wikipedia.org/wiki/Maximum_flow_problem)
 - [Matching (graph theory) — Wikipedia](https://en.wikipedia.org/wiki/Matching_(graph_theory))
 - [Hopcroft–Karp algorithm — Wikipedia](https://en.wikipedia.org/wiki/Hopcroft%E2%80%93Karp_algorithm)

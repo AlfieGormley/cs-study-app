@@ -2,39 +2,36 @@
 id: pki-tls-key-updates
 title: TLS usage limits and key updates
 level: intermediate
-minutes: 2
+minutes: 3
 sourceLesson: pki-tls
 summary: AES-GCM has a record-usage bound well before the sequence counter would wrap.
 ---
 
 TLS 1.3 protects each record using AEAD and a nonce derived from a static IV plus an implicit sequence counter. A unique nonce is necessary, but the AEAD also imposes an earlier usage limit.
 
-AEAD keys also have **usage limits**. RFC 9846 says to send no more than roughly 23.7 million full-size records (roughly 24 million records, close to 400 GB) under one AES-GCM key. In bytes:
+## How much one key may protect
 
-```formula
-D_max = R_max × S_rec
-D_max = 2^{24.5} × 16,384 B
-D_max ≈ 23.7 × 10^6 × 16,384 B
-D_max ≈ 3.89 × 10^{11} B ≈ 389 GB
-where
-D_max: the most data one AES-GCM key should protect, in bytes (B)
-R_max: RFC 9846's record limit for AES-GCM, 2^24.5 ≈ 23.7 million full-size records; the RFC states an authenticated-encryption security margin of approximately 2^−57 under its cited analysis, rather than an unconditional real-world attack probability
-S_rec: the content of one full-size record, 16 KiB = 16,384 bytes
-≈: approximately equal to
-B: bytes
-GB: gigabytes; 1 GB = 10^9 bytes
-In words: one AES-GCM key is good for roughly 389 GB of full records before it should be replaced.
-```
+AEAD keys have **usage limits**: the more data one key protects, the closer an attacker gets to the edge of the security analysis. RFC 9846 says that up to 2^24.5 full-size records, about 24 million, may be encrypted under one AES-GCM key while keeping a safety margin of roughly 2^−57 for authenticated-encryption security. At 16 KiB per record that is roughly 390 GB of data. For ChaCha20-Poly1305 the 64-bit sequence number would wrap before its safety limit is reached.
 
-A connection streaming 50 MB/s reaches that in about 7,800 seconds, a little over two hours. The limit is a safety margin chosen by the RFC, not a cliff: the risk grows gradually with the amount encrypted. For ChaCha20-Poly1305, RFC 9846 notes that the 64-bit sequence number would wrap before the safety limit is reached. Long-lived connections send a **KeyUpdate** message, which updates the sender's write secret and receiver's corresponding read secret with HKDF, giving a new key and resetting that direction's sequence number. Updating the opposite direction requires its own KeyUpdate.
+In practice, one long-lived connection streaming 50 MB/s would reach the AES-GCM figure in a little over two hours, so the limit matters for long-lived, high-volume connections such as video streams, database replication and VPN-style tunnels, not for ordinary web pages. The limit is a chosen safety margin rather than a cliff: risk grows gradually with the amount encrypted.
+
+RFC 9846 requires an implementation to either close the connection or perform a key update before reaching these limits, and receivers should not enforce the published numbers themselves because later analysis may change them. Early (0-RTT) data cannot be rekeyed, so it must stay within the limits.
+
+## KeyUpdate
+
+A **KeyUpdate** message advances the sender's application traffic secret with HKDF (the `"traffic upd"` label), derives a new key and IV from it and restarts that direction's sequence number at zero, all inside the existing connection. Each direction is independent: updating what one side sends does not change what the other side sends, although a KeyUpdate can ask the peer to update its own sending keys too. Because each new secret is derived one-way from the previous one, an attacker who steals the current secret cannot work backwards to earlier ones (though they can derive later updates).
+
+Libraries differ in whether they send KeyUpdate automatically, so check the documentation of the one you use for long-lived connections.
+
+## Why TLS 1.3 allows only AEAD
 
 Older TLS suites permitted CBC with a separate HMAC, traditionally MAC-then-encrypt; RFC 7366 later defined an encrypt-then-MAC extension. BEAST targeted predictable IVs in TLS 1.0, Lucky 13 exploited timing in CBC processing, and the original POODLE targeted SSL 3.0 padding. TLS 1.3 allows only AEAD.
 
 ## Key takeaways
 - AES-GCM has a record-usage bound well before the sequence counter would wrap.
-- At 50 MB/s, the illustrative full-record allowance is exhausted in a little over two hours.
-- KeyUpdate advances one direction’s traffic secret and resets its sequence count under a new key.
+- High-volume, long-lived connections reach the AES-GCM allowance in hours, so they need key updates or new connections.
+- KeyUpdate advances one direction's traffic secret and resets its sequence count under a new key.
 
 ## Further reading
 - [TLS 1.3 — RFC 9846](https://www.rfc-editor.org/rfc/rfc9846)
-- [TLS example traces — RFC 8448](https://www.rfc-editor.org/rfc/rfc8448)
+- [The Illustrated TLS 1.3 Connection](https://tls13.xargs.org/)

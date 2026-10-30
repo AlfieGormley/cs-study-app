@@ -2,7 +2,7 @@
 id: pki-key-management-hsm-kms
 title: HSMs, KMS and authorised misuse
 level: intermediate
-minutes: 2
+minutes: 3
 sourceLesson: pki-key-management
 summary: Non-exportable HSM keys resist ordinary extraction but can still be misused by an authorised caller.
 ---
@@ -23,6 +23,13 @@ Where HSMs are used: CA root and intermediate keys, card-payment PIN and key pro
 > [!warning] An HSM stops theft, not misuse
 > If an attacker compromises an authorised caller, a correctly enforced non-exportable key can resist extraction while the attacker still requests signatures permitted by its policy. Treat HSM access as a privilege to restrict, rate-limit and log, and alert on unusual use.
 
+> [!analogy] Real-world analogy: A notary who keeps the seal
+> A notary keeps the official seal in a locked drawer and stamps documents brought to the counter. You can never take the seal home, but anyone who gets to the counter with a document the notary is willing to stamp walks away with a genuine stamped document.
+>
+> **How it maps:** The seal is the non-exportable key and the notary is the HSM or KMS: it performs signatures and decryptions for callers but never hands out the key. A compromised application server is a fraudster standing at the counter. The protection against them is the notary's rules about what may be stamped, how often, and with whose approval, which correspond to signing policy, rate limits, quorum and logging.
+>
+> **Where it stops:** A human notary might recognise a suspicious customer or a forged document. An HSM checks only what its policy encodes, so anything an authorised caller is allowed to request will be signed, however suspicious it would look to a person.
+
 ## Cloud KMS: an HSM as an API
 
 Running HSMs yourself means hardware, firmware and operator procedures. **Cloud KMS** services expose key operations through APIs with access policies and audit facilities. Protection levels differ: Google Cloud KMS, for example, supports software, HSM and external protection; hardware backing is not universal.
@@ -36,4 +43,4 @@ For service-generated non-exportable keys, normal APIs return operation results 
 
 ## Further reading
 - [AWS KMS cryptographic details](https://docs.aws.amazon.com/kms/latest/developerguide/kms-cryptography.html)
-- [NIST key-management guidance](https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final)
+- [Hardware security module — Wikipedia](https://en.wikipedia.org/wiki/Hardware_security_module)

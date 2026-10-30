@@ -9,21 +9,9 @@ summary: The outer loop unlocks one possible intermediate vertex.
 
 Sometimes one source is not enough. A delivery company wants the driving time between every pair of its 300 depots. A network tool wants every router's distance to every other to find the network's **graph diameter** (the longest shortest path). A game precomputes distances between all waypoints so that AI agents can look them up instantly.
 
-That is the **all-pairs shortest paths (APSP)** problem: fill an n × n table where `d[i][j]` is the shortest distance from i to j. Just writing the answer down takes a lot of work:
+That is the **all-pairs shortest paths (APSP)** problem: fill an n × n table where `d[i][j]` is the shortest distance from i to j, for n vertices. Just writing the answer down takes a lot of work: one entry per ordered pair, so 90,000 distances for 300 depots, and no algorithm that writes out the full table can take fewer than about n² steps. A compressed or query-only representation is a different task.
 
-```formula
-N = n^2
-N = 300 × 300 = 90000
-T = Ω(n^2)
-where
-n: the number of vertices; 300 depots in the example
-N: the number of entries in the distance table, one per ordered pair (i, j)
-T: the time of any algorithm that writes the full table
-Ω(…): Big Omega: grows at least this fast, up to a constant factor (a lower bound, the mirror image of Big O)
-In words: the table has n² entries, so no all-pairs algorithm that writes it out can run faster than about n² steps.
-```
-
-For 300 depots that is 90,000 distances. A compressed or query-only representation is a different task. Throughout, m is the number of edges and O(…) is Big O notation: grows at most this fast, up to a constant factor. Assume finite weights and constant-time arithmetic in the complexity bounds below.
+Throughout, m is the number of edges and O(…) is Big O notation: grows at most this fast, up to a constant factor. Assume finite weights and constant-time arithmetic in the complexity bounds below.
 
 ## Floyd–Warshall
 
@@ -31,46 +19,41 @@ Floyd–Warshall is a short, elegant piece of **dynamic programming**.
 
 ### The idea
 
-Number the vertices 0 to n − 1. The DP table has one layer per number of "unlocked" vertices:
+Number the vertices 0 to n − 1. Instead of asking for the best route straight away, ask a smaller question first: what is the best route from i to j if only some vertices are allowed as **intermediate stops** (the vertices strictly between the start and the end)?
 
-```formula
-d_k[i][j]
-where
-i: the start vertex, a number from 0 to n − 1
-j: the end vertex
-k: how many vertices are unlocked: only vertices 0 to k − 1 may be used as **intermediate** stops
-n: the number of vertices
-d_k[i][j]: the shortest distance from i to j using only those intermediate stops
-In words: the shortest route from i to j that is allowed to pass through only the first k vertices on the way.
-```
+- At the start no intermediate stops are allowed. The table holds the direct edge weights (the lightest one, if there are parallel edges), zero for each vertex to itself (lower if a negative graph self-loop exists) and ∞ for pairs with no edge.
+- Then vertex 0 is unlocked as a possible stop, then vertex 1, and so on.
+- Once every vertex is unlocked, the table holds the true shortest distances.
 
-- The initial layer allows no intermediates: use minimum direct edge weights, also allowing the zero-length diagonal walk (so a negative graph self-loop can make the diagonal negative), and ∞ for absent connections.
-- The final layer allows every vertex: it is the answer.
+Assume no negative cycles for the finite recurrence. When vertex k is unlocked, a best route from i to j that may now use k either avoids k, so it is the old answer, or passes through k exactly once, so it is the best route from i to k followed by the best route from k to j, both using only the earlier stops:
 
-For the finite shortest-distance recurrence, assume no negative cycles. Going from k to k + 1, we unlock vertex k. A shortest path using intermediates from {0..k} either avoids k (cost dₖ[i][j]) or passes through k exactly once (cost dₖ[i][k] + dₖ[k][j]). So:
-
-```formula
+```formula essential
 d_{k+1}[i][j] = min(d_k[i][j],
     d_k[i][k] + d_k[k][j])
-d_{k+1}[2][1] = min(∞, 5 + 3) = 8
 where
 i, j: the start and end vertices
 k: the vertex being unlocked in this round
-d_k[i][j]: the best i→j distance using only vertices 0 to k − 1 as stops
+d_k[i][j]: the best i→j distance using only vertices 0 to k − 1 as intermediate stops
 d_{k+1}[i][j]: the best distance once vertex k may also be used
 min(…): the smaller of the two values
-∞: infinity: no route known yet
 In words: the best route from i to j either ignores the newly unlocked vertex k, or goes from i to k and then from k to j.
 ```
 
-For the worked line, suppose there is an edge 2→0 costing five and an edge 0→1 costing three: before any vertex is unlocked, 2 cannot reach 1, but via vertex 0 it costs 5 + 3 = 8. The code drops the k subscript and updates one table in place.
+For example, suppose there is an edge 2→0 costing five and an edge 0→1 costing three. Before any vertex is unlocked, 2 cannot reach 1; once vertex 0 is unlocked, 2 reaches 1 for 5 + 3 = 8. The code in the next unit drops the k subscript and updates one table in place.
+
+> [!analogy] Real-world analogy: opening interchange stations one at a time
+> Imagine a rail network where, at first, you may only take direct trains. Then one station at a time is opened as an interchange. Each time a new interchange opens, you check every journey: is it now quicker to change trains there than to use the best route you had?
+>
+> **How it maps:** stations are vertices, the journey-time table is `d`, and opening an interchange is one round of the outer loop that unlocks vertex k. The check for each journey is the recurrence: keep the old time, or go to the new interchange and on from there.
+>
+> **Where it stops:** a real route may change trains at several interchanges, and Floyd–Warshall handles that only because each round builds on the table from the previous rounds; the order in which stations open does not change the final table, but every pair must be rechecked in every round. Real timetables also add waiting times at interchanges, which plain edge weights do not model.
 
 ## Key takeaways
 - The outer loop unlocks one possible intermediate vertex.
-- Initialise minimum parallel-edge weights and preserve negative self-loops.
-- A negative diagonal reveals a negative cycle.
+- Initialise minimum parallel-edge weights and preserve negative graph self-loops.
+- After every vertex is unlocked, the table holds all shortest distances.
 
 ## Further reading
-- [Primary reference for this unit](https://algs4.cs.princeton.edu/44sp/)
+- [Sedgewick and Wayne, Algorithms 4th ed.: 4.4 Shortest paths](https://algs4.cs.princeton.edu/44sp/)
 - [Floyd–Warshall algorithm — Wikipedia](https://en.wikipedia.org/wiki/Floyd%E2%80%93Warshall_algorithm)
 - [Floyd–Warshall — cp-algorithms](https://cp-algorithms.com/graph/all-pair-shortest-path-floyd-warshall.html)

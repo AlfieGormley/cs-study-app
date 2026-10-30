@@ -9,7 +9,7 @@ summary: Introduce indirection to handle real variation rather than a speculativ
 
 ## When patterns hurt
 
-Patterns are a means, not a goal. Common ways they go wrong:
+Patterns are a means, not a goal. The GoF book itself warns against applying them indiscriminately: patterns often buy flexibility with extra indirection, which can complicate a design or cost performance, so use one when its flexibility is actually needed. Common ways they go wrong:
 
 - **Pattern-first design.** Starting with "let's use the abstract factory" and then looking for a problem. Start from the change you expect, then pick the shape that makes it cheap.
 - **Speculative flexibility.** Adding a strategy interface for a rule that has only ever had one implementation. That is a YAGNI violation: you pay the indirection now for flexibility you may never need.
@@ -19,7 +19,7 @@ Patterns are a means, not a goal. Common ways they go wrong:
 > [!warning] Indirection has a price
 > Each pattern adds a layer between "what happens" and "where it is written". That layer is worth it when it absorbs real change. When it does not, it is just harder code to read and debug.
 
-A good rule: **refactor towards a pattern** when the second or third variation shows up, rather than designing for it on day one. Joshua Kerievsky's book *Refactoring to Patterns* (2004) is built on this idea.
+A useful heuristic: **refactor towards a pattern** when the second or third variation shows up, rather than designing for it on day one. Joshua Kerievsky's book *Refactoring to Patterns* (2004) is built on this idea.
 
 ## Patterns beyond the GoF
 

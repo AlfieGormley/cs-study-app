@@ -25,7 +25,7 @@
     "answer": 3,
     "workedExample": "1. Matching rows: 85%.\n2. An index scan would read ~85% of the index entries and fetch rows from virtually every heap page (each page holds ~136 rows).\n3. A seq scan reads every page once, sequentially, at `seq_page_cost = 1` instead of `random_page_cost = 4`.\n\nFor this illustrative wide-row range query, the estimated sequential scan is cheaper. Indexes can also help broad queries by supplying order or covering their output columns.",
     "link": {
-      "title": "Combining multiple indexes \u2014 PostgreSQL docs",
+      "title": "Combining multiple indexes — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/indexes-bitmap-scans.html"
     }
   },
@@ -33,29 +33,29 @@
     "id": "qp-index-tuning-q7",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Each heap page holds about 136 rows, and the rows matching a filter are spread randomly through the table. The filter matches 3.7% of rows. Roughly what fraction of pages contain at least one matching row?",
+    "prompt": "Each heap page of `orders` holds about 136 rows. A filter on `ordered_on` matches 3.7% of rows, and orders for any date range are scattered randomly through the table. Before running anything, what do you predict a Bitmap Heap Scan for this filter will report under `Heap Blocks`?",
     "options": [
       {
-        "text": "About 3.7%",
-        "explanation": "That would be true only if matching rows were clustered together on the same pages, i.e. high correlation. Randomly spread, they land on most pages."
+        "text": "About 3.7% of the table's pages, because 3.7% of the rows match",
+        "explanation": "That would only hold if matching rows were packed together on the same pages, as in a table physically ordered by date. Scattered rows land on most pages."
       },
       {
-        "text": "About 37%",
-        "explanation": "That's off by a factor of ten in the wrong direction. With 136 rows per page, a typical page holds about 5 matches."
+        "text": "About a third of the pages",
+        "explanation": "There is nothing special about a third. With about five matching rows per page on average, very few pages have none at all."
       },
       {
-        "text": "About 50%",
-        "explanation": "There's no reason for a half. Compute the probability that a page has no matches: 0.963 to the power 136."
+        "text": "Nearly all of the pages, because a typical page holds about five matching rows",
+        "explanation": "Correct. 136 rows × 3.7% is about five matches per page, so a page with no match at all is rare (about 1 in 170). In the illustrative plan, 7,306 of 7,353 pages were visited."
       },
       {
-        "text": "About 99%",
-        "explanation": "Correct. The chance that a page has no match is 136 copies of 0.963 multiplied together, about 0.006, so about 99.4% of pages have at least one. For illustration, 7,306 of 7,353 pages would be about 99.4%."
+        "text": "Exactly one page per matching row",
+        "explanation": "A bitmap scan visits each matching page once, however many matching rows it holds, so pages are far fewer than rows here; but that still means nearly every page."
       }
     ],
-    "answer": 3,
-    "workedExample": "```formula\np_miss = 1 \u2212 s = 1 \u2212 0.037 = 0.963\np_none = p_miss^{r_page} = 0.963^{136}\np_none = e^{136 \u00d7 ln(0.963)}\np_none = e^{\u22125.13} \u2248 0.006\np_hit = 1 \u2212 p_none \u2248 0.994\nwhere\np_miss: the probability that one row does not match\ns: the selectivity: the fraction of rows matching, 0.037\np_none: the probability that none of a page's rows match, assuming each row matches independently at random\nr_page: the number of rows per page, 136\ne: Euler's number, about 2.718, the base of natural logarithms\nln: the natural logarithm (logarithm to base e); ln(0.963) \u2248 \u22120.0377\np_hit: the probability that a page holds at least one match, which is the fraction of pages the scan visits\n\u2248: approximately equal to\nIn words: a page escapes only if all 136 of its rows miss, and that happens to only about 1 page in 170.\n```\n\nEach page has on average 136 \u00d7 0.037 \u2248 5 matches. This is why `correlation` matters so much to the cost of an index scan: with data clustered by the filtered column, the same 3.7% of rows would occupy about 3.7% of the pages.",
+    "answer": 2,
+    "workedExample": "1. Expected matches per page: about 136 × 3.7%, roughly five.\n2. With rows scattered at random, a page escapes only if all of its 136 rows miss. With five expected matches, that is rare: about 1 page in 170.\n3. So the scan must visit about 99% of the pages, even though only 3.7% of the rows match.\n\nThis is why physical-order correlation matters so much: with orders clustered by date, the same 3.7% of rows would occupy about 3.7% of the pages, and the index would save most of the reading. It is also why the planner may prefer a sequential scan for what looks like a selective filter.",
     "link": {
-      "title": "Statistics used by the planner \u2014 PostgreSQL docs",
+      "title": "Statistics used by the planner — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/planner-stats.html"
     }
   }

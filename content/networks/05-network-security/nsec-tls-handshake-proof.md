@@ -44,9 +44,16 @@ The client sends its own Finished and can send application data immediately in t
 
 If the client guessed the wrong group, the server can send a **HelloRetryRequest** naming a supported group. A retry can also request a cookie. The revised ClientHello costs an extra round trip.
 
+> [!analogy] Real-world analogy: signed minutes of a meeting
+> Two firms negotiate through a courier. At the end, each signs a copy of the full minutes, listing every proposal made and accepted. If the courier quietly struck out the best offer from one side's letter, the two sets of minutes no longer match, and the deal is void.
+>
+> **How it maps:** The minutes are the handshake transcript, the signatures are CertificateVerify (proof of the certificate's key) and the keyed MACs in the Finished messages (proof that both sides saw the same messages), and the meddling courier is an on-path attacker attempting a downgrade.
+>
+> **Where it stops:** The checks are cryptographic and immediate, and they protect only what is inside the transcript. They do not stop the courier simply refusing to deliver (a denial of service), and they cannot protect a client that is configured to fall back to an older version after a failure.
+
 ### Downgrade protection and ossification
 
-A downgrade can expose older protocol choices or weaker permitted configurations; a correctly configured TLS 1.2 connection is not automatically vulnerable to every historical attack. So a TLS 1.3 server that ends up negotiating 1.2 puts a fixed sentinel (`DOWNGRD` plus one byte) in the last 8 bytes of its random value, which 1.3 clients check.
+A **downgrade attack** tries to make two parties that both support a strong option agree on a weaker one. It needs three things: an active attacker on the path who can alter or drop handshake messages, a weaker option that both ends still accept, and a way for the tampering to go unnoticed. TLS 1.3 attacks the third requirement. Finished carries a keyed MAC over the whole transcript, so editing the offered cipher suites or groups makes Finished fail. A TLS 1.3 server that ends up negotiating TLS 1.2 also puts a fixed sentinel (`DOWNGRD` plus one byte) in the last 8 bytes of its random value; a TLS 1.3 client that sees it aborts. The sentinel only helps when the TLS 1.2 handshake signs the server random, as ephemeral key exchange does; it gives no protection with static RSA. Disabling old versions entirely removes the second requirement. A correctly configured TLS 1.2 connection is not automatically vulnerable to every historical attack, but it lacks TLS 1.3's protections.
 
 Deployment showed a different problem: **middleboxes** that inspected TLS broke on anything unfamiliar. TLS 1.3 therefore disguises itself. The legacy version field still says 1.2 (`0x0303`), the real version goes in a `supported_versions` extension, and dummy ChangeCipherSpec messages are sent so the handshake looks like a resumed 1.2 session. QUIC reduces exposed protocol details with packet encryption and partial header protection, while fields such as connection IDs and version remain visible.
 
@@ -57,9 +64,5 @@ Deployment showed a different problem: **middleboxes** that inspected TLS broke 
 
 ## Further reading
 - [RFC 9846: TLS 1.3 (2026 revision)](https://www.rfc-editor.org/rfc/rfc9846.html)
-- [RFC 8446: original TLS 1.3 specification](https://www.rfc-editor.org/rfc/rfc8446)
 - [The Illustrated TLS 1.3 Connection](https://tls13.xargs.org/)
-- [RFC 9849: TLS Encrypted Client Hello](https://www.rfc-editor.org/rfc/rfc9849.html)
-- [Ballot SC081v3: reducing certificate validity periods — CA/Browser Forum](https://cabforum.org/2025/04/11/ballot-sc081v3-introduce-schedule-of-reducing-validity-and-data-reuse-periods/)
-- [Certificate Transparency — MDN](https://developer.mozilla.org/en-US/docs/Web/Security/Certificate_Transparency)
-- [ssl: TLS/SSL wrapper for socket objects — Python docs](https://docs.python.org/3/library/ssl.html)
+- [RFC 8446: original TLS 1.3 specification (obsoleted by RFC 9846)](https://www.rfc-editor.org/rfc/rfc8446)

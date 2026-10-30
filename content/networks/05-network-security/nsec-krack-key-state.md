@@ -22,7 +22,7 @@ The handshake has a reliability feature: if the AP does not receive M4, it retra
  -> packet-number component resets
 ```
 
-Reinstalling the key reset the **CCMP packet number**, which forms part of the CCMP nonce. Now the client encrypted new frames with a nonce, and therefore keystream, it had already used: the same mistake that killed WEP. Nonce reuse can expose relationships between plaintexts and enable decryption with additional known or predictable data; the exact capability depends on cipher and traffic. KRACK also enabled forgery in affected TKIP/GCMP cases.
+Reinstalling the key reset the **CCMP packet number**, which forms part of the CCMP nonce. Now the client encrypted new frames with a nonce, and therefore keystream, it had already used: the same mistake that killed WEP. Nonce reuse can expose relationships between plaintexts and enable decryption with additional known or predictable data; the exact capability depends on cipher and traffic. KRACK also enabled forgery in affected TKIP/GCMP cases. It does not reveal the Wi-Fi passphrase or the PMK, so changing the password does not fix it; patching does.
 
 Worst hit were Linux and Android devices using affected `wpa_supplicant` versions 2.4 and later before fixes, which installed an **all-zero key** after the reinstall, making traffic trivially decryptable.
 
@@ -35,8 +35,5 @@ Fixes ensure keys are not reinstalled in a way that resets their security state.
 
 ## Further reading
 - [Key Reinstallation Attacks (KRACK) — Mathy Vanhoef](https://www.krackattacks.com/)
-- [Dragonblood: analysing WPA3's Dragonfly handshake](https://wpa3.mathyvanhoef.com/)
+- [Key Reinstallation Attacks: Forcing Nonce Reuse in WPA2 (CCS 2017 paper)](https://papers.mathyvanhoef.com/ccs2017.pdf)
 - [Wi-Fi Protected Access — Wikipedia](https://en.wikipedia.org/wiki/Wi-Fi_Protected_Access)
-- [Wired Equivalent Privacy — Wikipedia](https://en.wikipedia.org/wiki/Wired_Equivalent_Privacy)
-- [IEEE 802.1X — Wikipedia](https://en.wikipedia.org/wiki/IEEE_802.1X)
-- [RFC 7664: Dragonfly Key Exchange](https://www.rfc-editor.org/rfc/rfc7664)

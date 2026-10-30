@@ -27,6 +27,13 @@ You want to treat a request ("transfer £50", "insert this text", "resize image 
 
 The invoker doesn't know what the command does; it just calls `execute()` and keeps history. The receiver does the real work.
 
+> [!analogy] Real-world analogy: a restaurant order slip
+> A waiter writes your order on an order slip and clips it to the kitchen rail. The slip can wait in a queue, be read by whichever cook is free, be kept for the bill, or be torn up if you cancel before cooking starts. The waiter never needs to know how to cook.
+>
+> **How it maps:** The slip is the command object holding the request and its details, the waiter is the invoker, the cook is the receiver that does the work, and the rail of slips is the queue or history.
+>
+> **Where it stops:** Once a meal has been served and eaten, tearing up the slip undoes nothing; the restaurant can only offer a refund. Software undo is the same: an in-memory edit can be reversed, but an external effect such as a captured payment needs a new compensating command.
+
 ### In Python
 
 Undo and redo for a text editor:

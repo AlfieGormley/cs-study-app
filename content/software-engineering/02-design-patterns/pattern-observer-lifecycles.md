@@ -24,6 +24,13 @@ When one object (the **observer subject**) changes, several others need to react
              o.update(e)
 ```
 
+> [!analogy] Real-world analogy: a club newsletter
+> A club posts a newsletter to everyone who has signed up for it. Anyone can join the list, and members can leave at any time. The club secretary doesn't need to know why each person signed up.
+>
+> **How it maps:** The club is the subject, its list of readers is the list of observers, joining and leaving are `subscribe` and `unsubscribe`, and posting an issue is `notify`. Someone who moves away without leaving the list still gets posted copies: the lapsed listener problem.
+>
+> **Where it stops:** Posting a letter doesn't make the club wait for each member to read it. In the synchronous example below, `emit` calls each handler in turn and waits for it to finish, and a handler that raises can stop the rest. And a forgotten software subscriber costs more than wasted post: the subject's reference keeps the whole object alive in memory.
+
 Also called **publish-subscribe** when a broker sits in between, though some people reserve that term for systems where publisher and subscriber don't know about each other at all.
 
 ### In Python

@@ -4,12 +4,10 @@ title: Exclusion, existence and repeated subqueries
 level: advanced
 minutes: 5
 sourceLesson: qp-anti-patterns
-summary: Exclusion, existence and repeated subqueries with worked examples and explicit assumptions.
+summary: How NOT IN, NOT EXISTS, correlated subqueries and DISTINCT-over-joins differ in meaning and in the plans PostgreSQL chooses.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 ## 5. NOT IN with a subquery
 
@@ -101,7 +99,7 @@ Nested Loop Semi Join
 Execution Time: 10.958 ms
 ```
 
-Four times faster: the semi-join stops at each customer's first order instead of producing all ten and de-duplicating. A `DISTINCT` you added to fix duplicates is a sign the query asks the wrong question.
+Here it was about four times faster: the semi-join stops at each customer's first order instead of producing all ten and de-duplicating. A `DISTINCT` you added to fix duplicates is a sign the query asks the wrong question.
 
 ## Aggregating before a join
 

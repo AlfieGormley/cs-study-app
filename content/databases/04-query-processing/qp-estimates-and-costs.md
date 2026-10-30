@@ -2,14 +2,12 @@
 id: qp-estimates-and-costs
 title: Unknown expressions, joins and scan costs
 level: intermediate
-minutes: 5
+minutes: 4
 sourceLesson: qp-statistics-optimiser
-summary: Unknown expressions, joins and scan costs with worked examples and explicit assumptions.
+summary: The planner's fixed guesses for expressions it cannot analyse, how it estimates join sizes, and how its cost units add up for a sequential scan.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 ## Missing expression statistics and join estimates
 
@@ -30,24 +28,18 @@ The planner has stats on the `email` column, but not on `lower(email)`. An **exp
 
 For an equijoin (a join on `=`), the selectivity is the fraction of all possible row pairs that match. Postgres estimates it from the distinct counts of the two join keys, refined using MCV lists where it has them. For `orders o JOIN customers c ON o.customer_id = c.id`:
 
-```formula
+```formula reference
 s_join ≈ 1 / max(d_R, d_S)
-n_est = n_R × n_S × s_join
-n_est = 1,000,000 × 100,000 / 100,000
-n_est = 1,000,000
 where
-s_join: the join selectivity: the fraction of all (order, customer) pairs that satisfy the join condition
+s_join: the join selectivity: the fraction of all possible (order, customer) pairs that satisfy the join condition
 max: the larger of the values in brackets
-d_R: the number of distinct values of the join key in orders, here 91,709 customer ids
-d_S: the number of distinct values of the join key in customers, here 100,000 ids
-n_R: the number of rows in orders, 1,000,000
-n_S: the number of rows in customers, 100,000
-n_est: the estimated number of rows the join produces
+d_R: the number of distinct join-key values in the first input, here about 91,709 customer IDs in orders
+d_S: the number of distinct join-key values in the second input, here 100,000 customer IDs
 ≈: approximately equal to
-In words: every order matches one customer out of 100,000, so the join produces one row per order: about a million.
+In words: of all possible pairs, about one in (the larger distinct-key count) matches. A million orders times 100,000 customers, divided by 100,000, gives about a million joined rows: one per order.
 ```
 
-The formula assumes every key value on the side with fewer distinct values has a match on the other side, which is exactly true for a foreign key.
+This assumes every key value on the side with fewer distinct values has a match on the other side, which is exactly true for a foreign key. A PostgreSQL 18.6 run estimated `rows=1000000` for this join.
 
 Errors **multiply** as they go up the tree. If each of three joins is out by a factor of 3, the final estimate can be out by 27, and the join algorithm choices near the top are made on wrong numbers.
 
@@ -63,29 +55,24 @@ Postgres costs are in arbitrary units anchored on one sequential page read = 1.0
 | `cpu_index_tuple_cost` | 0.005 | Each index entry |
 | `cpu_operator_cost` | 0.0025 | Each operator or function call |
 
-A sequential scan pays for every page it reads, every row it processes and every condition it evaluates on each row. For `orders` with `status = 'pending'`:
+A sequential scan pays for every page it reads, every row it processes and every condition it evaluates on each row:
 
-```formula
+```formula reference
 C_seq = P × c_page
       + n × c_tuple
       + n × q × c_op
-C_seq = 7,353 × 1.0
-      + 1,000,000 × 0.01
-      + 1,000,000 × 1 × 0.0025
-C_seq = 7,353 + 10,000 + 2,500
-C_seq = 19,853
 where
 C_seq: the estimated total cost of the sequential scan, in planner cost units (1 unit = one sequential page read)
-P: the number of pages in the table, here 7,353
+P: the number of pages in the table
 c_page: `seq_page_cost`, default 1.0 per page read in order
-n: the number of rows in the table, here 1,000,000
+n: the number of rows in the table
 c_tuple: `cpu_tuple_cost`, default 0.01 per row processed
-q: the number of operators (comparisons) in the filter evaluated on each row, here 1 for status = 'pending'
+q: the number of operators (comparisons) in the filter evaluated on each row
 c_op: `cpu_operator_cost`, default 0.0025 per operator or function call
-In words: read 7,353 pages, process a million rows and test one condition on each; the row work costs more than the page reads.
+In words: pages, plus a small charge per row, plus a smaller charge per condition per row. For `orders` with `status = 'pending'` that is 7,353 for pages, 10,000 for a million rows and 2,500 for one test on each: 19,853.
 ```
 
-EXPLAIN shows `cost=0.00..19853.00`: exactly this. An index scan's cost depends on how many index and heap pages it expects to touch, charged at `random_page_cost`, discounted by physical-order correlation and `effective_cache_size` (the planner's guess of how much data is cached).
+For a million narrow rows, the row work costs more than the page reads. EXPLAIN for that query shows `cost=0.00..19853.00`, exactly this sum. An index scan's cost depends on how many index and heap pages it expects to touch, charged at `random_page_cost`, discounted by physical-order correlation and `effective_cache_size` (the planner's guess of how much data is cached).
 
 > [!tip] Tune random_page_cost for SSDs
 > The default of 4.0 dates from spinning disks. On SSDs, or when most data is cached, many teams set it to around 1.1 so the planner is less reluctant to use indexes. Test the change on your workload first.

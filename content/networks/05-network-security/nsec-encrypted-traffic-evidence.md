@@ -28,10 +28,6 @@ The alternative is **TLS interception** at a proxy, which restores payload visib
 - ECH, caching and unobserved DNS paths limit what a passive sensor can infer.
 
 ## Further reading
-- [Suricata rules format — Suricata docs](https://docs.suricata.io/en/latest/rules/intro.html)
-- [tcpdump and libpcap](https://www.tcpdump.org/)
-- [Wireshark display filters — Wireshark wiki](https://wiki.wireshark.org/DisplayFilters)
-- [Logging IP traffic using VPC Flow Logs — AWS](https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html)
-- [RFC 7011: IPFIX Protocol Specification](https://www.rfc-editor.org/rfc/rfc7011)
 - [Zeek documentation](https://docs.zeek.org/en/v7.1.1/logs/index.html)
-- [Base rate fallacy — Wikipedia](https://en.wikipedia.org/wiki/Base_rate_fallacy)
+- [RFC 9849: TLS Encrypted Client Hello](https://www.rfc-editor.org/rfc/rfc9849.html)
+- [Intrusion detection system — Wikipedia](https://en.wikipedia.org/wiki/Intrusion_detection_system)

@@ -2,7 +2,7 @@
 id: pattern-names-and-catalogue
 title: Named patterns and their consequences
 level: basic
-minutes: 3
+minutes: 4
 sourceLesson: pattern-why
 summary: A pattern describes a recurring problem, a reusable collaboration and its consequences.
 ---
@@ -15,22 +15,24 @@ A pattern is not a library you import, and it is not finished code. It is a *rec
 
 The word comes from architecture. In *A Pattern Language* (1977), Christopher Alexander and colleagues described 253 patterns for towns and buildings, such as "Light on two sides of every room". Each one named a problem, the forces pulling against each other, and a solution you could apply "a million times over, without ever doing it the same way twice".
 
-Software borrowed the idea in the late 1980s. The breakthrough was the 1994 book *Design Patterns: Elements of Reusable Object-Oriented Software* by Erich Gamma, Richard Helm, Ralph Johnson and John Vlissides, known as the **Gang of Four (GoF)**. It catalogued 23 patterns, with examples in C++ and Smalltalk.
+Software borrowed the idea in the late 1980s: in a 1987 paper for an OOPSLA workshop, Kent Beck and Ward Cunningham adapted Alexander's pattern language to object-oriented programming, with five patterns for window-based user interfaces. The breakthrough was the 1994 book *Design Patterns: Elements of Reusable Object-Oriented Software* by Erich Gamma, Richard Helm, Ralph Johnson and John Vlissides, known as the **Gang of Four (GoF)**. It catalogued 23 patterns, with examples in C++ and Smalltalk.
 
 ## What a pattern description contains
 
-The GoF book describes each pattern with the same template. The four essential parts are:
+The GoF introduction says a pattern has four essential elements:
 
 1. **Name.** A word or two that becomes shared vocabulary.
 2. **Problem.** When to apply it, including the conditions that must hold.
 3. **Solution.** The elements, their roles and how they collaborate. It is a template, not code.
 4. **Consequences.** The costs and benefits: what gets easier, what gets harder.
 
+Each catalogue entry then expands these into a fixed set of headings, including Intent, Motivation, Applicability, Structure, Participants, Consequences, Implementation, Known Uses and Related Patterns.
+
 The consequences matter as much as the solution. A pattern that makes one kind of change easy nearly always makes another kind harder. That is the trade you are choosing to make.
 
 ## The catalogue at a glance
 
-The GoF split their 23 patterns by purpose:
+The GoF classified their 23 patterns by purpose:
 
 | Purpose | Concerned with | Examples |
 |---|---|---|
@@ -44,7 +46,9 @@ The full list:
 - **Structural (7):** adapter, bridge, composite, decorator, facade, flyweight, proxy.
 - **Behavioural (11):** chain of responsibility, command, Interpreter pattern, iterator, mediator, Memento pattern, observer, state, strategy, template method, visitor.
 
-This module covers the ones you will meet most often in real code and in interviews.
+They also classified each pattern by scope. *Class patterns* fix relationships through inheritance when the code is written; *object patterns* use relationships between objects that can change at run time. Most of the 23 are object patterns.
+
+This module covers the patterns you are most likely to meet in everyday code. Chain of responsibility, mediator and interpreter are only named here, and memento appears only as a note on undo.
 
 ## Why bother naming them?
 
@@ -56,6 +60,13 @@ Patterns also help you:
 - **Recognise designs in other people's code.** When you see `ast.NodeVisitor` or `BufferedReader(FileIO(...))`, knowing the pattern tells you how the pieces are meant to fit.
 - **Spot the forces in a problem.** "This needs to vary independently of that" is a sign that a pattern such as strategy or bridge may help.
 - **Avoid reinventing a worse version.** Many hand-rolled designs are half a pattern with the important consequence missing (an observer with no way to unsubscribe, say).
+
+> [!analogy] Real-world analogy: a named chess opening
+> Chess players say "Queen's Gambit" instead of listing the opening moves. The name brings along what experienced players know about it: what it aims for, what it gives up and the usual traps for each side. Each game still develops differently.
+>
+> **How it maps:** The opening's name is the pattern name. Its aims and traps are the problem and consequences. Playing it in a real game is adapting the solution to your own code.
+>
+> **Where it stops:** An opening is defined by a fixed sequence of first moves that you can play exactly. A design pattern describes roles and collaborations, so two correct implementations can look quite different in code.
 
 ## Key takeaways
 - A pattern describes a recurring problem, a reusable collaboration and its consequences.

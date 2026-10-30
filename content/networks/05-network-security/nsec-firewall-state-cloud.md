@@ -22,6 +22,13 @@ A **stateful** firewall keeps **a connection table**. When it sees an allowed ou
  udp   10.0.0.5:40001  9.9.9.9:53   REPLIED
 ```
 
+> [!analogy] Real-world analogy: a receptionist's log of expected replies
+> A receptionist who only reads each envelope must decide from the envelope alone whether to accept it, so a rule like "accept anything addressed to the post room" lets in unexpected mail too. A receptionist who keeps a log of outgoing letters can accept a reply because it matches a letter that was sent, and can turn away mail that matches nothing.
+>
+> **How it maps:** The envelope-only receptionist is a stateless filter that needs broad return rules, such as allowing every ephemeral port. The log is the connection table: an allowed outbound request creates an entry, and replies that match it can be accepted by an established-traffic rule.
+>
+> **Where it stops:** The log takes memory and entries expire, so a flood of fake new requests can fill it and idle connections can be forgotten. Matching an entry also proves nothing about who really sent a packet; it only shows that the addresses, ports and state fit an existing flow.
+
 On Linux this is **conntrack**. This abbreviated nftables input-chain example explicitly accepts established and related traffic:
 
 ```nftables
@@ -67,9 +74,7 @@ Security groups can also reference *other security groups*: "allow port 5432 fro
 - Return ports and idle timeouts matter even when the service port is open.
 
 ## Further reading
-- [NIST SP 800-207: Zero Trust Architecture](https://csrc.nist.gov/pubs/sp/800/207/final)
-- [BeyondCorp: A New Approach to Enterprise Security — Google Research](https://research.google/pubs/beyondcorp-a-new-approach-to-enterprise-security/)
 - [Control traffic to resources using security groups — AWS](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html)
 - [Control subnet traffic with network ACLs — AWS](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html)
 - [Simple ruleset for a workstation — nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Simple_ruleset_for_a_workstation)
-- [Firewall (computing) — Wikipedia](https://en.wikipedia.org/wiki/Firewall_(computing))
+- [Troubleshoot NAT gateways — AWS](https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-troubleshooting.html)

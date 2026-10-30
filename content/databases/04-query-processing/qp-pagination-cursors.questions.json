@@ -3,27 +3,27 @@
     "id": "qp-anti-patterns-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "An API pages through orders with `ORDER BY id LIMIT 20 OFFSET :n`, using an index on `id`. When a client requests page 5,000 (`OFFSET 99980`), roughly how many index entries does Postgres walk?",
+    "prompt": "An API pages through orders with `ORDER BY id LIMIT 20 OFFSET :n`, using the primary-key index on `id`. Page 1 returns in well under a millisecond, but clients paging deep into the results report slow responses. What explains this, and what happens as they page further?",
     "options": [
       {
-        "text": "20",
-        "explanation": "That's what keyset pagination would do. With OFFSET, Postgres can't jump to the 99,981st entry; it must count its way there."
+        "text": "Deep pages need a different plan, but each page costs about the same once that plan is chosen",
+        "explanation": "The plan is the same Index Scan for every page. What changes is how far along the index it must walk before the LIMIT is satisfied."
       },
       {
-        "text": "99,980",
-        "explanation": "Close, but it also has to produce the 20 rows it returns."
+        "text": "The work grows with the offset: to return rows 99,981 to 100,000, the scan must produce and discard the 99,980 rows before them",
+        "explanation": "Correct. OFFSET cannot jump to a position in the index; it counts its way there. Each page deeper adds another 20 rows of work, so latency grows steadily with the page number."
       },
       {
-        "text": "100,000",
-        "explanation": "Correct. It produces 99,980 rows to skip plus 20 to return. In the lesson OFFSET 900,000 walked 900,020 entries and took 67 ms."
+        "text": "Every request scans the whole table, so all pages are equally slow",
+        "explanation": "The index is ordered by `id`, so the scan stops as soon as it has produced offset plus limit rows. Early pages are fast, which this answer cannot explain."
       },
       {
-        "text": "The whole table, 1,000,000",
-        "explanation": "The index is ordered by `id`, so once it has produced 100,000 rows the LIMIT stops it."
+        "text": "Only the 20 returned rows are read; the slowness must be network latency",
+        "explanation": "The skipped rows are read too. In the lesson's plan, `OFFSET 900000` showed `actual rows=900020` on the index scan below the Limit."
       }
     ],
-    "answer": 2,
-    "workedExample": "```formula\nn_read = n_off + n_lim\nn_read = 99,980 + 20 = 100,000\nwhere\nn_read: the index entries walked (and rows fetched) to answer the request\nn_off: the OFFSET value, the rows skipped, 99,980\nn_lim: the LIMIT value, the rows returned, 20\nIn words: OFFSET pagination does the work of every earlier page plus the page you asked for.\n```\n\nThe work grows linearly with the page number. Keyset pagination remembers the last `id` and asks for `WHERE id > :last_id ORDER BY id LIMIT 20`: an index seek followed by the next visible rows, without scanning earlier pages. In the lesson that was 0.014 ms against 67 ms.",
+    "answer": 1,
+    "workedExample": "1. With OFFSET, the Limit node asks its child for rows and throws away the first `:n` of them.\n2. The index scan has no way to start at the 99,981st entry; it walks from the beginning of the requested order.\n3. So page 1 walks 20 entries, page 5,000 walks 100,000 and page 45,001 walks 900,020: the work grows in step with the page number.\n\nKeyset pagination fixes this by remembering the last `id` returned and asking for `WHERE id > :last_id ORDER BY id LIMIT 20`. The index seeks straight to that point, so every page costs about the same. In the lesson that was 0.014 ms against 67 ms for a deep OFFSET.",
     "link": {
       "title": "Use The Index, Luke: paging without OFFSET",
       "url": "https://use-the-index-luke.com/no-offset"

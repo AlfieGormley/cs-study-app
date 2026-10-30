@@ -4,12 +4,10 @@ title: Pulling rows and breaking pipelines
 level: basic
 minutes: 4
 sourceLesson: qp-execution
-summary: Pulling rows and breaking pipelines with worked examples and explicit assumptions.
+summary: How operators pull rows from their children one at a time, why LIMIT can stop a scan early, and which operators must read everything first.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 ## The iterator (Volcano) model
 
@@ -49,7 +47,7 @@ def limit(child, n):
             return
 ```
 
-The first block defines the operators. Initialise this six-row fixture before running the following plan; only IDs 2, 4 and 5 are pending. The counter counts visits, including rejected rows.
+The first block defines the operators. Initialise this six-row list before running the following plan; only IDs 2, 4 and 5 are pending. The counter counts visits, including rejected rows.
 
 ```python
 orders = [
@@ -60,7 +58,7 @@ orders = [
 ]
 ```
 
-Run a `LIMIT 2` over this fixture:
+Run a `LIMIT 2` over this list:
 
 ```python
 plan = limit(
@@ -91,7 +89,7 @@ Limit (actual rows=5.00)
      Rows Removed by Filter: 80
 ```
 
-Postgres read 85 rows and 2 pages out of 7,353, and finished in 0.012 ms.
+In this illustrative run Postgres read 85 rows and 2 pages out of 7,353, and finished in 0.012 ms. How many rows it reads before finding five depends on where pending rows happen to sit in the table, but it is a tiny fraction either way.
 
 ## Pipelines and blocking operators
 
@@ -102,6 +100,13 @@ Others are **blocking** (also called pipeline breakers). The full operators list
 - **Sort**: the smallest value might be the last row read.
 - **Hash** (the build side of a hash join): the table must be complete before any probe can trust a miss.
 - **HashAggregate**: a group's count isn't final until every row is seen.
+
+> [!analogy] Real-world analogy: a sandwich counter and a marking pile
+> At a sandwich counter, the person wrapping asks the filler for the next sandwich, who asks the bread-slicer for two slices. Nobody makes more than is asked for, so when the last customer is served the line simply stops. A teacher ranking exam papers by mark is different: she cannot announce the top paper until she has seen every paper.
+>
+> **How it maps:** each worker is an operator and "next, please" is the `next()` call travelling down the plan. Stopping when customers stop asking is LIMIT ending a streaming pipeline. The teacher is a blocking operator such as Sort or HashAggregate, which must consume all its input before emitting a row.
+>
+> **Where it stops:** real operators do not run as separate people at the same time; in PostgreSQL's executor one process calls each operator in turn. Some engines also push batches of rows upwards instead of pulling one at a time.
 
 This is why `EXPLAIN` shows two costs for each node, like `cost=0.00..19853.00`. The first number is the **startup cost** (work before the first row), the second the **total cost** (work for all rows). A Sort has a high startup cost; a Seq Scan's is zero. When a query has `LIMIT`, the planner prefers plans with low startup cost, because it may never need the total.
 

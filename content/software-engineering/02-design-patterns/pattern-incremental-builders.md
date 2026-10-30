@@ -2,7 +2,7 @@
 id: pattern-incremental-builders
 title: Incremental object construction
 level: basic
-minutes: 3
+minutes: 4
 sourceLesson: pattern-creational
 summary: Use a builder for genuinely incremental construction or final validation.
 ---
@@ -23,9 +23,15 @@ Some objects need many optional settings, or have to be assembled step by step. 
                      returns Product
 ```
 
+### Two meanings of "builder"
+
+The GoF Builder has a specific intent: separate the construction of a complex object from its representation, so the same construction steps can produce different representations. Their example reads a rich-text document once and hands each step to a builder that produces plain text, TeX or an editable widget.
+
+Most builders you meet today are narrower. The fluent `Builder().a(x).b(y).build()` style common in Java, recommended in the second edition (2008) of Joshua Bloch's *Effective Java*, mainly fixes constructors with many optional parameters.
+
 ### In Python
 
-Keyword arguments with defaults already solve the "telescoping constructor" problem that drove builders in Java. A `dataclass` gives you that for free.
+Keyword arguments with defaults already solve that "telescoping constructor" problem, which Java has because it lacks named and default arguments. A `dataclass` gives you that for free.
 
 Builders still earn their place when construction is genuinely **incremental**, when you want to **validate once at the end**, or when the result should be **immutable**:
 

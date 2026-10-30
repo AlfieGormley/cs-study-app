@@ -61,7 +61,7 @@ Their paper is unusually sympathetic. It calls the big ball of mud the de facto 
 
 ### The way out
 
-Rewriting from scratch is tempting and usually a mistake: the rewrite has to rediscover years of edge cases while the old system keeps changing. The usual alternative is the **strangler fig** approach (named by Martin Fowler): put a routing layer in front, build new functionality beside the old system, move features across one at a time, and retire the old code as it empties.
+Rewriting from scratch is tempting but high-risk: the rewrite has to rediscover years of edge cases while the old system keeps changing, and it delivers little until cut-over. The usual alternative is the **strangler fig** approach (named by Martin Fowler): put a routing layer in front, build new functionality beside the old system, move features across one at a time, and retire the old code as it empties.
 
 ## Key takeaways
 - An anti-pattern is an attractive recurring solution with harmful consequences and a better alternative.

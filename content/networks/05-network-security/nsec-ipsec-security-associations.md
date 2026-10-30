@@ -35,29 +35,30 @@ Tunnel mode:
 
 For these confidentiality-enabled ESP examples, **tunnel mode** encrypts the original IP packet, including its inner addresses, and is suitable for site-to-site VPNs. **Transport mode** leaves the original IP header outside encryption. The ESP trailer is encrypted; the ESP header and authentication tag are not. Actual protection follows the negotiated algorithms.
 
-With a 16-byte tag, no extra options or traffic-flow padding, ESP tunnel mode using AES-GCM adds 54 to 57 bytes over IPv4. Padding varies because ESP must make the encrypted part end on a 4-byte boundary:
+ESP tunnel mode adds a new outer IP header, the ESP header (SPI and sequence number), a per-packet initialisation vector, a trailer and an integrity tag. For AES-GCM over IPv4 with a 16-byte tag and no extra options, that is 54 to 57 bytes per packet:
 
-```formula
-O_ESP = H_IP + H_ESP + IV + P + T + ICV
-O_min = 20 + 8 + 8 + 0 + 2 + 16 = 54 B
-O_max = 20 + 8 + 8 + 3 + 2 + 16 = 57 B
-where
-O_ESP: the total bytes ESP tunnel mode adds to each packet
-O_min: the overhead with no padding needed
-O_max: the overhead with the most padding (3 bytes)
-H_IP: the new outer IPv4 header, 20 bytes
-H_ESP: the ESP header: SPI (4 bytes) and sequence number (4 bytes), 8 bytes
-IV: initialisation vector sent with each packet for AES-GCM, 8 bytes
-P: padding, 0 to 3 bytes, so the ESP trailer’s final fields meet the required 4-byte alignment
-T: the trailer's pad-length and next-header fields, 1 byte each, 2 bytes
-ICV: integrity check value: the 16-byte authentication tag
-B: bytes
-In words: AES-GCM ESP tunnel mode over IPv4 costs between 54 and 57 bytes per packet, depending on how much padding the inner packet needs.
 ```
+outer IPv4                20
+ESP header (SPI + seq)     8
+IV (AES-GCM)               8
+padding                  0-3
+pad length + next header   2
+ICV (integrity tag)       16
+total                  54-57
+```
+
+The padding varies because ESP must make the encrypted part end on a 4-byte boundary, so the exact overhead depends on the inner packet's length. Other algorithms, IPv6 outer headers and traffic-flow padding change the total.
 
 ### NAT traversal
 
-ESP has no TCP/UDP ports, complicating port-based NAT multiplexing; some devices implement ESP-specific passthrough. When IKE detects a NAT on the path, both peers switch to **NAT-T**: ESP is wrapped in UDP on port 4500, adding another 8 bytes. If a site-to-site VPN negotiates but no traffic flows, check that UDP 500 and 4500 (and protocol 50, if there is no NAT) are allowed.
+ESP has no TCP/UDP ports, complicating port-based NAT multiplexing; some devices implement ESP-specific passthrough. When IKE detects a NAT on the path, both peers switch to **NAT-T**: ESP is wrapped in UDP on port 4500, adding another 8 bytes per packet, which shrinks the inner packet budget again. If a site-to-site VPN negotiates but no traffic flows, check that UDP 500 and 4500 (and protocol 50, if there is no NAT) are allowed.
+
+> [!analogy] Real-world analogy: agreeing a courier contract, then sending sealed pouches
+> Two offices first hold a meeting where each proves who it is and they agree the locks, keys and reference numbers they will use. Afterwards, every package travels in a sealed pouch stamped with the agreed reference number, so the receiving office knows which key opens it.
+>
+> **How it maps:** The meeting is IKEv2, the control plane that authenticates the peers and negotiates Security Associations. The sealed pouches are ESP packets, the data plane. The reference number on each pouch is the SPI, which tells the receiver which SA (keys and algorithms) to use, and there is a separate agreement for each direction.
+>
+> **Where it stops:** IKE keeps running after setup, rekeying and checking the peer is alive, and its messages travel over the same network paths as the data. A firewall that lets the meeting happen but blocks the pouches (for example UDP 4500 behind a NAT) leaves a tunnel that looks negotiated but carries nothing.
 
 ## Key takeaways
 - IKEv2 authenticates peers and negotiates SAs; ESP protects data according to those SAs.
@@ -66,8 +67,6 @@ ESP has no TCP/UDP ports, complicating port-based NAT multiplexing; some devices
 
 ## Further reading
 - [RFC 4301: Security Architecture for the Internet Protocol](https://www.rfc-editor.org/rfc/rfc4301)
+- [RFC 7296: Internet Key Exchange Protocol Version 2 (IKEv2)](https://www.rfc-editor.org/rfc/rfc7296)
 - [RFC 4303: IP Encapsulating Security Payload (ESP)](https://www.rfc-editor.org/rfc/rfc4303)
-- [WireGuard: Next Generation Kernel Network Tunnel (whitepaper)](https://www.wireguard.com/papers/wireguard.pdf)
-- [WireGuard: protocol and cryptography](https://www.wireguard.com/protocol/)
-- [RFC 7348: Virtual eXtensible Local Area Network (VXLAN)](https://www.rfc-editor.org/rfc/rfc7348)
-- [RFC 4459: MTU and Fragmentation Issues with In-the-Network Tunneling](https://www.rfc-editor.org/rfc/rfc4459)
+- [RFC 3948: UDP Encapsulation of IPsec ESP Packets](https://www.rfc-editor.org/rfc/rfc3948)

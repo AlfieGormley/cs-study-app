@@ -43,6 +43,13 @@ PersistentKeepalive = 25
 - **Outbound**: a packet routed into WireGuard selects the peer by longest-prefix match on its destination in the cryptokey table.
 - **Inbound**: after authentication, the inner source address must select that same sending peer in the cryptokey table. Merely matching one of its broader prefixes is insufficient if a more-specific prefix selects a different peer.
 
+> [!analogy] Real-world analogy: couriers with named delivery rounds
+> A company uses several trusted couriers, each recognised by a personal seal and each assigned a list of districts. Outgoing parcels for a district go to the courier whose list covers it most precisely. When a courier hands in a parcel, reception checks the seal and then checks that the parcel's sender address is in that courier's districts; a parcel claiming to come from someone else's district is refused.
+>
+> **How it maps:** The seal is the peer's public key, the district list is AllowedIPs, choosing the most precise list is longest-prefix matching on the destination, and the reception check is the inbound source-address test after decryption. Together they are cryptokey routing.
+>
+> **Where it stops:** A parcel only reaches the courier desk if the building's own routing sends it there: the operating system's route table must first send the packet to the WireGuard interface. And there is no negotiation of seal types: WireGuard's algorithms are fixed.
+
 This laptop uses a **split tunnel**: only the two internal ranges go through the VPN. With suitable OS routes, `AllowedIPs = 0.0.0.0/0, ::/0` supports a **full tunnel** for ordinary IPv4/IPv6 destinations. Endpoint, local and policy-route exceptions still need handling. `PersistentKeepalive = 25` enables periodic authenticated empty packets when needed during idle periods, intended to keep a NAT mapping open when its timeout and policy permit (the earlier firewall units’ idle timeouts again).
 
 WireGuard avoids replies to random invalid probes. This is not absolute invisibility: under load, a packet with a valid MAC derived from the responder's public key can elicit a cookie reply before full peer authentication. Other network behaviour can also leak information.
@@ -53,9 +60,6 @@ WireGuard avoids replies to random invalid probes. This is not absolute invisibi
 - Inbound source lookup must select the authenticated sending peer; split and full tunnels also depend on OS routes.
 
 ## Further reading
-- [RFC 4301: Security Architecture for the Internet Protocol](https://www.rfc-editor.org/rfc/rfc4301)
-- [RFC 4303: IP Encapsulating Security Payload (ESP)](https://www.rfc-editor.org/rfc/rfc4303)
 - [WireGuard: Next Generation Kernel Network Tunnel (whitepaper)](https://www.wireguard.com/papers/wireguard.pdf)
 - [WireGuard: protocol and cryptography](https://www.wireguard.com/protocol/)
-- [RFC 7348: Virtual eXtensible Local Area Network (VXLAN)](https://www.rfc-editor.org/rfc/rfc7348)
-- [RFC 4459: MTU and Fragmentation Issues with In-the-Network Tunneling](https://www.rfc-editor.org/rfc/rfc4459)
+- [wg-quick(8) manual page](https://man7.org/linux/man-pages/man8/wg-quick.8.html)

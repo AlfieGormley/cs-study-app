@@ -2,14 +2,12 @@
 id: qp-explain-loops
 title: Inclusive time, loops and row errors
 level: intermediate
-minutes: 5
+minutes: 4
 sourceLesson: qp-reading-explain
-summary: Inclusive time, loops and row errors with worked examples and explicit assumptions.
+summary: Three rules for reading EXPLAIN ANALYZE numbers: times include children, rows and time are per loop, and the lowest big estimate error is the root cause.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 ## Three rules for the numbers
 
@@ -24,18 +22,15 @@ Hash Join  (actual time=12.237..44.658)
 -> Hash  (actual time=12.038..12.038)
 ```
 
-```formula
+```formula reference
 t_excl = t_node − Σ t_child
-t_excl = (44.658 − 25.815 − 12.038) ms
-t_excl ≈ 6.8 ms
 where
 t_excl: the node's exclusive time: the time spent in the node itself, in milliseconds (ms)
-t_node: the node's inclusive time, the second number of its `actual time`, here 44.658 ms for the Hash Join
-t_child: a child's inclusive time, the second number of its `actual time`: 25.815 ms for the orders scan and 12.038 ms for the Hash
+t_node: the node's inclusive time, the second number of its `actual time`
+t_child: a child's inclusive time, the second number of its `actual time`
 Σ: sum: add up the term for every child
-≈: approximately equal to
 ms: millisecond, a thousandth of a second
-In words: of the 44.7 ms reported for the Hash Join, about 6.8 ms was spent joining; the rest was its children.
+In words: a node's own time is its reported time minus its children's reported times. Here 44.7 ms for the Hash Join, less 25.8 ms and 12.0 ms for its children, leaves about 6.8 ms of actual joining.
 ```
 
 For serial totals, multiply both the parent's and each child's average time by their own `loops` before subtracting; the displayed example has one loop at every node. With parallel execution, loops may include executions by several processes. Multiplying averages by loops gives aggregate instrumented execution time, not elapsed wall-clock time; overlapping worker times cannot simply be subtracted from the leader time. Worker details, rescans and instrumentation overhead make exclusive-time subtraction only a diagnostic approximation.
@@ -57,20 +52,13 @@ Nested Loop  (actual rows=600.00 loops=1)
      Buffers: shared hit=1191 read=9
 ```
 
-```formula
+```formula reference
 n_total = n_loop × L
-n_total = 3.00 × 200 = 600
-t_total ≈ t_loop × L
-t_total ≈ 0.001 ms × 200 = 0.2 ms
 where
 n_total: the total number of rows the node produced across all its executions
-n_loop: the `rows` figure: the average number of rows per execution, here 3.00
-L: the `loops` figure: the number of times the node was executed, here 200 (once per outer row)
-t_total: the total time spent in the node across all executions, in milliseconds (ms)
-t_loop: the per-execution time, the second number of `actual time`, here 0.001 ms
-≈: approximately equal to (the per-loop time is a rounded average)
-ms: millisecond, a thousandth of a second
-In words: 200 lookups of 3 rows each is 600 rows, and 200 lookups of about a microsecond each is about 0.2 ms.
+n_loop: the `rows` figure: the average number of rows per execution
+L: the `loops` figure: the number of times the node was executed, once per outer row for the inner side of a nested loop
+In words: multiply the per-loop rows (and, likewise, the per-loop time) by loops. Here 200 lookups of 3 rows each is 600 rows, and 200 lookups of about a microsecond each is about 0.2 ms.
 ```
 
 `Buffers` are already **totals** across all loops, not per loop: 1,200 page accesses, 6 per lookup.
@@ -91,19 +79,7 @@ Nested Loop  (rows=3)
 Buffers: shared hit=3589400
 ```
 
-The Seq Scan on `imports` expected 1 row and got 600,000. When both counts are positive, measure the gap as a ratio, whichever way round is bigger. A zero estimate or zero actual count needs direct inspection instead of division:
-
-```formula
-r = max(n_act / n_est, n_est / n_act)
-r = max(600,000 / 1, 1 / 600,000)
-r = 600,000
-where
-r: the misestimate factor: how many times too high or too low the estimate was; 1 means exact
-n_act: the actual rows per loop, from `actual rows`, here 600,000
-n_est: the estimated rows, the `rows` figure in the first brackets, here 1
-max: the larger of the two values
-In words: the estimate was 600,000 times too low, far beyond the 10x that marks a serious error.
-```
+The Seq Scan on `imports` expected 1 row and got 600,000. Measure a gap as a ratio, whichever way round is bigger: here the estimate was 600,000 times too low, far beyond the 10x that marks a serious error. A zero estimate or zero actual count needs direct inspection instead of division.
 
 That's the root cause. The nested loop above it was a reasonable choice for 1 row and a poor one for 600,000: 3.6 million page accesses. After `ANALYZE imports`, the planner chose a hash join with about 19,000.
 

@@ -11,18 +11,16 @@ The previous unit counted response payload bytes per request payload byte. This 
 
 Two subtleties:
 
-**Headers dilute the factor in this unfragmented example.** A UDP datagram carried in one IPv4 packet with no options has 28 bytes of IP and UDP headers (20 for IPv4, 8 for UDP); link-layer overhead is additional. For a 40-byte request and 1,400-byte response, the payload BAF is 35, but counting the IP and UDP headers too gives a lower ratio:
+**Headers dilute the factor.** A UDP datagram carried in one IPv4 packet with no options has 28 bytes of IP and UDP headers (20 for IPv4, 8 for UDP); link-layer overhead is additional. The same 28 bytes are added to both the request and the response, but they are a much bigger share of a small request. So the ratio measured on whole IP packets is lower than the payload ratio, and falls most when the request is tiny. For a 40-byte request and 1,400-byte response, the payload BAF of 35 becomes about 21 at the IP-packet level:
 
-```formula
+```formula reference
 BAF_IP = (B_resp + H) / (B_req + H)
-BAF_IP = (1400 + 28) / (40 + 28)
-BAF_IP = 1428 / 68 = 21
 where
 BAF_IP: the amplification factor counting IP and UDP headers as well as payload, a plain ratio
-B_resp: the response payload, in bytes; here 1,400
-B_req: the request payload, in bytes; here 40
-H: the IPv4 header (20 bytes) plus the UDP header (8 bytes), 28 bytes per packet
-In words: adding the same 28 header bytes to both sides shrinks the ratio, and shrinks it most when the request is small: 35 on payload alone becomes 21 at the IP level.
+B_resp: the response payload, in bytes
+B_req: the request payload, in bytes
+H: the IPv4 header (20 bytes) plus the UDP header (8 bytes), 28 bytes per packet in this unfragmented model
+In words: adding the same header bytes to both sides shrinks the ratio, and shrinks it most when the request is small.
 ```
 
 A full link-level ratio also needs link-layer framing and packetisation, which dilute it further.
@@ -36,8 +34,7 @@ A full link-level ratio also needs link-layer framing and packetisation, which d
 - **Protocol design**: cap amplification before validating a peer's address. QUIC permits up to three times the received UDP payload bytes before address validation; this bounds amplification rather than eliminating it.
 - **Upstream scrubbing and anycast** to spread and absorb the flood.
 
-> [!note] Content omitted after review
-> Universal attack-success rates, firewall mistake rankings and provider capacity guarantees are absent: this review has no representative measurement supporting those claims. Historical amplification figures in the preceding unit retain their original measurement scope.
+QUIC's rule shows how protocol design can bound amplification: until a server has confirmed the client can receive at its claimed address, it may send at most three times the bytes it has received. Clients must pad UDP datagrams that carry Initial packets to at least 1,200 bytes of payload, so even the first flight gives the server some room. If the server's handshake (for example a long certificate chain) needs more, it must wait for more client bytes or validate the address first, for example with a Retry token.
 
 ## Key takeaways
 - Headers and fragmentation change amplification measured at the IP or link layer.
@@ -45,9 +42,6 @@ A full link-level ratio also needs link-layer framing and packetisation, which d
 - QUIC bounds pre-validation amplification; it does not eliminate amplification.
 
 ## Further reading
-- [UDP-Based Amplification Attacks — CISA](https://www.cisa.gov/news-events/alerts/2014/01/17/udp-based-amplification-attacks)
 - [RFC 2827 (BCP 38): Network Ingress Filtering](https://www.rfc-editor.org/rfc/rfc2827)
-- [RFC 4987: TCP SYN Flooding Attacks and Common Mitigations](https://www.rfc-editor.org/rfc/rfc4987)
-- [Amplification Hell: Revisiting Network Protocols for DDoS Abuse (NDSS 2014)](https://www.ndss-symposium.org/ndss2014/programme/amplification-hell-revisiting-network-protocols-ddos-abuse/)
-- [February 28th DDoS incident report — GitHub blog](https://github.blog/news-insights/company-news/ddos-incident-report/)
-- [Understanding the Mirai Botnet (USENIX Security 2017)](https://www.usenix.org/conference/usenixsecurity17/technical-sessions/presentation/antonakakis)
+- [RFC 9000: QUIC, section 8 (address validation)](https://www.rfc-editor.org/rfc/rfc9000#section-8)
+- [UDP-Based Amplification Attacks — CISA](https://www.cisa.gov/news-events/alerts/2014/01/17/udp-based-amplification-attacks)

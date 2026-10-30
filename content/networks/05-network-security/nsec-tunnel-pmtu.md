@@ -21,21 +21,26 @@ The usual fixes:
 - **Clamp the TCP MSS** at the tunnel edge to advertise an appropriate data budget. The maximum segment size (MSS) is how much TCP data fits in one packet once the IP and TCP headers are taken out (the formula follows this list). Senders must account for options, and an MSS clamp does not fix UDP or later path changes.
 - Allow ICMP "packet too big" (ICMPv4 type 3 code 4, ICMPv6 type 2) through firewalls.
 
-The MSS to clamp to, with minimum-size IPv4 and TCP headers:
+The MSS to clamp to is the tunnel MTU minus the IP and TCP headers:
 
-```formula
+```formula reference
 MSS = MTU − (H_IP + H_TCP)
-MSS = 1420 B − (20 B + 20 B) = 1380 B
 where
 MSS: maximum segment size: the most TCP payload in one segment, in bytes
-MTU: the maximum transmission unit of the tunnel interface, in bytes; here 1,420
-H_IP: the IPv4 header without options, 20 bytes (an IPv6 header is 40)
+MTU: the maximum transmission unit of the tunnel interface, in bytes
+H_IP: the IP header without options: 20 bytes for IPv4, 40 bytes for IPv6
 H_TCP: the TCP header without options, 20 bytes
-B: bytes
-In words: inside a 1,420-byte tunnel, each TCP segment can carry at most 1,380 bytes of data once the 40 bytes of IPv4 and TCP headers are subtracted.
+In words: the TCP data that fits in one packet is the tunnel's packet size minus the IP and TCP headers.
 ```
 
-Over IPv6 the subtraction is 60 bytes instead of 40, and TCP options such as timestamps reduce the data further.
+For a 1,420-byte WireGuard interface carrying IPv4 TCP, that is 1,380 bytes of data per segment; over IPv6 the headers take 60 bytes instead of 40, and TCP options such as timestamps reduce the data further.
+
+> [!analogy] Real-world analogy: a low bridge with no warning sign
+> A lorry route passes under a low railway bridge. Normally a sign warns drivers and they take a lower vehicle next time. If someone removes the sign, small vans keep getting through, but every tall lorry is turned back at the bridge without the depot ever learning why, so it keeps sending tall lorries.
+>
+> **How it maps:** The bridge height is the tunnel's reduced path MTU, the tall lorries are full-size packets with Don't Fragment set, and the warning sign is the ICMP "packet too big" message. A firewall that blocks all ICMP removes the sign, producing a PMTU black hole: small requests work, large transfers stall. Clamping the MSS is telling the depot in advance to load only lower vehicles.
+>
+> **Where it stops:** A driver could stop and ask; a sender that never receives the error may simply retransmit the same oversized packet until it times out. And MSS clamping only reshapes TCP; UDP traffic and later path changes still need correct MTU settings and working ICMP.
 
 ## Key takeaways
 - Small successful requests do not prove the path can carry full-size packets.
@@ -43,9 +48,6 @@ Over IPv6 the subtraction is 60 bytes instead of 40, and TCP options such as tim
 - MSS clamping changes TCP’s advertised data budget and does not repair all UDP traffic.
 
 ## Further reading
-- [RFC 4301: Security Architecture for the Internet Protocol](https://www.rfc-editor.org/rfc/rfc4301)
-- [RFC 4303: IP Encapsulating Security Payload (ESP)](https://www.rfc-editor.org/rfc/rfc4303)
-- [WireGuard: Next Generation Kernel Network Tunnel (whitepaper)](https://www.wireguard.com/papers/wireguard.pdf)
-- [WireGuard: protocol and cryptography](https://www.wireguard.com/protocol/)
-- [RFC 7348: Virtual eXtensible Local Area Network (VXLAN)](https://www.rfc-editor.org/rfc/rfc7348)
 - [RFC 4459: MTU and Fragmentation Issues with In-the-Network Tunneling](https://www.rfc-editor.org/rfc/rfc4459)
+- [RFC 8201: Path MTU Discovery for IPv6](https://www.rfc-editor.org/rfc/rfc8201)
+- [RFC 4821: Packetization Layer Path MTU Discovery](https://www.rfc-editor.org/rfc/rfc4821)

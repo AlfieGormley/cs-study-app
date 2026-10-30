@@ -60,20 +60,9 @@ print(r.total())      # 3 (no reload)
 ### When not to use it
 
 - When the "transparent" stand-in hides behaviour that callers need to know about. A **remote proxy** makes a network call look like a local method call, but networks fail, time out and can have much higher and more variable latency than a local call; the ratio depends on the work and environment. Treating it as local falls for two classic fallacies of distributed computing: "the network is reliable" and "latency is zero".
-- Lazy proxies can cause the **N+1 query problem**: looping over 100 lazily loaded ORM objects triggers 100 separate queries.
+- Lazy proxies can cause the **N+1 query problem**. One query fetches a list of N objects; then touching a lazily loaded related object on each one runs a hidden query per object. A loop over 100 orders that reads each order's customer sends 101 queries instead of one or two.
 
-The name comes from counting the database round trips. One query fetches the list of N objects; then touching a lazily loaded related object on each of them runs one more query per object:
-
-```formula
-Q = 1 + N
-Q = 1 + 100 = 101
-where
-Q: the total number of database queries the loop sends (a plain count, no unit)
-N: the number of objects in the list, each with one lazily loaded related object that the loop touches; here 100
-In words: one query for the list, plus one hidden query for every item in it, so the query count grows in step with the list.
-```
-
-For a remote database, each sequential query can add a network round trip. In a deliberately simplified example at 1 millisecond per query, 101 queries contribute about 0.1 seconds, while one or two contribute roughly one or two milliseconds. This counts only the assumed per-query time; local databases, query execution, transfer sizes, parallelism and connection behaviour change real timings. The count assumes nothing is cached or prefetched; ORMs offer eager loading (in Django, `select_related` and `prefetch_related`) precisely to collapse the N extra queries.
+The cost grows with the list, and against a remote database each sequential query usually adds a network round trip. Nothing in the loop's code shows this, because attribute access looks free. ORMs offer eager loading (in Django, `select_related` and `prefetch_related`) precisely to collapse the N extra queries into a join or one batched query.
 
 ### In real libraries
 

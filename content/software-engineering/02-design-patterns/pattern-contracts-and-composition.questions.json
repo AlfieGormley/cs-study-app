@@ -3,27 +3,27 @@
     "id": "pattern-why-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A notification system has 3 channels (email, SMS, Slack) and 3 optional features (retry, logging, rate limiting) that can be combined freely. If every combination of channel and features is its own subclass, how many concrete classes could you need, and how many does a composition-based design need?",
+    "prompt": "A notification module has grown these classes:\n\n```\nEmailNotifier       SmsNotifier\nEmailRetry          SmsRetry\nEmailLog            SmsLog\nEmailRetryLog       SmsRetryLog\n```\n\nA pull request adds rate limiting and Slack, and it adds 16 new subclasses. What is the underlying design problem, and what is the best fix?",
     "options": [
       {
-        "text": "9 subclasses versus 6 composable classes",
-        "explanation": "9 is 3 × 3, which assumes each channel takes at most one feature. Features combine freely, so you need every subset of features, not each one alone."
+        "text": "Too few levels of inheritance; add an intermediate `RetryingNotifier` base class for every channel",
+        "explanation": "More inheritance levels still give one class per combination. Each new feature still multiplies the class count, because inheritance fixes each combination when the class is written."
       },
       {
-        "text": "24 subclasses versus 6 composable classes",
-        "explanation": "Correct. Each channel can have any subset of 3 features: 2 × 2 × 2 = 8 subsets, times 3 channels = 24. With composition you write 3 channels and 3 wrappers and stack them at run time."
+        "text": "Independent features are being combined by subclassing, so classes multiply; write each channel once and each feature once as a wrapper, and compose them at run time",
+        "explanation": "Correct. Channels and features vary independently. As wrappers sharing the channel's `send` interface, they combine freely: `Retry(Log(Email()))`. Adding a feature then adds one class instead of doubling the set."
       },
       {
-        "text": "27 subclasses versus 9 composable classes",
-        "explanation": "27 is 3 × 3 × 3, which counts the wrong thing. Each feature is either on or off (2 choices), giving 2 × 2 × 2 = 8 feature sets per channel, not 27."
+        "text": "Hide the subclasses behind a factory so callers do not see them",
+        "explanation": "A factory hides *which* class is built, but every combination still has to exist as a class. It treats the symptom for callers, not the growth in classes."
       },
       {
-        "text": "Inheritance and composition need the same number of classes",
-        "explanation": "This misses the point of the principle. Inheritance needs one class per *combination*; composition needs one class per *part*."
+        "text": "Make each notifier a singleton so only one object exists per class",
+        "explanation": "The problem is the number of classes, not the number of instances. Singleton does nothing to stop combinations multiplying."
       }
     ],
     "answer": 1,
-    "workedExample": "Each feature is either on or off, so first count the possible feature sets, then multiply by the number of channels:\n\n```formula\nN_inherit = c × 2^f\nN_inherit = 3 × 2^3 = 3 × 8 = 24\nwhere\nN_inherit: the number of subclasses needed when every combination of a channel and a set of features is its own class (a plain count, no unit)\nc: the number of channels (email, SMS, Slack); here 3\nf: the number of optional features (retry, logging, rate limiting), each on or off independently; here 3\n2^f: f copies of 2 multiplied together; it counts the possible feature sets, including 'no features' (2 × 2 × 2 = 8)\nIn words: every channel needs one subclass per feature set, so 3 channels × 8 feature sets = 24 subclasses.\n```\n\nWith composition, each channel and each feature is written once, and you stack them at run time:\n\n```\nRetry(Log(Email()))\nRateLimit(SMS())\n```\n\n```formula\nN_compose = c + f = 3 + 3 = 6\nwhere\nN_compose: the number of classes in the composition-based design (a plain count, no unit)\nc: the number of channel classes; here 3\nf: the number of feature wrapper classes; here 3\nIn words: composition needs one class per part, so the counts add instead of multiply.\n```\n\nAdd a fourth feature and inheritance doubles to 3 × 16 = 48 subclasses, while composition grows to 3 + 4 = 7 classes. This explosion is why the GoF said to favour composition.",
+    "workedExample": "1. Look at the class names: each one is a channel plus a set of features. Two channels and two features already give 8 classes.\n2. Each optional feature is on or off, so every new feature doubles the feature sets per channel, and every new channel repeats the whole set. Three channels times eight feature sets is 24 classes, so one pull request needs 16 new ones.\n3. The features do not depend on which channel they wrap. They only need the channel's `send` method.\n4. So make each feature a wrapper with the same interface and compose at run time:\n\n```\nRetry(Log(Email()))\nRateLimit(Slack())\n```\n\n5. Now the design needs one class per channel plus one per feature, and adding a feature means writing one class. This is the GoF advice to favour object composition over class inheritance, and it is the decorator pattern in action.\n\nComposition is not free: wrapper order can matter (retry outside or inside logging changes what gets logged), and each wrapper must honour the same contract.",
     "link": {
       "title": "Composition over inheritance — Python Design Patterns guide",
       "url": "https://python-patterns.guide/gang-of-four/composition-over-inheritance/"

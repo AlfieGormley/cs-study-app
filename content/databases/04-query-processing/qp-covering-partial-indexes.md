@@ -4,12 +4,10 @@ title: Covering and partial indexes
 level: advanced
 minutes: 3
 sourceLesson: qp-index-tuning
-summary: Covering and partial indexes with worked examples and explicit assumptions.
+summary: How an index that holds every needed column can skip the table, why recent updates undo that until VACUUM runs, and when a partial index can be used.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 ## Covering indexes and index-only scans
 
@@ -33,7 +31,14 @@ There's a catch. The index doesn't record whether each row version is visible to
 | Just after updating 20,000 rows | 20,592 | 20,661 | 27.6 ms |
 | After VACUUM | 0 | 81 | 1.1 ms |
 
-The 20,000 updated rows were spread across nearly every page, so nearly every page lost its all-visible bit. The "index-only" scan went back to the heap for every row and became 25 times slower. Index-only scans work best on tables that are mostly read, or where autovacuum keeps up.
+The 20,000 updated rows were spread across nearly every page, so nearly every page lost its all-visible bit. The "index-only" scan went back to the heap for every row and, in this illustrative run, became 25 times slower. Index-only scans work best on tables that are mostly read, or where autovacuum keeps up.
+
+> [!analogy] Real-world analogy: a library search terminal
+> A library's search terminal lists each book's title, author and year. To answer "which books by this author came out in 2001?" you can use the terminal alone, without walking to the shelves. But if a section is marked "recently reorganised, check the shelves", you must go and look at each book there.
+>
+> **How it maps:** the terminal's listing is a covering index whose `INCLUDE` columns hold everything the query needs. Answering from it alone is an Index Only Scan. The "check the shelves" mark is a heap page that is not all-visible in the visibility map, which forces a heap fetch for every row on it; VACUUM is the librarian clearing the marks once the shelves are settled.
+>
+> **Where it stops:** the library's mark means the listing might be out of date. The database's heap check is different: it asks whether each row version is visible to your transaction's snapshot, which an index entry cannot say on its own, even when it is perfectly up to date.
 
 ## Partial indexes
 

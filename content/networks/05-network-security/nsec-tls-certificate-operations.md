@@ -2,7 +2,7 @@
 id: nsec-tls-certificate-operations
 title: Revocation, renewal and verified TLS clients
 level: intermediate
-minutes: 3
+minutes: 4
 summary: Revocation mechanisms and client failure policy vary.
 sourceLesson: nsec-tls
 ---
@@ -13,7 +13,23 @@ Certificate trust must survive routine operations as well as the first connectio
 
 If a private key leaks, the certificate must be **revoked**. The two classic mechanisms are **CRLs** (lists of revoked serial numbers) and **OCSP** (ask the CA about one certificate). Direct OCSP requests can reveal certificate lookups to the responder. Some clients **soft-fail** when status cannot be retrieved; others use different revocation mechanisms or policies. Blocking a responder can therefore undermine a soft-fail check. **OCSP stapling** lets the server attach a recent signed OCSP response itself.
 
-The industry's answer has shifted to **short-lived certificates**. Let's Encrypt shut down its OCSP service in 2025 in favour of CRLs. The CA/Browser Forum has cut the maximum lifetime of public certificates from 398 days to 200 days (from March 2026), falling to 100 days in 2027 and 47 days in 2029. Short lifetimes limit the damage of an unrevoked key, and make reliable renewal and monitoring more demanding. **Automated renewal** (for example ACME) is a practical approach, not a mathematical requirement imposed by the lifetime alone.
+The industry's answer has shifted to **short-lived certificates**. Since March 2024 the CA/Browser Forum Baseline Requirements have required CAs to publish CRLs while making OCSP optional, and Let's Encrypt turned off its OCSP service in August 2025, publishing revocation only through CRLs. The Baseline Requirements also cut the maximum lifetime of publicly trusted TLS server certificates on a fixed schedule, applied by issue date:
+
+| Certificate issued | Maximum validity |
+|---|---|
+| Before 15 March 2026 | 398 days |
+| 15 March 2026 to 14 March 2027 | 200 days |
+| 15 March 2027 to 14 March 2029 | 100 days |
+| From 15 March 2029 | 47 days |
+
+(Schedule as published in Baseline Requirements version 2.3.1, checked October 2026; check the current version, because ballots can change it.) After each date a publicly trusted CA must not issue a longer certificate; certificates already issued keep their original expiry. Short lifetimes limit how long an unrevoked stolen key stays useful, and they make reliable renewal and expiry monitoring more demanding. **Automated renewal** (for example ACME) is the practical response: a once-a-year manual process cannot keep up with a 100-day or 47-day maximum.
+
+> [!analogy] Real-world analogy: cancelled bank cards and short expiry dates
+> When a bank card is stolen, a shop can check a printed list of cancelled card numbers, or phone the bank about one card. Both can fail: the list may be out of date, and if the phone line is down the shop must decide whether to accept the card anyway. Cards that expire after a few weeks limit the damage even when the check fails.
+>
+> **How it maps:** The printed list is a CRL, the phone call is an OCSP query (which tells the bank which card is being used, just as OCSP tells a CA which site is being checked), accepting the card when the line is down is soft-fail, and short expiry is a short-lived certificate.
+>
+> **Where it stops:** Certificates are checked by software automatically on every connection, and certificate holders must renew far more often than cardholders replace cards, so automation is essential. A short-lived certificate also does not stop misuse of a stolen key before it expires.
 
 Checking a server by hand:
 
@@ -49,10 +65,7 @@ The negotiated version, cipher and certificate subject depend on the live endpoi
 - Use a verified TLS context and an explicit server name; live outputs are environment dependent.
 
 ## Further reading
-- [RFC 9846: TLS 1.3 (2026 revision)](https://www.rfc-editor.org/rfc/rfc9846.html)
-- [RFC 8446: original TLS 1.3 specification](https://www.rfc-editor.org/rfc/rfc8446)
-- [The Illustrated TLS 1.3 Connection](https://tls13.xargs.org/)
-- [RFC 9849: TLS Encrypted Client Hello](https://www.rfc-editor.org/rfc/rfc9849.html)
-- [Ballot SC081v3: reducing certificate validity periods — CA/Browser Forum](https://cabforum.org/2025/04/11/ballot-sc081v3-introduce-schedule-of-reducing-validity-and-data-reuse-periods/)
-- [Certificate Transparency — MDN](https://developer.mozilla.org/en-US/docs/Web/Security/Certificate_Transparency)
+- [CA/Browser Forum Baseline Requirements (TLS server certificates)](https://cabforum.org/working-groups/server/baseline-requirements/requirements/)
+- [OCSP service has reached end of life — Let's Encrypt](https://letsencrypt.org/2025/08/06/ocsp-service-has-reached-end-of-life/)
+- [RFC 6960: Online Certificate Status Protocol (OCSP)](https://www.rfc-editor.org/rfc/rfc6960)
 - [ssl: TLS/SSL wrapper for socket objects — Python docs](https://docs.python.org/3/library/ssl.html)

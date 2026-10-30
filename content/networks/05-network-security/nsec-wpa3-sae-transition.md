@@ -26,6 +26,13 @@ WPA3-Personal changes password authentication, while protected management frames
 
 WPA3 is not flawless. The 2019 **Dragonblood** attacks (Vanhoef and Ronen) found timing and cache side channels in SAE implementations, and **downgrade attacks** against *transition mode*, where an AP accepts both WPA2 and WPA3 so old devices can connect: an attacker advertises a WPA2-only copy and captures a crackable WPA2 handshake. Fixes followed (including the hash-to-element method), but transition mode remains a weak spot. Wi-Fi certification requirements for 6 GHz call for WPA3 or Enhanced Open (OWE) with PMF, without WPA2 on that band. This does not prohibit a multi-band SSID from separately serving legacy clients on 2.4 or 5 GHz.
 
+> [!analogy] Real-world analogy: a new front door with the old back door still open
+> A building fits a new front door that cannot be picked, but keeps the old back door working for staff who have not yet been issued new fobs. Both doors open with the same staff code. A burglar ignores the new door and watches someone use the old one.
+>
+> **How it maps:** The new front door is SAE, which resists offline guessing; the old back door is WPA2-Personal kept by transition mode, and the shared code is the single passphrase used by both. An attacker who lures a client into a WPA2 handshake (for example with a WPA2-only fake access point) can crack the passphrase offline and then use it for the WPA3 side too.
+>
+> **Where it stops:** Clients can be told to remember that a network supports WPA3 and refuse the old door (transition disable), which has no exact building equivalent. And SAE still allows slow online guessing at the "front door", so a weak passphrase remains weak.
+
 **OWE** encrypts open networks (cafés, airports) with an unauthenticated key exchange. It stops passive sniffing, but not an evil twin, because nobody's identity is checked.
 
 ## Key takeaways
@@ -34,9 +41,6 @@ WPA3 is not flawless. The 2019 **Dragonblood** attacks (Vanhoef and Ronen) found
 - WPA2 transition support and implementation side channels can weaken the intended protections.
 
 ## Further reading
-- [Key Reinstallation Attacks (KRACK) — Mathy Vanhoef](https://www.krackattacks.com/)
 - [Dragonblood: analysing WPA3's Dragonfly handshake](https://wpa3.mathyvanhoef.com/)
-- [Wi-Fi Protected Access — Wikipedia](https://en.wikipedia.org/wiki/Wi-Fi_Protected_Access)
-- [Wired Equivalent Privacy — Wikipedia](https://en.wikipedia.org/wiki/Wired_Equivalent_Privacy)
-- [IEEE 802.1X — Wikipedia](https://en.wikipedia.org/wiki/IEEE_802.1X)
 - [RFC 7664: Dragonfly Key Exchange](https://www.rfc-editor.org/rfc/rfc7664)
+- [Wi-Fi Protected Access — Wikipedia](https://en.wikipedia.org/wiki/Wi-Fi_Protected_Access)

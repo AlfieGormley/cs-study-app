@@ -3,27 +3,27 @@
     "id": "qp-join-algorithms-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Same tables: R has 2,000 pages and S has 400 pages. Neither fits in memory, but there is enough memory for a two-phase Grace hash join. What does it cost in page I/Os?",
+    "prompt": "In the textbook page-I/O model, R has 2,000 pages and S has 400 pages. At first memory is too small to hold S, so the join runs as a Grace hash join. Then the join is given enough memory to hold all of S and its hash table. What happens to the page I/O, ignoring output writes?",
     "options": [
       {
-        "text": "2,400",
-        "explanation": "That reads each input once: reading each table once. It only applies when the build side fits entirely in memory, which the question rules out."
+        "text": "Nothing changes: a hash join always partitions both inputs first",
+        "explanation": "Partitioning is only needed when the build side does not fit. With S in memory the join can build once and stream R past it."
       },
       {
-        "text": "4,800",
-        "explanation": "That is twice the combined page count, the partitioning phase alone. The partitions must then be read again to join them."
+        "text": "It falls from about 3 transfers per page to about 1, because nothing is written out and read back",
+        "explanation": "Correct. Grace hash reads, writes and rereads every page: about 7,200 page I/Os. With S in memory, each table is read once: about 2,400."
       },
       {
-        "text": "12,000",
-        "explanation": "That is five times the combined page count, the cost of a sort-merge join that writes each sorted table out before merging."
+        "text": "It halves, because only S stops being partitioned while R is still written out",
+        "explanation": "Once S is held whole in memory, R has no partitions to be matched against, so it simply streams past the hash table. Neither table is written out."
       },
       {
-        "text": "7,200",
-        "explanation": "Correct. Partition both tables by hash of the key (read and write each: 2 x 2,400), then read each partition pair once to join (2,400): 3 x 2,400."
+        "text": "It rises, because a bigger hash table must be written to disk",
+        "explanation": "An in-memory hash table is not written to disk at all. Writing to disk is exactly what the extra memory avoids."
       }
     ],
-    "answer": 3,
-    "workedExample": "Grace hash join has two phases. Partitioning reads both tables and writes them back out as partitions (2 I/Os per page). Joining reads each pair of partitions once (1 I/O per page):\n\n```formula\nC_GH = 2 × (M + N) + (M + N)\nC_GH = 2 × 2,400 + 2,400\nC_GH = 3 × 2,400 = 7,200\nwhere\nC_GH: the cost of a Grace hash join, in page I/Os (each page read or written counts as one)\nM: the number of pages in R, 2,000\nN: the number of pages in S, 400\nIn words: every page is read, written, then read again: 3 I/Os per page of the two tables.\n```\n\nCompare with the block nested loop's best of 16,400 from the previous question. The output write is excluded in both, as is conventional.",
+    "answer": 1,
+    "workedExample": "Compare what happens to each page:\n\n1. **Grace hash.** Partition both tables: read every page and write it to a partition (2 transfers). Then read every partition once to join it (1 transfer). Three transfers per page of 2,400 pages is about 7,200.\n2. **S fits in memory.** Read S once to build the hash table, then read R once and probe. One transfer per page: about 2,400.\n\nThat single read of each table is the lower bound for an unindexed join in this model. The extra memory removes the whole write-and-reread round trip, which is why memory budgets such as `work_mem` matter so much for hash joins.",
     "link": {
       "title": "Hash join — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Hash_join"

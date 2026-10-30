@@ -11,16 +11,7 @@ Cloud overlays need many separate layer 2 networks. VXLAN supplies the identifie
 
 ## VXLAN and overlays
 
-Data centres and clouds need far more isolated layer 2 segments than VLANs allow. **VXLAN** (RFC 7348) carries whole Ethernet frames in UDP (port 4789), with a 24-bit **VNI** (VXLAN network identifier). The number of network segments an ID field can name doubles with every bit:
-
-```formula
-N_VLAN = 2^12 − 2 = 4094
-N_VNI = 2^24 = 16777216
-where
-N_VLAN: usable VLAN IDs: a 12-bit field holds 2^12 (12 copies of 2 multiplied together) = 4,096 values, and IDs 0 and 4095 are reserved
-N_VNI: possible VXLAN network identifiers in a 24-bit field: 24 copies of 2 multiplied together
-In words: a 12-bit VLAN ID allows about four thousand network segments, while VXLAN's 24-bit VNI allows about 16.8 million.
-```
+Data centres and clouds need far more isolated layer 2 segments than VLANs allow. **VXLAN** (RFC 7348) carries whole Ethernet frames in UDP (port 4789), with a 24-bit **VNI** (VXLAN network identifier). A 12-bit VLAN ID allows only 4,094 usable network segments (IDs 0 and 4095 are reserved); VXLAN's 24-bit VNI allows 16,777,216, about 16.8 million, because every extra bit doubles the count.
 
 The VXLAN encapsulation looks like this:
 
@@ -41,9 +32,5 @@ For the inner IP budget, subtract outer IPv4 (20), UDP (8), VXLAN (8), and inner
 - Filtering and protected underlay paths provide security absent from VXLAN itself.
 
 ## Further reading
-- [RFC 4301: Security Architecture for the Internet Protocol](https://www.rfc-editor.org/rfc/rfc4301)
-- [RFC 4303: IP Encapsulating Security Payload (ESP)](https://www.rfc-editor.org/rfc/rfc4303)
-- [WireGuard: Next Generation Kernel Network Tunnel (whitepaper)](https://www.wireguard.com/papers/wireguard.pdf)
-- [WireGuard: protocol and cryptography](https://www.wireguard.com/protocol/)
 - [RFC 7348: Virtual eXtensible Local Area Network (VXLAN)](https://www.rfc-editor.org/rfc/rfc7348)
-- [RFC 4459: MTU and Fragmentation Issues with In-the-Network Tunneling](https://www.rfc-editor.org/rfc/rfc4459)
+- [RFC 8926: Geneve](https://www.rfc-editor.org/rfc/rfc8926)

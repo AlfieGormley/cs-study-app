@@ -13,9 +13,9 @@ IPsec sequence numbers protect against replay only when the receiver tracks whic
 
 Each ESP packet carries a sequence number. The receiver keeps an **anti-replay window** (RFC 4303 recommends 64 packets) so that it tolerates packets arriving slightly out of order but rejects duplicates and anything too old. WireGuard and DTLS use the same idea.
 
-The receiver accepts an authenticated packet only when both conditions on the first line hold, and then updates its highest-seen number:
+After checking a packet's integrity, the receiver accepts it only if its sequence number is above the bottom of the window and has not been accepted before; a new highest number slides the window forward.
 
-```formula
+```formula reference
 s > s_top − W   and   s ∉ S
 s_new = max(s_top, s)
 where
@@ -82,9 +82,5 @@ This toy handles already authenticated positive sequence numbers for one SA, wit
 - The teaching set model omits counter wrapping and costs work proportional to its window.
 
 ## Further reading
-- [RFC 4301: Security Architecture for the Internet Protocol](https://www.rfc-editor.org/rfc/rfc4301)
-- [RFC 4303: IP Encapsulating Security Payload (ESP)](https://www.rfc-editor.org/rfc/rfc4303)
-- [WireGuard: Next Generation Kernel Network Tunnel (whitepaper)](https://www.wireguard.com/papers/wireguard.pdf)
-- [WireGuard: protocol and cryptography](https://www.wireguard.com/protocol/)
-- [RFC 7348: Virtual eXtensible Local Area Network (VXLAN)](https://www.rfc-editor.org/rfc/rfc7348)
-- [RFC 4459: MTU and Fragmentation Issues with In-the-Network Tunneling](https://www.rfc-editor.org/rfc/rfc4459)
+- [RFC 4303: IP Encapsulating Security Payload (ESP), section 3.4.3](https://www.rfc-editor.org/rfc/rfc4303)
+- [RFC 6479: IPsec Anti-Replay Algorithm without Bit Shifting](https://www.rfc-editor.org/rfc/rfc6479)

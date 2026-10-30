@@ -3,27 +3,27 @@
     "id": "nsec-threats-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A reflector answers a 36-byte UDP request payload with a 1,200-byte payload. Counting 28 bytes of IPv4 and UDP headers per packet, what are the payload BAF and the IP-packet-byte BAF, excluding link-layer framing?",
+    "prompt": "Two reflectors both have a payload bandwidth amplification factor of 30. Reflector A answers a 10-byte request payload with a 300-byte payload. Reflector B answers a 100-byte request payload with a 3,000-byte payload. Each request and response is one unfragmented IPv4/UDP packet carrying 28 bytes of headers. Measured on whole IP packets, which reflector amplifies more?",
     "options": [
       {
-        "text": "Payload 33.3, IP-packet about 19.2",
-        "explanation": "Correct. 1,200 / 36 = 33.3. At the IP-packet level: (1,200 + 28) / (36 + 28) = 1,228 / 64 ≈ 19.2."
+        "text": "Both the same, because their payload ratios are equal",
+        "explanation": "The header bytes are the same 28 on every packet, but they are a much larger share of A's tiny request than of B's. Equal payload ratios therefore give different IP-packet ratios."
       },
       {
-        "text": "Payload 33.3, IP-packet 33.3",
-        "explanation": "Headers are added to both packets but are a much bigger share of the small request, so they lower the factor."
+        "text": "Reflector A, because its request is smaller",
+        "explanation": "A small request is cheap to send, but the fixed 28 header bytes nearly quadruple A's 10-byte request while barely changing its response, so A's IP-packet ratio falls the most."
       },
       {
-        "text": "Payload 19.2, IP-packet 33.3",
-        "explanation": "These are swapped: adding headers can only shrink the ratio here, not grow it."
+        "text": "Reflector B, because the fixed headers dilute its larger request far less",
+        "explanation": "Correct. A's 38-byte request packet brings back a 328-byte packet (about 8.6 times); B's 128-byte request packet brings back 3,028 bytes (about 24 times). Headers dilute the ratio most when the request is tiny."
       },
       {
-        "text": "Payload 33.3, IP-packet about 146",
-        "explanation": "This subtracts the headers instead of adding them: (1,200 − 28) / (36 − 28) ≈ 146. Headers are extra bytes on every packet, so they are added."
+        "text": "Neither amplifies at the IP level, because headers cancel out",
+        "explanation": "The headers are added to both sides, not subtracted; the ratio shrinks but stays above 1 for both reflectors."
       }
     ],
-    "answer": 0,
-    "workedExample": "1. Payload BAF is the response payload divided by the request payload:\n\n```formula\nBAF = B_resp / B_req\nBAF = 1200 / 36 ≈ 33.3\nwhere\nBAF: bandwidth amplification factor, a plain ratio with no unit\nB_resp: the response payload, in bytes; here 1,200\nB_req: the request payload, in bytes; here 36\n≈: approximately equal to (rounded)\nIn words: each payload byte the attacker sends brings back about 33 payload bytes.\n```\n\n2. At the IP-packet level, each packet also carries 20 bytes of IPv4 header and 8 of UDP header:\n\n```formula\nBAF_IP = (B_resp + H) / (B_req + H)\nBAF_IP = (1200 + 28) / (36 + 28)\nBAF_IP = 1228 / 64 ≈ 19.2\nwhere\nBAF_IP: the amplification factor counting IP and UDP headers, a plain ratio\nB_resp: the response payload, 1,200 bytes\nB_req: the request payload, 36 bytes\nH: IPv4 header (20 bytes) plus UDP header (8 bytes) = 28 bytes per packet\n≈: approximately equal to (rounded)\nIn words: adding 28 header bytes to each side nearly doubles the small request but barely changes the big response, so the ratio drops from 33.3 to about 19.2.\n```\n\n3. The 28 bytes nearly double the small request but barely change the large response, so the real multiplier drops a lot. Rossow's cited measurements use UDP payload bytes. These computed sizes exclude link-layer overhead and assume one unfragmented packet in each direction.",
+    "answer": 2,
+    "workedExample": "1. The payload ratio ignores the 20-byte IPv4 and 8-byte UDP headers that every packet carries.\n2. Adding the same 28 bytes to both request and response pulls the ratio down, most strongly when the request is small.\n3. Reflector A: a 10-byte request becomes a 38-byte packet; the 300-byte response becomes 328. The ratio drops from 30 to under 9.\n4. Reflector B: a 100-byte request becomes 128 bytes; the 3,000-byte response becomes 3,028. The ratio drops only to about 24.\n5. So for an attacker paying for whole packets, B is the better amplifier. Published BAF tables (such as Rossow's) usually report payload ratios, so say which bytes you are counting. Link-layer framing would dilute both ratios further.",
     "link": {
       "title": "UDP-Based Amplification Attacks — CISA",
       "url": "https://www.cisa.gov/news-events/alerts/2014/01/17/udp-based-amplification-attacks"
@@ -72,27 +72,27 @@
     "id": "nsec-threats-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "A QUIC client's first Initial datagram has a UDP payload padded to 1,200 bytes, as the protocol requires. Before the server has validated the client's address, what is the most it may send in response to that one datagram?",
+    "prompt": "A QUIC server receives one client Initial datagram padded to 1,200 bytes of UDP payload from an address it has not yet validated. Its full first flight, including a long certificate chain, would be about 6,000 bytes. What does RFC 9000 require?",
     "options": [
       {
-        "text": "1,200 bytes",
-        "explanation": "The limit is a multiple of what was received, not equal to it."
+        "text": "Send all 6,000 bytes, because QUIC packets are encrypted",
+        "explanation": "Encryption does not prove the source address. Anyone can send an Initial with a spoofed source, so encryption is no reason to send more."
       },
       {
-        "text": "Unlimited, because QUIC is encrypted",
-        "explanation": "Encryption does not prove the source address; anyone can send an Initial with a spoofed source."
+        "text": "Send at most three times the bytes received from that address until it is validated, then wait for more client bytes or validate the address, for example with a Retry token",
+        "explanation": "Correct. Before validation the server may send at most three times what it has received, here 3,600 bytes. It must wait for further client datagrams or validate the address before sending the rest."
       },
       {
-        "text": "3,600 bytes",
-        "explanation": "Correct. RFC 9000 caps the server at three times the bytes received until the address is validated: 3 × 1,200 = 3,600."
+        "text": "Send nothing until the client completes a TCP handshake",
+        "explanation": "QUIC runs over UDP and has no TCP handshake. Address validation uses QUIC's own mechanisms, such as Retry tokens and handshake progress."
       },
       {
-        "text": "14,600 bytes, one initial congestion window",
-        "explanation": "The congestion window is a separate limit; the anti-amplification limit applies first and is far smaller here."
+        "text": "Send the full flight but only once its congestion window allows it",
+        "explanation": "The congestion window is a separate limit. The anti-amplification limit applies before address validation, and here it is the smaller one."
       }
     ],
-    "answer": 2,
-    "workedExample": "1. QUIC runs over UDP, so a spoofed Initial is possible.\n2. The server's handshake (certificate chain and all) can be several kilobytes, which would let a small spoofed packet trigger a much larger reply.\n3. RFC 9000 §8: before address validation the server must not send more than **3×** the bytes received.\n4. Clients must pad Initials to at least 1,200 bytes, which raises the cost of each probe:\n\n```formula\nL_max = 3 × B_recv\nL_max = 3 × 1200 B = 3600 B\nwhere\nL_max: the most the server may send before the client's address is validated, in bytes\nB_recv: the bytes the server has received from that address, here one 1,200-byte datagram\nB: bytes; one byte is 8 bits\nIn words: until it validates the address, a QUIC server may send at most three times what it has received, so 1,200 bytes in allows 3,600 bytes out.\n```\n\n5. If the handshake needs more, the server waits for more client packets or sends a Retry packet. Only receiving and validating the returned token establishes that the client could receive it; merely sending a Retry proves nothing.",
+    "answer": 1,
+    "workedExample": "1. QUIC runs over UDP, so a forged Initial from a victim's address is possible.\n2. A server whose first flight is much larger than the client's datagram could otherwise be an amplifier.\n3. RFC 9000 section 8: until the client's address is validated, the server must not send more than three times the bytes it has received from that address. One 1,200-byte datagram allows about 3,600 bytes.\n4. Clients must pad datagrams carrying Initial packets to at least 1,200 bytes, which raises the cost of each forged probe and gives honest clients a usable allowance.\n5. To send the remaining data the server waits for further client datagrams (which raise the allowance) or validates the address, for example by sending a Retry and receiving the token back. Sending a Retry by itself proves nothing; only the returned token does.\n\nThe limit bounds amplification to threefold rather than removing it.",
     "link": {
       "title": "RFC 9000: QUIC, section 8 (address validation)",
       "url": "https://www.rfc-editor.org/rfc/rfc9000#section-8"

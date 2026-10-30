@@ -44,7 +44,7 @@ The standard library does this all over the place. `None`, `True` and `False` ar
 
 ### When not to use it
 
-Singleton is the most criticised GoF pattern, for good reason:
+Singleton is probably the most criticised GoF pattern. In a 2009 interview Erich Gamma said he favoured dropping it, calling its use almost always a design smell. The reasons:
 
 - **It's global mutable state.** Any code can change it, so behaviour depends on hidden history.
 - **It hides dependencies.** A function that reaches for `Database.instance()` doesn't say so in its signature.

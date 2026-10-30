@@ -27,6 +27,13 @@ ClientHelloInner (encrypted)
 2. It encrypts the real ClientHello with that key and wraps it in an outer ClientHello naming only the public name.
 3. The provider decrypts the inner hello and completes the handshake for the real site.
 
+> [!analogy] Real-world analogy: a sealed letter inside a mailroom envelope
+> To keep the post office from learning which company you are writing to, you seal your letter in an inner envelope that only the building's mailroom can open, and address the outer envelope just to "Mailroom, 1 Big Tower". The mailroom opens it and passes the letter to the right company.
+>
+> **How it maps:** The outer envelope is the outer ClientHello with the provider's public name, the inner envelope is the encrypted inner ClientHello with the real SNI, the mailroom's lock is the ECH public key published in DNS, and the tower full of companies is the set of sites sharing that configuration.
+>
+> **Where it stops:** If the building houses only one company, the outer address gives the secret away, just as a unique IP address or a small anonymity set can. The post office can also see where your other letters go, as a plaintext DNS lookup can reveal the name even when the ClientHello hides it.
+
 ECH hides the inner ClientHello from passive observers, but the practical anonymity set depends on shared configuration, IP addresses and other metadata; a CDN is not a protocol requirement. Plaintext DNS can independently disclose the requested name. Encrypted DNS protects that hop but does not conceal it from the chosen resolver. For defenders it is a trade-off: firewalls and filters that block by SNI (the detection units) lose that signal.
 
 ## Key takeaways
@@ -35,10 +42,5 @@ ECH hides the inner ClientHello from passive observers, but the practical anonym
 - ECH privacy depends on deployment and anonymity sets, not merely enabling one extension.
 
 ## Further reading
-- [RFC 9846: TLS 1.3 (2026 revision)](https://www.rfc-editor.org/rfc/rfc9846.html)
-- [RFC 8446: original TLS 1.3 specification](https://www.rfc-editor.org/rfc/rfc8446)
-- [The Illustrated TLS 1.3 Connection](https://tls13.xargs.org/)
 - [RFC 9849: TLS Encrypted Client Hello](https://www.rfc-editor.org/rfc/rfc9849.html)
-- [Ballot SC081v3: reducing certificate validity periods — CA/Browser Forum](https://cabforum.org/2025/04/11/ballot-sc081v3-introduce-schedule-of-reducing-validity-and-data-reuse-periods/)
-- [Certificate Transparency — MDN](https://developer.mozilla.org/en-US/docs/Web/Security/Certificate_Transparency)
-- [ssl: TLS/SSL wrapper for socket objects — Python docs](https://docs.python.org/3/library/ssl.html)
+- [RFC 9846: TLS 1.3 (2026 revision)](https://www.rfc-editor.org/rfc/rfc9846.html)

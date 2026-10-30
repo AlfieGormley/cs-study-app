@@ -47,6 +47,8 @@ print("X-Id" in base["headers"])
 # False: deep copy has its own dict
 ```
 
+For immutable values you often need "one like that, but with this field changed" rather than a mutable clone. `dataclasses.replace()` does that for dataclasses, and Python 3.13 added `copy.replace()` for any class that supports it. Each returns a new object and leaves the original untouched, though nested mutable fields are still shared rather than copied.
+
 ### When not to use it
 
 - When construction is cheap: just call the constructor.

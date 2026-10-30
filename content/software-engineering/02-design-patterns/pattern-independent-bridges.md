@@ -47,20 +47,9 @@ class Circle:
 print(Circle(3, Ascii()).draw())   # ooo
 ```
 
-Why bother? Count the classes. With one subclass per (shape, renderer) pair, the classes multiply; with a bridge, each shape and each renderer is written once, so they add:
+Why bother? With one subclass per (shape, renderer) pair, the classes *multiply*: every new renderer needs a new class for every shape. With a bridge, each shape and each renderer is written once, so they only *add*. At 2 shapes and 2 renderers there is no saving (4 classes either way); at 5 shapes and 4 renderers it is 20 classes against 9, and the gap widens as either list grows.
 
-```formula
-N_sub = mn
-N_bridge = m + n
-where
-N_sub: the number of classes when every shape-and-renderer pair is its own subclass (a plain count, no unit)
-N_bridge: the number of classes with a bridge: one per shape plus one per renderer
-m: the number of shapes (abstractions), such as circle and square
-n: the number of renderers (implementations), such as SVG, PNG and ASCII art
-In words: subclassing every pair multiplies the two list lengths; a bridge only adds them.
-```
-
-Extending the example to 2 shapes and 2 renderers gives 2 × 2 = 4 subclasses against 2 + 2 = 4 bridge classes, so at this size there is no saving. With 5 shapes and 4 renderers it is 20 against 9, and the gap widens as either list grows. The formula assumes the two dimensions really are independent: every shape can be drawn by every renderer through the same small renderer interface. If one renderer needs special code for each shape, some of the multiplication comes back.
+That saving assumes the two dimensions really are independent: every shape can be drawn by every renderer through the same small renderer interface. If one renderer needs special code for each shape, some of the multiplication comes back.
 
 ### When not to use it
 

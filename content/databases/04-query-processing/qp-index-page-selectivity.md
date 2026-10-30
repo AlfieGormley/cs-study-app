@@ -2,18 +2,14 @@
 id: qp-index-page-selectivity
 title: Selectivity means pages as well as rows
 level: advanced
-minutes: 5
+minutes: 4
 sourceLesson: qp-index-tuning
-summary: Selectivity means pages as well as rows with worked examples and explicit assumptions.
+summary: Why an index helps only when the matching rows sit on few pages, and how scattered rows can make a small fraction of rows touch nearly every page.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 The System Design module's indexing lesson covers how B-trees and LSM trees work. This lesson takes the planner's point of view: given a query and its plan, which index would change the plan, and is the change worth what the index costs?
-
-The examples below assume an illustrative 1,000,000-row `orders` table and PostgreSQL 18 plan features.
 
 ## Will the planner use the index?
 
@@ -27,7 +23,7 @@ Three queries on `ordered_on` with an index on that column:
 | One quarter | 37,390 (3.7%) | Bitmap index scan | 9.3 ms |
 | Since 2021 | 847,258 (85%) | Seq Scan | 51 ms |
 
-The quarter is the interesting one. A sequential scan took 23 ms, so the index halved the time, but look at the plan:
+The quarter is the interesting one. In this illustrative run a sequential scan took 23 ms, so the bitmap scan took well under half the time, but look at the plan:
 
 ```
 Bitmap Heap Scan on orders
@@ -38,27 +34,25 @@ Bitmap Heap Scan on orders
 
 Matching 3.7% of the rows touched 7,306 of 7,353 heap pages, nearly all of them. Orders for a given quarter are spread uniformly through the table (physical-order correlation near 0), so almost every 8 KiB page contains a few. You can predict that: if matching rows are scattered at random, the chance that a page has none at all is tiny.
 
-```formula
-m = r_page × s
-m = 136 × 0.037 ≈ 5
+```formula reference
 p_none = (1 − s)^{r_page}
-p_none = 0.963^{136} ≈ 0.006
-P_hit ≈ P × (1 − p_none)
-P_hit ≈ 7,353 × 0.994 ≈ 7,309
 where
-m: the average number of matching rows on each heap page
-r_page: the number of rows on each heap page, about 136 for `orders`
+p_none: the probability that a page holds no matching row, if each row matches independently at random
 s: the selectivity: the fraction of rows that match, here 0.037 (3.7%) for one quarter
-p_none: the probability that a page holds no matching row, if each row matches independently at random; one factor of (1 − s) per row on the page, all multiplied together
-P: the number of heap pages in the table, 7,353
-P_hit: the expected number of heap pages holding at least one matching row
-≈: approximately equal to
-In words: with about 5 matches per page on average, only about 1 page in 170 escapes, so the index scan still visits about 99.4% of the pages.
+r_page: the number of rows on each heap page, about 136 for `orders`
+In words: a page escapes only if every one of its rows misses. With about five matching rows per page on average, only about 1 page in 170 escapes, so the scan still visits about 99.4% of the pages: about 7,309 of 7,353, close to the 7,306 the plan reported.
 ```
 
-The prediction, about 7,309 pages, is close to the 7,306 the plan reported. The model assumes matches are scattered at random; any clustering by date lowers the page count. A bitmap scan visits matching heap pages in physical order. Whether it beats a sequential scan when nearly every page is touched must be measured; the illustrative timing is not a general guarantee. But the benefit of an index depends on **how many pages** the matching rows occupy, not just how many rows match.
+The model assumes matches are scattered at random; any clustering by date lowers the page count. A bitmap scan visits matching heap pages in physical order. Whether it beats a sequential scan when nearly every page is touched must be measured; the illustrative timing is not a general guarantee. But the benefit of an index depends on **how many pages** the matching rows occupy, not just how many rows match.
 
 If rows were physically clustered by this date column (for example, an append-only log written in date order), the same quarter would occupy about 4% of the pages, and the index would win by far more.
+
+> [!analogy] Real-world analogy: collecting red cars from a car park
+> A valet is asked to fetch every red car. If red cars are scattered at random, there is one in almost every aisle of the car park, so the valet walks nearly every aisle even though only one car in 27 is red. If all the red cars had been parked together in one corner, the valet would visit one corner and be done.
+>
+> **How it maps:** cars are table rows, aisles are heap pages, and the red cars are the rows matching the filter. Scattered red cars are low physical-order correlation: a small fraction of rows still touches nearly every page. Parking them together is a table physically ordered by the filtered column, where the same rows occupy few pages.
+>
+> **Where it stops:** a valet sees the colour from a distance, while the database usually has to read a page to find out what is on it; the index tells it which pages hold matches, not how to avoid reading those pages.
 
 > [!note] Bitmap scans
 > A **Bitmap Index Scan** collects the locations of all matches into an in-memory bitmap of pages; the **Bitmap Heap Scan** then reads those pages in physical order. It's the planner's middle ground between an index scan (good for a few rows) and a seq scan (good for many). Bitmaps from different indexes can be combined with `BitmapAnd` and `BitmapOr`.

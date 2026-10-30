@@ -4,12 +4,10 @@ title: Merge joins and duplicate keys
 level: intermediate
 minutes: 3
 sourceLesson: qp-join-algorithms
-summary: Merge joins and duplicate keys with worked examples and explicit assumptions.
+summary: How a merge join walks two sorted inputs together, and when existing order makes it cheaper than hashing.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 ## Merge join (sort-merge)
 
@@ -37,6 +35,13 @@ On equality, keeping the left position allows all duplicate right keys to match 
 
 With the unique-left-key assumption in this miniature, the merge is O(n + m), where n and m are the row counts of the two inputs: each step advances one of the two positions, so the work grows in proportion to the total number of rows. General duplicate-key joins must also account for output size and any repeated processing of matching groups. If an input isn't already sorted, it must be sorted first. Sorting n rows costs O(n log n), where n is the input's row count and log n grows very slowly (about 20 for a million rows in base 2), and a big sort may spill to disk. Merge join is attractive when **an index already provides the order**, or when the query needs that order anyway (`ORDER BY` on the join key).
 
+> [!analogy] Real-world analogy: matching two alphabetical lists
+> A teacher has a class register and a pile of marked tests, both in surname order. She runs a finger down each: if the register name comes first alphabetically she moves down the register, if the test comes first she moves to the next test, and when they match she records the mark.
+>
+> **How it maps:** the two lists are the sorted inputs and the fingers are the two positions in the merge. Moving whichever finger points at the smaller key is the merge step, and each finger only ever moves forwards, so the work grows with the length of both lists.
+>
+> **Where it stops:** if the lists arrive unsorted, someone must sort them first, and that sort can cost more than the merge. Duplicate surnames on both sides also force the real algorithm to revisit a group of matches, which a single pass of two fingers does not show.
+
 An illustrative merge plan for the pending-orders query (disabling hash joins encourages alternatives but does not force a merge, because nested loops remain available):
 
 ```
@@ -50,7 +55,7 @@ Merge Join
 Execution Time: 36.220 ms
 ```
 
-`customers` comes out of its primary-key index already in `id` order, and only the 30,066 pending orders need sorting, in memory. The time is essentially the same as the hash join, which is why the planner's estimates for the two were close.
+`customers` comes out of its primary-key index already in `id` order, and only the 30,066 pending orders need sorting, in memory. The run time was close to the hash join's, and so were the planner's cost estimates for the two plans; the hash join was still estimated slightly cheaper, which is why it was the default choice.
 
 ## Key takeaways
 - Merge joins need compatible sorted inputs and an eligible equality condition in PostgreSQL.

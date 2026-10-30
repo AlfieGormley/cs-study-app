@@ -2,20 +2,18 @@
 id: qp-equality-selectivity
 title: Equality selectivity from column statistics
 level: intermediate
-minutes: 4
+minutes: 3
 sourceLesson: qp-statistics-optimiser
-summary: Equality selectivity from column statistics using explicit models and assumptions.
+summary: How the planner turns column statistics into a row estimate for an equality condition, using the most common values or an even share of the rest.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plans and figures below are illustrative model inputs. Actual execution depends on version, workload and settings.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 ## Selectivity: from stats to row counts
 
 **Selectivity** is the fraction of rows a condition keeps. Every row estimate starts from it:
 
-```formula
+```formula essential
 n_est = s × n_table
 where
 n_est: the planner's estimated number of rows the condition keeps (its cardinality estimate)
@@ -24,50 +22,21 @@ n_table: the planner's estimate of the number of rows in the table, from `pg_cla
 In words: the estimated row count is the fraction of rows the condition keeps, times the number of rows in the table.
 ```
 
-The rules below are all ways of working out *s*, using the illustrative column-frequency statistics.
+Everything below is about how the planner works out *s* for `column = value`. Which rule it uses depends on what the statistics say about that value.
 
-### Equality on a common value
+### A value on the most-common-values list
 
-`WHERE status = 'pending'`: 'pending' is in the MCV list, so the planner uses its measured frequency, 0.030767, as the selectivity:
+`WHERE status = 'pending'`: 'pending' is in the MCV list with a sampled frequency of 0.030767, so that frequency is the selectivity. About 3.1% of a million rows is an estimate of 30,767; the actual count is 30,066, about 2% lower. The MCV list exists so that common values get their own measured share instead of an average.
 
-```formula
-n_est = f_MCV × n_table
-n_est = 0.030767 × 1,000,000
-n_est = 30,767
-where
-n_est: the estimated number of matching rows
-f_MCV: the value's frequency in the most-common-values (MCV) list: the fraction of sampled rows holding it, here 0.030767 for 'pending'
-n_table: the number of rows in the table, here 1,000,000
-In words: if about 3.1% of the sample was 'pending', expect about 3.1% of the table to be.
-```
+### A column with no common values
 
-The actual count is 30,066, so the estimate is about 2% high.
+`WHERE customer_id = 42`: there is no MCV list, because no customer is especially common. The planner assumes every distinct value matches the same share of rows, so the selectivity is 1 divided by `n_distinct`. A million orders shared among about 91,709 customer IDs is about 11 orders each, so the estimate is 11. The actual count for customer 42 is 14: close enough to choose the right plan. (If the column had NULLs, their fraction would be taken off first; NULL never equals anything.)
 
-### Equality on any other value
+### A value missing from the list
 
-`WHERE customer_id = 42`: there's no MCV list (no value is especially common), so the planner assumes values are evenly spread and every value matches the same share of rows. The column has no NULLs here; if it had, their fraction would be taken off first:
+When the column *does* have an MCV list but the value isn't on it, the planner takes away the rows the MCVs and NULLs account for, and shares the rest evenly among the remaining distinct values:
 
-```formula
-s = 1 / n_distinct
-n_est = n_table / n_distinct
-n_est = 1,000,000 / 91,709
-n_est ≈ 10.9 ≈ 11
-where
-s: the selectivity: the fraction of rows expected to match
-n_distinct: the estimated number of distinct values in the column, here 91,709 customer ids
-n_est: the estimated number of matching rows, rounded to a whole number
-n_table: the number of rows in the table, here 1,000,000
-≈: approximately equal to
-In words: a million orders shared evenly among about 92,000 customers gives about 11 orders per customer.
-```
-
-The actual count for customer 42 is 14: close enough to choose the right plan.
-
-This residual model requires a positive count of remaining distinct non-NULL values.
-
-When the column *does* have an MCV list but the value isn't on it, the planner takes away the rows the MCVs and NULLs account for and shares the rest evenly among the remaining distinct values:
-
-```formula
+```formula reference
 s = (1 − Σ f_MCV − f_null)
     / (n_distinct − n_MCV)
 where
@@ -76,12 +45,19 @@ s: the selectivity for a value not in the MCV list
 Σ: sum: add up the terms
 f_MCV: the frequency of one most-common value
 f_null: the fraction of rows that are NULL (`null_frac`)
-n_distinct: the estimated number of distinct values in the column
+n_distinct: the estimated number of distinct values in the column; this model needs more distinct values than MCVs
 n_MCV: the number of values in the MCV list
-In words: whatever fraction of rows isn't covered by the common values or NULLs is assumed to be spread evenly over the values that aren't common.
+In words: whatever share of rows isn't taken by the common values or NULLs is assumed to be spread evenly over the values that aren't common. If 3 common values cover 40% of rows and there are 100 other values, each other value gets 0.6%.
 ```
 
-For example, if 3 MCVs cover 40% of rows, there are no NULLs and 103 distinct values, the remaining 60% of rows are shared among 100 values, giving 0.6% per value. PostgreSQL also caps this figure so that a value missing from the list is never estimated as more common than the least common value on it.
+PostgreSQL also caps this figure so that a value missing from the list is never estimated as more common than the least common value on it.
+
+> [!analogy] Real-world analogy: guessing a surname's share of a phone book
+> Asked how many entries in a city's phone book are "Smith", you might remember that Smith, Jones and Taylor are very common and know roughly how common each is. For an unusual name you have no figure, so you assume the remaining entries are shared evenly among all the other surnames.
+>
+> **How it maps:** the remembered common surnames are the MCV list with their frequencies, used directly for a listed value. The even share of the rest is the residual rule for a value not on the list, and with no common names at all it becomes 1 divided by the number of distinct names.
+>
+> **Where it stops:** your memory might be years old; the planner's figures come from a random sample at the last ANALYZE, which can also be out of date, but is refreshed by the database rather than by recollection.
 
 ## Key takeaways
 - Use MCV frequencies for listed values; share residual probability among the remaining distinct non-NULL values.

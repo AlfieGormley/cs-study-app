@@ -57,7 +57,7 @@ Each character on screen can store a reference to a shared glyph plus its own po
 ### In real libraries
 
 - **CPython's small-int cache and string interning**.
-- **Java's `Integer.valueOf()`**, which caches values from -128 to 127.
+- **Java's `Integer.valueOf()`**, which always caches values from -128 to 127 and may cache more, so `==` on boxed integers is unreliable outside that range.
 - **`__slots__`** is a related memory technique: it can avoid a per-instance __dict__ when bases do not supply one and the class does not request one, which matters at millions of instances.
 
 ## Key takeaways

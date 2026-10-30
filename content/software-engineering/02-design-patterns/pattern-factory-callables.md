@@ -35,6 +35,8 @@ For example, a generic list view knows it must fetch records, but only a specifi
 
 `operation()` in the base class calls `self.make()`. Subclasses override `make()` to return their own product.
 
+The GoF intent is to define an interface for creating an object but let subclasses decide which class to instantiate. A factory method is usually called from inside a template method: the base class keeps the fixed algorithm, and one overridable step happens to create an object.
+
 ### In Python
 
 ```python
@@ -80,7 +82,7 @@ Often a simpler Python version is to pass the class (or any callable) in: `Expor
 
 ### In real libraries
 
-- **Django class-based views**: `get_queryset()` and `get_form_class()` are factory methods that subclasses override.
+- **Django class-based views**: `get_queryset()` and `get_form_class()` are factory-method-style hooks that subclasses override to choose what the view works with.
 - **Django REST Framework**: `get_serializer_class()`.
 - **Alternative constructors** such as `datetime.fromtimestamp()` and `dict.fromkeys()` are `classmethod` factories. They're not the GoF pattern exactly, but they serve the same purpose: named ways to create an object.
 

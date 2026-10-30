@@ -4,12 +4,10 @@ title: Batches, compilation and workers
 level: basic
 minutes: 3
 sourceLesson: qp-execution
-summary: Batches, compilation and workers with worked examples and explicit assumptions.
+summary: Vectorised, compiled and parallel execution as alternatives to one-row-at-a-time iterators, and what each one changes.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 ## Other execution models
 
@@ -18,6 +16,13 @@ The iterator model pays a function call per row per operator. That overhead is n
 - **Vectorised execution** (DuckDB, ClickHouse; Snowflake's 2016 design paper): operators process batches of values instead of one row per call; batch layout and size vary by engine, so loops are tight and CPU-cache friendly.
 - **Compiled execution** (HyPer, Umbra, SingleStore): the plan is compiled to machine code that fuses operators into a single loop. Postgres has a limited form of this: it can **JIT-compile** expressions with LLVM for expensive queries.
 - **Parallel query**: Postgres can split a scan across worker processes and gather their results through a `Gather` node. You'll see `Gather` and `Parallel Seq Scan` in real plans on big tables.
+
+> [!analogy] Real-world analogy: carrying shopping in from the car
+> You can carry one tin at a time from the car to the cupboard, or fill a box and carry thirty. The walking is the same each trip, so the box spreads that fixed cost over many tins. Asking a friend to help is a different improvement: two people walking at once.
+>
+> **How it maps:** each trip is a `next()` call with its fixed overhead. The box is a vectorised batch, which spreads that overhead over many values and keeps the CPU in a tight loop. The friend is a parallel worker process.
+>
+> **Where it stops:** batching does not reduce how much data must be read from storage, and a larger box is not always better: batches too big for the CPU caches lose some of the benefit.
 
 Vectorisation batches CPU work; parallelism uses concurrent workers. They are separate choices: either model can run in one process or be combined with parallel work. Compilation is another axis and may fuse several operators. PostgreSQL expression JIT does not compile an entire query into one fused native loop.
 

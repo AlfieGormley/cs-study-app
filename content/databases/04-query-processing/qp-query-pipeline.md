@@ -4,16 +4,12 @@ title: From SQL text to a plan
 level: basic
 minutes: 3
 sourceLesson: qp-execution
-summary: From SQL text to a plan with worked examples and explicit assumptions.
+summary: The stages a PostgreSQL query passes through, from parsing and name resolution to planning and execution.
 ---
-
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
 
 SQL is **declarative**: you say *what* rows you want, not *how* to find them. Something has to turn that description into a concrete program of loops, lookups and sorts. That something is the query processor, and it is the reason the same query can take 2 milliseconds on Monday and 20 seconds on Tuesday.
 
-This module uses the shop schema from SQL Fundamentals, scaled up so that performance actually matters:
+This module uses the shop tables from SQL Fundamentals, scaled up so that performance actually matters: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id, ...)`.
 
 ```
 customers   100,000 rows   1,029 pages
@@ -22,7 +18,7 @@ orders     1,000,000 rows  7,353 pages
 order_items 3,000,000 rows 16,217 pages
 ```
 
-The examples use PostgreSQL 18 plan terminology and assume serial execution (`max_parallel_workers_per_gather = 0`) for readability. Plan fragments are abbreviated. The supplied row and page counts define the illustrative dataset.
+The plans in this module are abbreviated PostgreSQL 18 plans for a generated dataset of about this size. About 3% of orders are pending, 7% cancelled and 90% shipped, spread over 2,400 days from 2020. Customers are spread evenly over eight cities (12,500 each), and each has about ten orders. Treat the row counts and timings as illustrative: a similar dataset on your machine gives similar shapes but different numbers. Assume serial execution (`max_parallel_workers_per_gather = 0`), so no parallel workers appear.
 
 ## The pipeline
 
@@ -49,6 +45,13 @@ For an ordinary PostgreSQL optimisable query, the stages are as follows. Utility
 3. **Rewriter.** Applies rules. The main one is **view expansion**: a query against a view is rewritten into a query against the view's underlying tables, so the planner can optimise the whole thing together. Row-level security policies are added here too.
 4. **Planner/optimiser.** Considers many ways to run the query and estimates the cost of each. It outputs one **plan**.
 5. **Executor.** Runs the plan and streams rows back to the client.
+
+> [!analogy] Real-world analogy: a restaurant order
+> A waiter takes your order and checks it is written legibly. The kitchen checks each dish is on today's menu, expands "set menu B" into its three courses, and the head chef decides which cook makes what, in which order. Then the cooks do the work and plates go out as they are ready.
+>
+> **How it maps:** checking legibility is the parser (grammar only). Checking dishes exist is the analyser resolving table and column names against the catalog. Expanding the set menu is the rewriter expanding a view. The head chef's plan is the planner choosing a plan, and the cooks are the executor.
+>
+> **Where it stops:** a chef plans from experience, while the planner estimates costs from stored statistics, and it can pick a poor plan when those statistics are wrong. Rows also stream back as soon as the executor produces them, rather than in courses.
 
 Planning and execution both have costs. Their relative importance depends on the complexity of the SQL statement, prepared-plan reuse and workload; short OLTP statements can spend a substantial share of their time planning.
 

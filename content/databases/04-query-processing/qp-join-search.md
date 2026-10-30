@@ -2,14 +2,12 @@
 id: qp-join-search
 title: Searching the join-order space
 level: intermediate
-minutes: 4
+minutes: 3
 sourceLesson: qp-statistics-optimiser
-summary: Searching the join-order space with worked examples and explicit assumptions.
+summary: Why the number of possible join orders explodes, how dynamic programming over table subsets tames it, and when PostgreSQL switches to a genetic search.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 The optimiser predicts cardinalities, applies a cost model, and searches candidate plans. Cardinality errors can dominate plan quality: the Leis et al. study in Further reading documents this on its evaluated workloads.
 
@@ -23,35 +21,29 @@ For each table the planner generates the candidate access paths (seq scan, each 
 | 5 | 120 | 1,680 |
 | 10 | 3,628,800 | 17,643,225,600 |
 
-Both columns come from counting arrangements:
-
-```formula
+```formula reference
 L(n) = n!
 T(n) = (2 × n − 2)! / (n − 1)!
-L(10) = 10! = 3,628,800
-T(10) = 18! / 9! = 17,643,225,600
 where
 L(n): the number of left-deep join orders for n tables: each step joins one more base table to the result so far, so an order is just a sequence of the tables
 T(n): the number of join trees of any shape (left-deep or bushy), counting which input goes on which side of each join
 n: the number of tables being joined
 !: factorial: multiply all the whole numbers from 1 up to the number, so 3! = 1 × 2 × 3 = 6
-In words: the number of possible plans grows faster than exponentially, so trying them all is hopeless beyond a handful of tables.
+In words: the number of possible join orders grows faster than exponentially with the number of tables, so trying them all is hopeless beyond a handful of tables.
 ```
 
-The three-table row follows the same factorial counts: six left-deep orders and twelve ordered, labelled trees. These counts assume unrestricted joins among distinct tables; they exclude physical method choices and illegal reorderings.
+These counts assume every table can join to every other; they exclude the choice of join algorithm and orders that the query's semantics forbid.
 
-Postgres uses System R-style **dynamic programming**. It finds the best way to join every pair of tables, then every set of three built from those, and so on. It keeps the cheapest plan for each subset, plus any plan that produces a useful sort order (an "interesting order") that might avoid a sort later. Working over subsets rather than full orderings is what makes it tractable:
-
-```formula
-N_sub = 2^n
-N_sub = 2^10 = 1,024
-where
-N_sub: the number of subsets of the tables, counting the empty set; each table is either in a subset or not, giving 2 choices per table
-n: the number of tables being joined, here 10
-In words: ten tables have only 1,024 subsets, against 3.6 million orderings.
-```
+Postgres uses System R-style **dynamic programming**. It finds the best way to join every pair of tables, then every set of three built from those, and so on. It keeps the cheapest plan for each subset, plus any plan that produces a useful sort order (an "interesting order") that might avoid a sort later. Working over subsets rather than full orderings is what makes it tractable. Ten tables have only 1,024 subsets (each table is either in a subset or not: 2 choices, ten times over), against 3.6 million left-deep orders.
 
 The work per subset still varies, because each subset can be split in several ways and each split has several physical join methods, but the count stays far below the number of trees.
+
+> [!analogy] Real-world analogy: planning a multi-stop delivery round
+> A driver with five drops could compare every possible route, but with twenty drops there are far too many. A sensible planner instead works out the best way to cover each small group of nearby stops once, then builds bigger groups from those, never recomputing a group it has already solved.
+>
+> **How it maps:** the drops are tables and a route is a join order. Remembering the best plan for each group of stops is dynamic programming over subsets of tables. With very many stops, settling for a good route found by trial and improvement is GEQO's genetic search.
+>
+> **Where it stops:** a delivery route's cost is mostly fixed distances; a join plan's cost depends on estimated row counts, so a "best" join order can still be poor if those estimates are wrong.
 
 At or above `geqo_threshold` (default 12) FROM items, exhaustive search is too slow, so Postgres switches to **GEQO**, a genetic algorithm that finds a good plan rather than the best. Separately, `join_collapse_limit` (default 8) caps how many explicit `JOIN`s are merged into one list for reordering.
 

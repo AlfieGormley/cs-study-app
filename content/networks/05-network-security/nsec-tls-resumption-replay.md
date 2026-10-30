@@ -28,10 +28,5 @@ This revisits the earlier threat units’ replay problem, accepted deliberately 
 - Permit early data only when the actual operation tolerates the remaining replay risk.
 
 ## Further reading
-- [RFC 9846: TLS 1.3 (2026 revision)](https://www.rfc-editor.org/rfc/rfc9846.html)
-- [RFC 8446: original TLS 1.3 specification](https://www.rfc-editor.org/rfc/rfc8446)
-- [The Illustrated TLS 1.3 Connection](https://tls13.xargs.org/)
-- [RFC 9849: TLS Encrypted Client Hello](https://www.rfc-editor.org/rfc/rfc9849.html)
-- [Ballot SC081v3: reducing certificate validity periods — CA/Browser Forum](https://cabforum.org/2025/04/11/ballot-sc081v3-introduce-schedule-of-reducing-validity-and-data-reuse-periods/)
-- [Certificate Transparency — MDN](https://developer.mozilla.org/en-US/docs/Web/Security/Certificate_Transparency)
-- [ssl: TLS/SSL wrapper for socket objects — Python docs](https://docs.python.org/3/library/ssl.html)
+- [RFC 9846: TLS 1.3, 0-RTT and anti-replay](https://www.rfc-editor.org/rfc/rfc9846.html)
+- [RFC 8470: Using Early Data in HTTP](https://www.rfc-editor.org/rfc/rfc8470)

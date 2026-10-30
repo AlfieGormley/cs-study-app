@@ -61,6 +61,13 @@ print(notify(SmsAdapter(LegacySms())))
 # sent 'hi' to +447700900000
 ```
 
+> [!analogy] Real-world analogy: a travel plug adapter
+> A UK laptop charger has a three-pin plug, and a hotel in Spain has two-pin sockets. A small travel adapter takes the UK plug on one side and fits the Spanish socket on the other. Neither the charger nor the wall changes.
+>
+> **How it maps:** The wall socket is the interface your code expects (the target), the charger's plug is the existing API (the adaptee), and the travel adapter is the adapter class that translates one shape into the other.
+>
+> **Where it stops:** A plain travel adapter changes only the plug's shape, not the voltage, so a device built for a different voltage still needs a proper converter. In the same way, renaming methods cannot fix two APIs that behave differently. A software adapter can contain real translation logic, but then it is no longer thin.
+
 ### When not to use it
 
 - When you own both sides. Just change one of them.

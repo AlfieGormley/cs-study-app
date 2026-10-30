@@ -2,22 +2,21 @@
 id: qp-nested-loop-io
 title: Row and block nested-loop I/O
 level: intermediate
-minutes: 5
+minutes: 4
 sourceLesson: qp-join-algorithms
-summary: Row and block nested-loop I/O with worked examples and explicit assumptions.
+summary: Why a block nested loop rereads the inner table far fewer times than a row-at-a-time loop, and which table to put on the outer side.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
+This lesson uses the textbook page-I/O model, which counts page transfers between disk and memory. It is a way of reasoning about algorithms, not PostgreSQL's planner cost units.
 
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+## Counting page reads
 
-## Costing them in page reads
-
-Textbook analyses count page I/Os (each page read from or written to disk counts as one), because that's what dominates when data is on disk. They ignore CPU work and, by convention, the cost of writing the final result. Use the classic set-up:
+Textbook analyses count page I/Os (each page read from or written to disk counts as one), because that is what dominates when data is on disk. They ignore CPU work and, by convention, the cost of writing the final result. The classic set-up used in this and the next few lessons:
 
 - Table R has 1,000 pages, with 100 rows per page (100,000 rows).
 - Table S has 500 pages.
 - 102 pages of memory (buffer pages) are available to the join.
+- Neither table has an index on the join column.
 
 | Algorithm | Page I/Os |
 |---|---|
@@ -28,66 +27,37 @@ Textbook analyses count page I/Os (each page read from or written to disk counts
 | Grace hash | 4,500 |
 | Hash, S fits in memory | 1,500 |
 
-The rest of this section shows where each figure comes from.
+The spread is the point: the same join costs anything from 1,500 to 50 million page I/Os depending on the algorithm and the memory it can use.
 
 ### Row nested loop
 
-Read R once, then scan all of S once for each of R's rows:
-
-```formula
-C_NL = M + |R| × N
-C_NL = 1,000 + 100,000 × 500
-C_NL = 50,001,000
-where
-C_NL: the cost of a row-at-a-time nested loop join, in page I/Os
-M: the number of pages in the outer table R, here 1,000
-N: the number of pages in the inner table S, here 500
-R: the outer table
-|R|: the number of rows in R, here 100,000 (1,000 pages × 100 rows per page)
-In words: each of R's 100,000 rows causes a full 500-page scan of S, so the inner scans swamp the 1,000 pages spent reading R itself.
-```
+Read R once, then scan all of S once for **each row** of R. That is 100,000 scans of a 500-page table, about 50 million page reads, which swamp the 1,000 pages spent reading R itself.
 
 ### Block nested loop
 
-Instead of rescanning S for every row, load as much of R as memory allows (a **block**), then scan S once per block, matching its rows against every R row in memory. Two buffer pages are kept back: one to read S into and one to collect output.
+Instead of rescanning S for every row, load as much of R as memory allows (a **block**), then scan S once per block, matching its rows against every R row in memory. Two buffer pages are kept back: one to read S into and one to collect output. The number of times the inner table is reread is what matters:
 
-```formula
+```formula essential
 C_BNL = M + ⌈M / (B − 2)⌉ × N
-C_BNL = 1,000 + ⌈1,000 / 100⌉ × 500
-C_BNL = 1,000 + 10 × 500
-C_BNL = 6,000
 where
 C_BNL: the cost of a block nested loop join, in page I/Os
-M: the number of pages in the outer table R, here 1,000
-N: the number of pages in the inner table S, here 500
-B: the number of memory buffer pages available to the join, here 102
-B − 2: the pages left to hold one block of R, after reserving one input page for S and one output page; here 100
-⌈ ⌉: ceiling: round up to the next whole number, because a final part-full block still needs a full scan of S
-In words: R is read once in 10 blocks of 100 pages, and S is scanned once per block, so S is read 10 times.
+M: the number of pages in the outer table
+N: the number of pages in the inner table
+B: the number of memory buffer pages available to the join
+B − 2: the pages left to hold one block of the outer table, after reserving one input page for the inner table and one output page
+⌈ ⌉: ceiling: round up to the next whole number, because a final part-full block still needs a full scan of the inner table
+In words: read the outer table once, and scan the whole inner table once per block of the outer table. More memory means bigger blocks, fewer blocks and fewer rescans.
 ```
 
-The number of times the inner table is rescanned dominates, so compare both orientations. The smaller outer table wins in this fixture; ceiling effects mean it is a heuristic rather than a universal rule. With the 500-page S as the outer and the 1,000-page R as the inner:
+With R as the outer side, its 1,000 pages make 10 blocks of 100 pages, so S is scanned 10 times: 1,000 + 5,000 = 6,000 page I/Os. Swap the sides and S's 500 pages make only 5 blocks, so the 1,000-page R is scanned 5 times: 500 + 5,000 = 5,500. Putting the **smaller table on the outer side** usually wins because it produces fewer blocks. Ceiling effects mean this is a heuristic: compare both orientations when the sizes are close.
 
-```formula
-C_BNL = N + ⌈N / (B − 2)⌉ × M
-C_BNL = 500 + ⌈500 / 100⌉ × 1,000
-C_BNL = 500 + 5 × 1,000
-C_BNL = 5,500
-where
-C_BNL: the cost of a block nested loop join, in page I/Os
-N: the number of pages in S, now the outer table, here 500
-M: the number of pages in R, now the inner table, here 1,000
-B: the number of memory buffer pages available, here 102
-B − 2: the pages left to hold one block of the outer table, here 100
-⌈ ⌉: ceiling: round up to the next whole number
-In words: S fits in 5 blocks, so the 1,000-page R is scanned 5 times instead of S being scanned 10 times.
-```
+Two levers follow directly from the relationship. Doubling the memory roughly halves the number of rescans, and a table small enough to fit in one block needs only a single scan of the inner table.
 
-The formula assumes the inner table is scanned from disk every time. If it fits in the operating system's cache, real costs are lower.
+The model assumes the inner table is read from disk every time. If it fits in the operating system's cache, real costs are lower.
 
 ## Key takeaways
 - Row nested loop rereads the inner once per outer row; block nested loop does so once per outer block.
-- Compare both orientations with the ceiling formula; page-I/O estimates exclude CPU and final output writes.
+- The smaller table usually belongs on the outer side, and more memory means fewer inner rescans; page-I/O counts exclude CPU and final output writes.
 
 ## Further reading
 - [Hash join — Wikipedia](https://en.wikipedia.org/wiki/Hash_join)

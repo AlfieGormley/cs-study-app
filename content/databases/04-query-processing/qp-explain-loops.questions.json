@@ -3,29 +3,29 @@
     "id": "qp-reading-explain-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "```\nHash Join  (actual time=31.0..80.0\n            rows=50000.00 loops=1)\n-> Seq Scan on a\n     (actual time=0.01..50.0 loops=1)\n-> Hash  (actual time=20.0..20.0\n          loops=1)\n```\n\nHow much time was spent in the Hash Join node itself (its exclusive time)?",
+    "prompt": "A query takes about 80 ms. Its plan shows:\n\n```\nHash Join  (actual time=31.0..80.0\n            rows=50000.00 loops=1)\n-> Seq Scan on a\n     (actual time=0.01..50.0 loops=1)\n-> Hash  (actual time=20.0..20.0\n          loops=1)\n```\n\nWhich part of the plan should you investigate first?",
     "options": [
       {
-        "text": "80 ms",
-        "explanation": "80 ms is the inclusive time: it covers the children too. Times in EXPLAIN ANALYZE are cumulative."
+        "text": "The Hash Join, because it reports the largest time, 80 ms",
+        "explanation": "80 ms is the Hash Join's inclusive time: it includes both children. Its own work is only what is left after subtracting them."
       },
       {
-        "text": "49 ms",
-        "explanation": "That's 80 - 31, the gap between first and last row. Part of that is the scan of `a` streaming rows in."
+        "text": "The join's own probing, because rows only appear after 31 ms",
+        "explanation": "The 31 ms before the first row is mostly waiting for the Hash child to build. Startup time is not the same as exclusive time."
       },
       {
-        "text": "30 ms",
-        "explanation": "That only subtracts the Seq Scan. The Hash child's 20 ms is also included in the join's 80 ms."
+        "text": "The Seq Scan on `a`, which accounts for about 50 of the 80 ms",
+        "explanation": "Correct. Times are cumulative, so subtract children: the scan takes about 50 ms, the hash build 20 ms, and the join itself only about 10 ms. The scan is the biggest single cost."
       },
       {
-        "text": "About 10 ms",
-        "explanation": "Correct. 80 ms total, minus 50 ms in the probe-side scan, minus 20 ms building the hash, leaves about 10 ms for probing and joining."
+        "text": "The Hash node, because building a hash table is always the expensive step",
+        "explanation": "Here the build took about 20 ms, less than half the scan's 50 ms. Measure rather than assume which operator is expensive."
       }
     ],
-    "answer": 3,
-    "workedExample": "```formula\nt_excl = t_node \u2212 \u03a3 t_child\nt_excl = (80.0 \u2212 50.0 \u2212 20.0) ms\nt_excl = 10.0 ms\nwhere\nt_excl: the exclusive time: time spent in the Hash Join itself, in milliseconds (ms)\nt_node: the node's inclusive time, the second number of its `actual time`, 80.0 ms\nt_child: a child's inclusive time: 50.0 ms for the scan of a, 20.0 ms for the Hash\n\u03a3: sum: add up the term for every child\nms: millisecond, a thousandth of a second\nIn words: subtract the children's durations from the node's total, and 10 ms is left for probing and joining.\n```\n\nBoth children ran once, so no loop multiplication is needed. The real bottleneck is the scan of `a` (50 ms), so that's where to look first: is it reading far more rows than it returns?",
+    "answer": 2,
+    "workedExample": "Every node's `actual time` includes its children, so work out each node's own share:\n\n| Node | Inclusive | Own share |\n|---|---|---|\n| Hash Join | 80 ms | about 10 ms |\n| Seq Scan on a | 50 ms | 50 ms |\n| Hash | 20 ms | 20 ms |\n\nThe join's own share is 80 minus 50 minus 20. Both children ran once, so no loop multiplication is needed. The scan of `a` is the bottleneck, so look there first: is it reading far more rows than it returns, and would an index or a narrower filter help?",
     "link": {
-      "title": "Using EXPLAIN \u2014 PostgreSQL docs",
+      "title": "Using EXPLAIN — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/using-explain.html"
     }
   },
@@ -33,29 +33,29 @@
     "id": "qp-reading-explain-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "The inner side of a nested loop shows:\n\n```\nIndex Scan using items_order_idx\n  (actual time=0.010..0.012\n   rows=2.50 loops=4000)\n```\n\nHow many rows did this node return in total, and roughly how long did it take altogether?",
+    "prompt": "The inner side of a slow nested loop shows:\n\n```\nIndex Scan using items_order_idx\n  (actual time=0.010..0.012\n   rows=2.50 loops=4000)\n```\n\nA teammate says this node can't be the problem because it takes only 0.012 ms. What do you tell them?",
     "options": [
       {
-        "text": "10,000 rows in about 48 ms",
-        "explanation": "Correct. Figures are per loop: 2.5 rows x 4,000 loops = 10,000 rows, and 0.012 ms x 4,000 = 48 ms."
+        "text": "They're right: 0.012 ms is negligible whatever else the plan shows",
+        "explanation": "0.012 ms is the time for one execution. The node ran 4,000 times, which this answer ignores."
       },
       {
-        "text": "2.5 rows in 0.012 ms",
-        "explanation": "Those are per-loop averages. The node ran 4,000 times."
+        "text": "The figures are per loop: 4,000 executions of about 0.012 ms is about 48 ms, returning about 10,000 rows in total",
+        "explanation": "Correct. `actual time` and `rows` are averages per execution. Multiply by `loops` to see the node's total contribution."
       },
       {
-        "text": "4,000 rows in 0.012 ms",
-        "explanation": "4,000 is the number of executions, not rows; and the time must be multiplied by loops too."
+        "text": "`rows=2.50` shows the plan is corrupt, so the timings can't be trusted",
+        "explanation": "2.50 is an average over 4,000 lookups: some found 2 rows, others 3. PostgreSQL 18 prints the decimals for exactly this reason."
       },
       {
-        "text": "It can't return half a row, so the plan is corrupt",
-        "explanation": "2.50 is an average over 4,000 loops: some lookups found 2 rows, others 3. Postgres 18 prints the decimals for exactly this reason."
+        "text": "Only `Buffers` can show whether the node is slow, so the time is irrelevant",
+        "explanation": "Buffers help, but the timing is meaningful too once multiplied by loops. Neither figure should be read per execution and then ignored."
       }
     ],
-    "answer": 0,
-    "workedExample": "```formula\nn_total = n_loop \u00d7 L\nn_total = 2.50 \u00d7 4,000 = 10,000\nt_total \u2248 t_loop \u00d7 L\nt_total \u2248 0.012 ms \u00d7 4,000 = 48 ms\nwhere\nn_total: the total rows the node returned across all executions\nn_loop: the `rows` figure, the average rows per execution, 2.50\nL: the `loops` figure, the number of executions, 4,000\nt_total: the total time spent in the node, in milliseconds (ms)\nt_loop: the per-execution time to the last row, the second number of `actual time`, 0.012 ms\n\u2248: approximately equal to\nms: millisecond, a thousandth of a second\nIn words: 4,000 lookups of 2.5 rows each is 10,000 rows, and 4,000 lookups of 0.012 ms is 48 ms.\n```\n\nA 0.012 ms node looks harmless until you multiply it by its loops. That's how a nested loop with a very cheap inner side can still dominate a query.",
+    "answer": 1,
+    "workedExample": "1. In EXPLAIN ANALYZE, `actual time` and `rows` are **per loop** averages.\n2. `loops=4000` means the nested loop ran this index scan once for each of 4,000 outer rows.\n3. So the node's total is about 4,000 × 0.012 ms, roughly 48 ms, and about 4,000 × 2.5 = 10,000 rows.\n\nA very cheap inner side can still dominate a query when it runs thousands of times. The next questions are whether 4,000 outer rows was what the planner expected (compare the outer node's estimate) and whether a hash join over the two inputs would do less work.",
     "link": {
-      "title": "Using EXPLAIN \u2014 PostgreSQL docs",
+      "title": "Using EXPLAIN — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/using-explain.html"
     }
   },
@@ -85,7 +85,7 @@
     "answer": 3,
     "workedExample": "Walk up from the leaves:\n\n| Node | Est | Actual | Ratio |\n|---|---|---|---|\n| Scan orders | 30,767 | 30,066 | 1.0x |\n| Scan customers | 1,573 | 12,500 | 8x |\n| Hash Join | 484 | 3,686 | 7.6x |\n\nThe first big error is on `customers`, and the join inherits it. Fix: `CREATE STATISTICS ... (dependencies) ON city, country`, then ANALYZE.",
     "link": {
-      "title": "Multivariate statistics examples \u2014 PostgreSQL docs",
+      "title": "Multivariate statistics examples — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/multivariate-statistics-examples.html"
     }
   }

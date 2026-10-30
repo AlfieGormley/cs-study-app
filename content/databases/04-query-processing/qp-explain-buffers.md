@@ -4,33 +4,14 @@ title: Buffers and a slow-query investigation
 level: intermediate
 minutes: 4
 sourceLesson: qp-reading-explain
-summary: Buffers and a slow-query investigation with worked examples and explicit assumptions.
+summary: What the Buffers counts mean, why a read is not always a disk read, and a step-by-step method for investigating a slow query.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 ## Reading BUFFERS
 
-Each buffer is one page, normally 8 KiB, so the counts convert to volumes. For `Buffers: shared hit=7011 read=342`:
-
-```formula
-V = n_buf × 8 KiB
-V_hit = 7,011 × 8 KiB = 56,088 KiB
-V_hit ≈ 54.8 MiB
-V_read = 342 × 8 KiB = 2,736 KiB
-V_read ≈ 2.7 MiB
-where
-V: the volume of data the buffer accesses represent
-n_buf: the number of buffer (page) accesses in the count
-V_hit: the volume served from Postgres's shared memory
-V_read: the volume requested from the operating system
-KiB: kibibyte, 1,024 bytes
-MiB: mebibyte, 1,024 KiB
-≈: approximately equal to
-In words: about 55 MiB came from Postgres's own cache and under 3 MiB had to be requested from the operating system.
-```
+Each buffer is one page, normally 8 KiB, so the counts convert to volumes. `Buffers: shared hit=7011 read=342` means about 55 MiB of page accesses were served from PostgreSQL's own cache and under 3 MiB were requested from the operating system.
 
 Repeated accesses to the same page count again each time, so this is a measure of work, not of distinct data.
 
@@ -56,7 +37,7 @@ To catch slow plans in production without running EXPLAIN by hand, use the **aut
 
 > [!note] Other databases
 > MySQL has `EXPLAIN ANALYZE` (8.0.18+) with a similar tree format. SQLite's `EXPLAIN QUERY PLAN` is much terser:
-> `SCAN o`, then `SEARCH c USING INTEGER PRIMARY KEY (rowid=?)`, then `USE TEMP B-TREE FOR GROUP BY`. That was our cities query: a nested loop of primary-key lookups, with a temporary B-tree for the grouping.
+> `SCAN o`, then `SEARCH c USING INTEGER PRIMARY KEY (rowid=?)`, `USE TEMP B-TREE FOR GROUP BY` and `USE TEMP B-TREE FOR ORDER BY`. That is our cities query in SQLite 3.51 and 3.53: a nested loop of primary-key lookups, with temporary B-trees for the grouping and the final ordering.
 
 ## Caveats
 

@@ -3,27 +3,27 @@
     "id": "qp-statistics-optimiser-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "`pg_stats` for `orders.status` (1,000,000 rows) shows:\n\n```\nmost_common_vals:\n  {shipped,cancelled,pending}\nmost_common_freqs:\n  {0.8976,0.0716,0.0308}\n```\n\nHow many rows will the planner estimate for `WHERE status = 'cancelled'`?",
+    "prompt": "`pg_stats` for `orders.status` (1,000,000 rows) shows:\n\n```\nmost_common_vals:\n  {shipped,cancelled,pending}\nmost_common_freqs:\n  {0.8976,0.0716,0.0308}\n```\n\n`EXPLAIN SELECT * FROM orders WHERE status = 'cancelled'` estimates `rows=71600`. Where does that estimate come from?",
     "options": [
       {
-        "text": "333,333",
-        "explanation": "That's 1/3, treating the three values as equally common. The MCV list exists precisely so the planner doesn't have to assume that."
+        "text": "From an even split of the table among the three statuses",
+        "explanation": "An even split would give about 333,333 rows. The MCV list exists precisely so that the planner can use each common value's own frequency instead."
       },
       {
-        "text": "71,600",
-        "explanation": "Correct. 'cancelled' is in the MCV list, so the planner uses its measured frequency: 0.0716 x 1,000,000."
+        "text": "From the frequency listed for 'cancelled' in the MCV list, applied to the table's row count",
+        "explanation": "Correct. 'cancelled' is on the list with frequency 0.0716, so the planner expects 7.16% of the million rows."
       },
       {
-        "text": "5,000",
-        "explanation": "That's the 0.5% default for equality when there are no usable statistics. Here there are."
+        "text": "From the fixed 0.5% guess for equality conditions",
+        "explanation": "The 0.5% default (5,000 rows here) is used only when there are no usable statistics, for example on an unanalysed expression. This column has an MCV list."
       },
       {
-        "text": "1",
-        "explanation": "A 1-row estimate happens when a value appears to be absent from the sample. 'cancelled' is clearly present."
+        "text": "From counting the matching rows when EXPLAIN ran",
+        "explanation": "Plain EXPLAIN never runs the query or counts rows. Every `rows=` figure in it is an estimate from statistics."
       }
     ],
     "answer": 1,
-    "workedExample": "1. Is the value in `most_common_vals`? Yes, in position 2.\n2. Take the matching frequency: 0.0716.\n3. Multiply by the table's row count:\n\n```formula\nn_est = f_MCV × n_table\nn_est = 0.0716 × 1,000,000\nn_est = 71,600\nwhere\nn_est: the estimated number of matching rows\nf_MCV: the value's frequency from `most_common_freqs`, 0.0716 for 'cancelled'\nn_table: the number of rows in the table, 1,000,000\nIn words: 7.16% of the sampled rows were 'cancelled', so the planner expects 7.16% of the table to be.\n```\n\nThe illustrative estimate is `rows=71600`. ANALYZE samples large tables (typically about 30,000 rows with the default target for built-in scalar types), so sampled frequency need not equal the true frequency.",
+    "workedExample": "Check the statistics in the order the planner does:\n\n1. Is the value in `most_common_vals`? Yes, 'cancelled' is second.\n2. Then its frequency, 0.0716, is the selectivity, and 7.16% of 1,000,000 rows is 71,600.\n3. No other rule is needed; the even-share and default rules are for values without a measured frequency.\n\nThe frequency comes from ANALYZE's sample (typically about 30,000 rows at the default target for built-in scalar types), so it need not equal the true share exactly. In a PostgreSQL 18.6 run on a similar table the sampled frequency was 0.0717 against a true share of 0.0702.",
     "link": {
       "title": "Row estimation examples — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/row-estimation-examples.html"
@@ -33,27 +33,27 @@
     "id": "qp-statistics-optimiser-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "For `orders.customer_id`, `pg_stats` shows `n_distinct = 91709` and no most-common values. The table has 1,000,000 rows and no NULL customer IDs. What does the planner estimate for `WHERE customer_id = 42`?",
+    "prompt": "For `orders.customer_id`, `pg_stats` shows `n_distinct = 91709` and no most-common values. The table has 1,000,000 rows and no NULL customer IDs. EXPLAIN ANALYZE for `WHERE customer_id = 42` shows `rows=11` estimated and 14 actual. What explains the estimate, and what should you do?",
     "options": [
       {
-        "text": "About 91,709",
-        "explanation": "That's the number of distinct values, not the rows per value. It inverts the calculation."
+        "text": "The statistics are stale; run ANALYZE until the estimate says 14",
+        "explanation": "Fresh statistics would give the same kind of answer. The planner deliberately estimates an average customer, so a busy customer will always be above it and a quiet one below."
       },
       {
-        "text": "Exactly 14, the real count",
-        "explanation": "The planner doesn't count rows at plan time; that would require running the query. It estimates from statistics."
+        "text": "It is the fixed 0.5% guess for equality, so add an index",
+        "explanation": "0.5% of a million is 5,000, not 11. The column has statistics, so no default guess is involved."
       },
       {
-        "text": "About 11",
-        "explanation": "Correct. With no MCVs, it assumes the rows are spread evenly over the distinct values: 1,000,000 / 91,709 = 10.9, rounded to 11."
+        "text": "The rows are assumed to be shared evenly among about 91,709 customers, about 11 each; a gap of 11 against 14 is normal and needs no action",
+        "explanation": "Correct. With no MCVs the selectivity is 1 / n_distinct. The estimate is within a small factor of the truth, which leads to the same plan choice."
       },
       {
-        "text": "About 5,000",
-        "explanation": "That's the 0.5% default for an expression with no statistics. A plain column with stats gets a proper estimate."
+        "text": "The planner counted customer 42's entries in the index while planning",
+        "explanation": "The planner works from stored statistics; it does not count matching rows at plan time. That would mean running part of the query."
       }
     ],
     "answer": 2,
-    "workedExample": "```formula\ns = 1 / n_distinct\ns = 1 / 91,709\nn_est = n_table × s\nn_est = 1,000,000 / 91,709\nn_est ≈ 10.9 ≈ 11\nwhere\ns: the selectivity: the fraction of rows expected to match\nn_distinct: the estimated number of distinct values in the column, 91,709\nn_est: the estimated number of matching rows, rounded to a whole number\nn_table: the number of rows in the table, 1,000,000\n≈: approximately equal to\nIn words: a million rows shared evenly among about 92,000 values gives about 11 rows per value.\n```\n\n(If there were MCVs, the planner would first subtract their total frequency and divide the rest among the remaining distinct values.) The real count for customer 42 is 14, so the estimate is close. Good enough to pick an index scan.",
+    "workedExample": "1. No MCV list, so no value has its own frequency.\n2. The planner assumes every customer ID matches the same share of rows: 1 / 91,709 of the table.\n3. A million rows shared among about 92,000 customers is about 11 rows each, and that is the estimate for any customer ID.\n\nCustomer 42 actually has 14 orders. An error of a few rows is harmless: both 11 and 14 rows make an index lookup the right plan. Worry when estimate and actual differ by ten times or more, or when a few customers hold a large share of the rows; then a higher statistics target lets those customers appear in the MCV list with their own frequency.",
     "link": {
       "title": "Row estimation examples — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/row-estimation-examples.html"

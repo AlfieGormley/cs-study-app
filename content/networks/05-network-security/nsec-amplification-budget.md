@@ -2,12 +2,12 @@
 id: nsec-amplification-budget
 title: Reflection and amplification budgets
 level: basic
-minutes: 5
+minutes: 4
 summary: Reflection directs replies to a forged victim address.
 sourceLesson: nsec-threats
 ---
 
-Source-address spoofing becomes a bandwidth problem when public UDP servers send large replies to small requests. This unit traces that path and calculates its idealised byte budget.
+Source-address spoofing becomes a bandwidth problem when public UDP servers send large replies to small requests. This unit traces that path and explains what limits how big the resulting flood can get.
 
 ## Amplification attacks
 
@@ -29,11 +29,18 @@ One important family of volumetric attacks combines spoofing with **reflection a
 
 UDP is used because there is no handshake to verify the source. The reflectors are innocent and the victim sees traffic from thousands of legitimate servers, which is hard to block.
 
+> [!analogy] Real-world analogy: free catalogues sent to someone else's address
+> Imagine posting thousands of one-line postcards to mail-order firms, each asking for their heaviest free catalogue and each giving your victim's address. Every firm innocently posts a catalogue, and the victim's doormat is buried under mail they never asked for.
+>
+> **How it maps:** The postcard is the small spoofed request, the firms are the reflectors, the forged address is the victim's IP in the source field, and the catalogue's weight compared with the postcard is the amplification factor. The firms cannot easily tell the request was forged, and the victim cannot simply refuse mail from well-known firms.
+>
+> **Where it stops:** Network reflection happens in milliseconds and at enormous scale, and each request costs the attacker almost nothing. Reflectors are limited by their own links and rate limits in a way the analogy hides, and networks can drop forged-source packets at the sender's ISP (BCP 38), which has no postal equivalent.
+
 ### The amplification factor
 
-To compare reflectors, and to estimate how big an attack can get, you need one number: how many bytes come back for every byte the attacker sends. That ratio is the **bandwidth amplification factor (BAF)**:
+To compare reflectors, you need one number: how many bytes come back for every byte the attacker sends. That ratio is the **bandwidth amplification factor (BAF)**:
 
-```formula
+```formula essential
 BAF = B_resp / B_req
 where
 BAF: the bandwidth amplification factor, a plain ratio with no unit; 1 means no amplification
@@ -55,63 +62,26 @@ The following historical examples use UDP-payload ratios. Rossow's 2014 measurem
 | CharGEN | 358.8 |
 | Memcached | Up to 51,000 in the cited 2018 report |
 
-If every reflector answers every request, the traffic arriving at the victim is the attacker's sending rate multiplied by the BAF. The attacker's sending rate is in turn the number of bots times each bot's upload rate:
+### How big can the flood get?
 
-```formula
-R_send = N_bots r_bot
-R_victim = R_send BAF
-where
-R_send: the attacker's total sending rate, in megabits per second (Mbps)
-N_bots: the number of compromised devices (bots) sending spoofed requests
-r_bot: the upload rate of each bot, in megabits per second (Mbps)
-R_victim: the traffic rate arriving at the victim, in the same unit as R_send
-BAF: the bandwidth amplification factor of the reflectors used, a plain ratio
-Mbps: megabits per second; 1,000 Mbps = 1 gigabit per second (Gbps)
-In words: the flood hitting the victim is the attackers' combined upload multiplied by how much each reflector amplifies it.
-```
+In an idealised model, the traffic arriving at the victim is the attackers' combined sending rate multiplied by the BAF. For example, 2,000 bots each sending 5 Mbps give 10 Gbps of requests; reflected through DNS servers with a BAF of about 50 (a round figure near the table's authoritative-server measurement), that is up to about 500 Gbps at the victim.
 
-This assumes a payload-rate model: reflectors have enough capacity, nothing is lost on the way, and every request is answered. Real attacks fall short of it, because reflectors' own links and rate limits cap what they can send.
+That figure is a ceiling, not a prediction. It assumes every request reaches a reflector, every reflector answers, and nothing is lost. Real attacks fall short because:
 
-**Working it out.** A botnet has 2,000 devices, each able to send 5 Mbps, reflected through open DNS resolvers with a BAF of 50:
+- **Reflectors have their own limits.** Each reflector's uplink, CPU and any response rate limiting cap what it can send, however many requests arrive.
+- **Requests and replies are lost** along congested paths.
+- **The BAF varies** by query and server, and the attacker may not find enough high-amplification reflectors.
 
-```formula
-R_send = 2000 × 5 Mbps = 10000 Mbps
-R_send = 10 Gbps
-R_victim = 10 Gbps × 50 = 500 Gbps
-where
-R_send: the botnet's total sending rate
-R_victim: the traffic rate arriving at the victim
-Mbps: megabits per second, millions of bits per second
-Gbps: gigabits per second; 1 Gbps = 1,000 Mbps
-In words: 2,000 bots at 5 Mbps send 10 Gbps in total, and a fifty-fold reflector turns that into about 500 Gbps at the victim.
-```
+Through exposed memcached servers even a 1 Gbps attacker could, in principle, generate tens of Tbps (terabits per second; 1 Tbps = 1,000 Gbps); in practice the reflectors' own links capped it. In 2018 GitHub absorbed a 1.35 Tbps memcached attack.
 
-Through exposed memcached servers even a 1 Gbps attacker could, in principle, generate tens of Tbps (terabits per second; 1 Tbps = 1,000 Gbps); in practice the reflectors' own links cap it. In 2018 GitHub absorbed a 1.35 Tbps memcached attack.
-
-The same calculation as Python code:
-
-```python
-def attack_gbps(bots, mbps_each, baf):
-    # Convert combined Mbps into Gbps.
-    sent = bots * mbps_each / 1000
-    # Apply the stated reflector ratio.
-    return sent * baf
-
-# Idealised victim rate in Gbps.
-print(attack_gbps(2000, 5, 50))
-```
-
-This prints `500.0`.
+The practical lesson is that the BAF tells you which services are dangerous to leave exposed, while the reflectors' total capacity and the attacker's sending rate decide how large an attack actually gets.
 
 ## Key takeaways
 - Reflection directs replies to a forged victim address.
 - Specify which bytes a bandwidth amplification factor counts.
-- The bot-rate model assumes sufficient reflector capacity and no loss.
+- Multiplying sending rate by BAF gives a ceiling that assumes sufficient reflector capacity and no loss.
 
 ## Further reading
 - [UDP-Based Amplification Attacks — CISA](https://www.cisa.gov/news-events/alerts/2014/01/17/udp-based-amplification-attacks)
-- [RFC 2827 (BCP 38): Network Ingress Filtering](https://www.rfc-editor.org/rfc/rfc2827)
-- [RFC 4987: TCP SYN Flooding Attacks and Common Mitigations](https://www.rfc-editor.org/rfc/rfc4987)
 - [Amplification Hell: Revisiting Network Protocols for DDoS Abuse (NDSS 2014)](https://www.ndss-symposium.org/ndss2014/programme/amplification-hell-revisiting-network-protocols-ddos-abuse/)
 - [February 28th DDoS incident report — GitHub blog](https://github.blog/news-insights/company-news/ddos-incident-report/)
-- [Understanding the Mirai Botnet (USENIX Security 2017)](https://www.usenix.org/conference/usenixsecurity17/technical-sessions/presentation/antonakakis)

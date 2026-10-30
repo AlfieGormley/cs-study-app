@@ -3,27 +3,27 @@
     "id": "qp-anti-patterns-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A page lists 2,000 posts and, for each one, the ORM runs `SELECT * FROM users WHERE id = %s` to load its author. Each query executes in 0.05 ms and the network round trip is 0.4 ms. About how long does the page spend on database calls, and what's the fix?",
+    "prompt": "A page lists 2,000 posts and, for each one, the ORM runs `SELECT * FROM users WHERE id = %s` to load its author. Each of those queries executes in about 0.05 ms on the server, and the network round trip is about 0.4 ms. The page takes almost a second to load. What is the main cause, and what's the fix?",
     "options": [
       {
-        "text": "About 0.1 seconds; it's fine because every query uses the primary key",
-        "explanation": "That counts only execution time (2,000 x 0.05 ms). Each query also pays a round trip, which dominates."
+        "text": "The author lookups are slow; add an index on `users.id`",
+        "explanation": "`users.id` is the primary key and already indexed, and each lookup takes only 0.05 ms on the server. Faster queries won't remove the round trips."
       },
       {
-        "text": "About 0.9 seconds; load all authors in one query with `WHERE id = ANY(...)` or a JOIN",
-        "explanation": "Correct. 2,001 queries x 0.45 ms is about 0.9 s, almost all of it network latency. One batched query costs one round trip."
+        "text": "About 2,000 separate round trips dominate the time; load all the authors in one query with `WHERE id = ANY(...)` or a JOIN",
+        "explanation": "Correct. Each query pays a 0.4 ms round trip on top of its 0.05 ms execution, so 2,001 queries spend about 0.8 s on the network alone. One batched query pays one round trip."
       },
       {
-        "text": "About 0.9 seconds; add an index on `users.id`",
-        "explanation": "`users.id` is the primary key and already indexed. Each query is already fast; the problem is the number of round trips."
+        "text": "The server's `work_mem` is too small; increase it",
+        "explanation": "`work_mem` affects sorts and hashes inside one query. These are single-row primary-key lookups that need almost no memory."
       },
       {
-        "text": "About 2 seconds; increase `work_mem`",
-        "explanation": "The arithmetic is off, and `work_mem` affects sorts and hashes inside one query. It does nothing for round trips."
+        "text": "Execution time dominates, because 2,000 queries are executed",
+        "explanation": "Server execution adds up to only about 0.1 s here. The round trips, at eight times the execution time each, are the larger cost."
       }
     ],
     "answer": 1,
-    "workedExample": "```formula\nn_q = 1 + 2,000 = 2,001\nt_total ≈ n_q × (t_exec + t_RTT)\nt_total ≈ 2,001 × (0.05 ms + 0.4 ms)\nt_total ≈ 2,001 × 0.45 ms ≈ 900 ms\nwhere\nn_q: the number of queries: 1 for the posts plus 1 per post for its author\nt_total: the total time the page spends waiting on the database\nt_exec: the time the database spends running one query, 0.05 ms\nt_RTT: the network round-trip time (RTT) for one query, 0.4 ms\nms: millisecond, a thousandth of a second\n≈: approximately equal to\nIn words: 2,001 small queries at 0.45 ms each add up to about 0.9 seconds, almost all of it network latency.\n```\n\nBatched:\n\n```sql\nSELECT * FROM users\nWHERE id = ANY(%s)\n```\n\nwith the distinct author IDs reduces author loading to one round trip; execution time and plan depend on the data and environment. In Django use `select_related('author')`; in SQLAlchemy, `selectinload` or `joinedload`.",
+    "workedExample": "Split each query's cost into its two parts:\n\n| Part | Per query | 2,001 queries |\n|---|---|---|\n| Server execution | 0.05 ms | about 0.1 s |\n| Network round trip | 0.4 ms | about 0.8 s |\n\nThe round trips dominate, and no index or server setting can remove them; only fewer queries can. Batch the author lookups:\n\n```sql\nSELECT * FROM users\nWHERE id = ANY(%s)\n```\n\nwith the distinct author IDs, so author loading costs one round trip. In Django use `select_related('author')`; in SQLAlchemy, `selectinload` or `joinedload`. To find N+1 patterns, look in `pg_stat_statements` for a cheap query with a huge `calls` count, or in application traces.",
     "link": {
       "title": "pg_stat_statements — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/pgstatstatements.html"

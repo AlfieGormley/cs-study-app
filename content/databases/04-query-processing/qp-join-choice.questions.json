@@ -3,27 +3,27 @@
     "id": "qp-join-algorithms-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "A toy model: an index nested loop costs 4 random page reads per outer row, at 4 units each. A hash join costs one sequential scan of the 1,029-page inner table at 1 unit per page (ignore CPU). Roughly how many outer rows make the two plans cost the same?",
+    "prompt": "A toy cost model: an index nested loop makes 4 random page reads per outer row, each charged `random_page_cost`. A hash join instead scans the 1,029-page inner table once at 1 unit per page (ignore CPU). With the default `random_page_cost = 4`, the plans cost the same at about 64 outer rows. A team on SSDs lowers `random_page_cost` to 1.1. What happens to the crossover?",
     "options": [
       {
-        "text": "About 64",
-        "explanation": "Correct. Each outer row costs 4 x 4 = 16 units in the nested loop. 1,029 / 16 is about 64 rows."
+        "text": "It moves to more outer rows (roughly 230), so index probes are chosen for bigger outer inputs than before",
+        "explanation": "Correct. Each probe now looks about 3.6 times cheaper, while the hash join's sequential scan costs the same. The nested loop stays cheaper until 1,029 / (4 × 1.1), about 230 outer rows."
       },
       {
-        "text": "About 257",
-        "explanation": "That's 1,029 / 4: it charges 4 pages per row but forgets that random pages cost 4 units each."
+        "text": "It moves to fewer outer rows, because SSD settings favour sequential scans",
+        "explanation": "Lowering `random_page_cost` makes random reads look cheaper, which favours index access, not scans."
       },
       {
-        "text": "About 1,029",
-        "explanation": "That assumes one unit per outer row. Each probe touches several pages, and random reads are charged more."
+        "text": "It doesn't move, because both plans read pages",
+        "explanation": "Only the probes are charged `random_page_cost`. The hash join's scan uses `seq_page_cost`, which hasn't changed, so the balance shifts."
       },
       {
-        "text": "There is no crossover; the nested loop is always cheaper with an index",
-        "explanation": "The nested loop's cost grows linearly with outer rows while the scan's cost is fixed, so there's always a crossover."
+        "text": "It disappears: the index nested loop is now cheaper for any number of outer rows",
+        "explanation": "The probe cost still grows with every outer row while the scan's cost is fixed, so a crossover remains; it just moves."
       }
     ],
     "answer": 0,
-    "workedExample": "Set the two costs equal and solve for the number of outer rows:\n\n```formula\nC_NL = k × p × c_rand\nC_hash = P × c_seq\nk × 4 × 4 = 1,029 × 1\nk = 1,029 / 16 ≈ 64\nwhere\nC_NL: the cost of the index nested loop, in planner cost units\nC_hash: the cost of the hash join's single scan of the inner table, in planner cost units\nk: the number of outer rows\np: the random page reads per outer row, here 4\nc_rand: the cost of one random page read, here 4 units\nP: the number of pages in the inner table, here 1,029\nc_seq: the cost of one sequential page read, 1 unit\n≈: approximately equal to\nIn words: each outer row costs the nested loop 16 units, so about 64 outer rows cost the same as one 1,029-page scan.\n```\n\nBelow about 64 outer rows the index probes win; above, scanning the inner table once and hashing wins. Real planners add CPU costs, caching effects (`effective_cache_size`) and correlation, so the real crossover moves, but the shape is the same. That's why a misestimate of the outer row count flips the join choice.",
+    "workedExample": "Reason about which side of the comparison changed:\n\n1. The hash join's cost is one sequential scan of 1,029 pages. It does not depend on `random_page_cost`.\n2. The index nested loop's cost is the number of outer rows times 4 page reads times `random_page_cost`. At 4.0 each outer row costs 16 units, so 1,029 units buy about 64 outer rows.\n3. At 1.1 each outer row costs about 4.4 units, so the same 1,029 units buy about 230 outer rows.\n\nThe crossover moves towards more outer rows, and the planner chooses index probes in more situations. That is the intent of lowering `random_page_cost` on SSDs or well-cached data, and also its risk: if random reads are not really that cheap on your storage, the planner will over-use probes. Real planners add CPU costs and caching effects, so test the change on your workload.",
     "link": {
       "title": "Query planning configuration — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/runtime-config-query.html"

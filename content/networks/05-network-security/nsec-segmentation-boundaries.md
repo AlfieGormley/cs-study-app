@@ -44,15 +44,19 @@ Segmentation draws internal boundaries:
 
 The design question is always **blast radius**: if this machine falls, what else can the attacker reach? Each allowed path is a possible route for lateral movement.
 
+> [!analogy] Real-world analogy: fire doors in a building
+> A building without internal fire doors lets a fire in one office spread down every corridor. Fire doors divide it into compartments, so a fire stays contained long enough to deal with, and only the doors people genuinely need are kept open.
+>
+> **How it maps:** The compartments are network segments (DMZ, application tier, database tier, guest Wi-Fi), the fire doors are internal firewalls and the policies between network segments, and the spread of fire is lateral movement. Asking "which doors are open?" is asking what the blast radius of one compromised machine is.
+>
+> **Where it stops:** An attacker, unlike a fire, chooses where to go and can use permitted paths: if the web server is allowed to reach the database, segmentation does not stop an attacker using that path. Boundaries between network segments also need monitoring, because a blocked attempt is only useful evidence if someone sees it.
+
 ## Key takeaways
 - An open HTTPS port does not identify the application behind it.
 - Inspecting encrypted HTTP requires appropriate decryption and introduces trust costs.
 - Segmentation restricts the paths available after one workload is compromised.
 
 ## Further reading
+- [Network segmentation — Wikipedia](https://en.wikipedia.org/wiki/Network_segmentation)
 - [NIST SP 800-207: Zero Trust Architecture](https://csrc.nist.gov/pubs/sp/800/207/final)
-- [BeyondCorp: A New Approach to Enterprise Security — Google Research](https://research.google/pubs/beyondcorp-a-new-approach-to-enterprise-security/)
-- [Control traffic to resources using security groups — AWS](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html)
-- [Control subnet traffic with network ACLs — AWS](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html)
-- [Simple ruleset for a workstation — nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Simple_ruleset_for_a_workstation)
 - [Firewall (computing) — Wikipedia](https://en.wikipedia.org/wiki/Firewall_(computing))

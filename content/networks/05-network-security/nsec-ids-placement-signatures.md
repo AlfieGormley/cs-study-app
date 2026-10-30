@@ -9,9 +9,6 @@ sourceLesson: nsec-detection
 
 The earlier units focused on preventive controls. Prevention can fail: a password is phished, a VPN appliance is unpatched, a firewall rule is too broad. The question then is how quickly you notice. **Dwell time** is the interval from intrusion to detection.
 
-> [!note] Content gap
-> No industry-wide dwell-time estimate, rule-count estimate or typical retention period is supplied: a dated, comparable measurement was not verified for this lesson.
-
 Detection on the network rests on three kinds of evidence, which trade detail against cost:
 
 | Source | Detail | Cost to keep |
@@ -42,6 +39,13 @@ An **intrusion detection system** (IDS) watches traffic and raises alerts. An **
 - An IDS is fed a copy of traffic from a switch **SPAN** (mirror) port or a network **TAP**, or in the cloud via traffic mirroring. A passive sensor is outside the forwarding path; automatic response integrations can still affect traffic. A mirror can lose packets when the copied traffic exceeds its monitoring-port capacity.
 - An IPS can stop an attack in progress, but it adds latency and becomes a point of failure. You must choose **fail-open** (traffic flows if the IPS dies, unprotected) or **fail-closed** (the network goes down with it). A false positive on a blocking rule can disrupt legitimate traffic; alert-only rules do not themselves block it.
 
+> [!analogy] Real-world analogy: a CCTV room and a door supervisor
+> A shop can watch its entrance on CCTV from a back room, or post a supervisor at the door. The CCTV operator sees a copy of everything and can raise the alarm, but cannot stop anyone directly; if the camera feed drops out, the shop stays open. The supervisor can turn people away, but every customer queues past them, and if the supervisor leaves the door has to be either locked or left unguarded.
+>
+> **How it maps:** The CCTV room is a passive IDS fed from a SPAN port or TAP: it analyses a copy of the traffic and raises alerts. The door supervisor is an inline IPS: it can drop traffic, adds delay and is a point of failure. Locking or leaving the door when the supervisor is absent is the fail-closed or fail-open choice. Turning away a regular customer by mistake is a false positive on a blocking rule.
+>
+> **Where it stops:** A camera feed shows everything in view, but a mirror port can silently lose packets under load and encrypted traffic hides its contents from both devices. A passive sensor can also trigger automated responses elsewhere, so "only watching" is not always harmless.
+
 Network IDS (NIDS) watch the wire; host IDS (HIDS) and EDR agents watch processes and files on each machine. They complement each other: hosts see what happened inside encrypted sessions, networks see machines that have no agent, such as printers, cameras and anything the attacker brought.
 
 ### Signatures and anomalies
@@ -68,10 +72,6 @@ Signatures match specified patterns, which can occur in both known and previousl
 - An established flow is connection state, not cryptographic sender authentication.
 
 ## Further reading
+- [Intrusion detection system — Wikipedia](https://en.wikipedia.org/wiki/Intrusion_detection_system)
 - [Suricata rules format — Suricata docs](https://docs.suricata.io/en/latest/rules/intro.html)
-- [tcpdump and libpcap](https://www.tcpdump.org/)
-- [Wireshark display filters — Wireshark wiki](https://wiki.wireshark.org/DisplayFilters)
-- [Logging IP traffic using VPC Flow Logs — AWS](https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html)
-- [RFC 7011: IPFIX Protocol Specification](https://www.rfc-editor.org/rfc/rfc7011)
 - [Zeek documentation](https://docs.zeek.org/en/v7.1.1/logs/index.html)
-- [Base rate fallacy — Wikipedia](https://en.wikipedia.org/wiki/Base_rate_fallacy)

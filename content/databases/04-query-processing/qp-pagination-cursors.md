@@ -4,12 +4,10 @@ title: OFFSET and stable keyset cursors
 level: advanced
 minutes: 3
 sourceLesson: qp-anti-patterns
-summary: OFFSET and stable keyset cursors with worked examples and explicit assumptions.
+summary: Why OFFSET pagination gets slower the deeper you page, and how keyset pagination with a unique cursor avoids it.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 ## 4. OFFSET pagination
 
@@ -27,17 +25,7 @@ Limit  (actual rows=20.00)
 Execution Time: 66.979 ms
 ```
 
-To skip 900,000 rows, Postgres has to produce them: it walked 900,020 index entries and fetched their rows, then threw away all but 20.
-
-```formula
-n_read = n_off + n_lim
-n_read = 900,000 + 20 = 900,020
-where
-n_read: the number of index entries walked and rows fetched to answer one page
-n_off: the OFFSET value: the number of rows skipped, here 900,000
-n_lim: the LIMIT value: the number of rows returned, here 20
-In words: an OFFSET query does the work of every page before the one you asked for, plus the page itself.
-```
+To skip 900,000 rows, Postgres has to produce them: it walked 900,020 index entries and fetched their rows, then threw away all but 20. An OFFSET query does the work of every page before the one you asked for, plus the page itself.
 
 With 20 rows per page, an offset of 900,000 is page 45,001. Page 1 reads 20 rows; page 45,001 reads 900,020. The work grows in step with the page number, so the deeper users go the worse it gets.
 
@@ -57,6 +45,13 @@ Limit  (actual rows=20.00)
      Index Cond: (id > 900000)
 Execution Time: 0.014 ms
 ```
+
+> [!analogy] Real-world analogy: a bookmark
+> To carry on reading a novel, you can count pages from the front until you reach page 371, or open it at your bookmark. Counting gets slower the further through the book you are; the bookmark takes the same moment on page 3 or page 371.
+>
+> **How it maps:** counting from the front is OFFSET, which produces and discards every earlier row. The bookmark is the keyset cursor: the last `id` (or last sort values) seen, from which the index can seek straight to the next row.
+>
+> **Where it stops:** a book's pages never move, but rows can be inserted or deleted between requests, so a cursor continues after a value rather than at a fixed position, and the next page reflects whatever changed in between.
 
 In these illustrative timings the difference is large. Keyset pagination avoids work that grows with the skipped offset, though actual latency still depends on the data, index and system state. For a non-unique sort column, use a tie-breaker: `WHERE (ordered_on, id) < ($1, $2) ORDER BY ordered_on DESC, id DESC`. The trade-off is that you can't jump straight to page 371, which most interfaces don't need.
 

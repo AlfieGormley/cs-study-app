@@ -2,14 +2,12 @@
 id: qp-page-costs
 title: Pages, caches and scan costs
 level: basic
-minutes: 4
+minutes: 3
 sourceLesson: qp-execution
-summary: Pages, caches and scan costs with worked examples and explicit assumptions.
+summary: Why databases count pages rather than rows, what a buffer hit or read means, and why sequential pages are cheaper than random ones.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 ## Pages: the unit of cost
 
@@ -17,21 +15,19 @@ Tables and indexes are stored in fixed-size **database pages** (normally 8 KiB i
 
 MVCC means a scan must also establish whether each tuple version is visible to its snapshot. A sequential scan visits heap pages; an ordinary index scan follows index entries and then checks heap row versions. A covering index still needs heap visibility checks unless the visibility map says the page is all-visible.
 
-To turn a row count into the number of pages a full scan must read, divide by how many rows fit on one page:
+A full scan's work therefore follows the table's size in pages, not its row count:
 
-```formula
+```formula reference
 P = ⌈n_rows / r_page⌉
-P = ⌈1,000,000 / 136⌉
-P = ⌈7,352.9⌉ = 7,353
 where
-P: the number of database pages the table occupies, so the pages a simplified dense full scan visits; visits do not necessarily cause physical storage reads
-n_rows: the number of rows in the table, here 1,000,000 orders
-r_page: the average number of rows that fit on one page, here about 136 for `orders` (8 KiB pages holding rows of a few dozen bytes each, plus per-row and per-page overhead)
-⌈ ⌉: ceiling: round up to the next whole number, because a part-filled last page is still a whole page to read
-In words: a million orders at about 136 per page fill about 7,353 pages, and it is that page count, not the row count, that a full scan pays for.
+P: the number of pages the table occupies, which a simple full scan visits; visits do not necessarily cause physical storage reads
+n_rows: the number of rows in the table
+r_page: the average number of rows that fit on one 8 KiB page; about 136 for `orders`, whose rows are a few dozen bytes each plus per-row and per-page overhead
+⌈ ⌉: ceiling: round up to the next whole number, because a part-filled last page still has to be read
+In words: the pages a full scan reads are the row count divided by how many rows fit on a page. A million orders at about 136 per page fill about 7,353 pages, so rows twice as wide mean roughly twice as many pages for the same number of rows.
 ```
 
-That matches the 7,353 pages in the table at the top of this lesson. It assumes rows are packed evenly; real tables also contain free space and dead row versions, so the true page count is usually a little higher than this ideal.
+That is the ideal for evenly packed rows. Real tables also contain free space and dead row versions, so the true page count is usually a little higher.
 
 - A page found in PostgreSQL's shared buffer cache is a **hit**. It avoids an operating-system read request; no fixed latency follows from the label.
 - A page that isn't is a **read**. It might come from the operating system's cache or from storage; measure the latency rather than assigning a fixed time to either case.

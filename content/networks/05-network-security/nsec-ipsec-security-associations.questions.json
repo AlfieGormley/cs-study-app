@@ -63,30 +63,30 @@
     "id": "nsec-vpns-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "Using AES-GCM in ESP tunnel mode over IPv4 (20-byte outer IP, 8-byte ESP header, 8-byte IV, 2 bytes of pad length and next header, 16-byte ICV, padding to a 4-byte boundary), with NAT-T adding 8 bytes of UDP, what is the largest inner packet that fits a 1,500-byte link?",
+    "prompt": "A site-to-site IPsec tunnel (ESP tunnel mode over IPv4) worked for months with its tunnel MTU and TCP MSS clamp sized to fill a 1,500-byte link exactly. After the branch office moves behind its ISP's NAT, the tunnel still comes up and small requests work, but large file transfers stall. ICMP is blocked on the path. What changed?",
     "options": [
       {
-        "text": "1,480",
-        "explanation": "This subtracts only the outer IP header and ignores ESP, the IV, the trailer, the ICV and NAT-T."
+        "text": "NAT-T now wraps every ESP packet in an extra 8-byte UDP header, so packets sized for the old budget no longer fit and the drops go unreported",
+        "explanation": "Correct. With a NAT detected, ESP travels inside UDP 4500. The extra 8 bytes push full-size packets over 1,500 bytes; with ICMP blocked the senders never learn, giving a size-dependent black hole. Lower the tunnel MTU and MSS clamp by at least 8 bytes."
       },
       {
-        "text": "1,446",
-        "explanation": "This forgets the 8-byte NAT-T UDP header, which is present whenever a NAT is on the path."
+        "text": "The NAT is decrypting ESP and corrupting large packets",
+        "explanation": "A NAT does not hold the IPsec keys, so it cannot decrypt ESP. Integrity checks would reject altered packets of any size, not just large ones."
       },
       {
-        "text": "1,438",
-        "explanation": "Correct. Overhead is 20 + 8 + 8 + 8 + 2 + 16 = 62 bytes, leaving 1,438, and 1,438 + 2 is already a multiple of 4, so no padding is needed."
+        "text": "IKE has stopped rekeying, so the keys expired",
+        "explanation": "Expired keys would break all traffic, small and large alike. The failure here depends on packet size."
       },
       {
-        "text": "1,454",
-        "explanation": "This forgets the 16-byte ICV (integrity tag). This question specifies a 16-byte tag; RFC 4106 also permits negotiated 8- or 12-byte tags."
+        "text": "ESP padding grows behind a NAT",
+        "explanation": "ESP padding depends on the cipher's alignment and the inner packet length (0 to 3 bytes for AES-GCM's 4-byte alignment), not on NAT. The new overhead is the UDP encapsulation."
       }
     ],
-    "answer": 2,
-    "workedExample": "1. Add the fixed overhead:\n\n```\nouter IPv4        20\nUDP (NAT-T)        8\nESP SPI + seq      8\nIV                 8\npad len + next hdr 2\nICV (GCM tag)     16\ntotal             62\n```\n\n2. Subtract it from the link MTU, then check ESP's 4-byte alignment rule:\n\n```formula\nL_max = M_link − O\nL_max = 1500 B − 62 B = 1438 B\n(L_in + P + 2) mod 4 = 0\n1438 + 0 + 2 = 1440 = 4 × 360\nwhere\nL_max: the space left for inner packet plus padding, in bytes\nM_link: the link MTU, here 1,500 bytes\nO: the fixed overhead above, 62 bytes\nL_in: the inner packet length, in bytes\nP: ESP padding, 0 to 3 bytes\nmod: remainder after division; x mod 4 = 0 means x is a multiple of 4\nB: bytes\nIn words: 62 bytes of overhead leave 1,438 bytes, and 1,438 plus the 2 trailer bytes is already a multiple of 4, so no padding is needed.\n```\n\nSo padding is 0 and the inner packet can be 1,438 bytes. A 1,437-byte packet would also fit (with 1 byte of padding). Without NAT-T the figure rises to 1,446.",
+    "answer": 0,
+    "workedExample": "1. Symptom: the tunnel negotiates and small exchanges work, but large transfers stall. A size-dependent failure points at the MTU budget.\n2. What changed: a NAT now sits on the path. IKEv2 detects it and switches to NAT traversal, carrying ESP inside UDP port 4500.\n3. That UDP header adds 8 bytes to every packet, on top of the outer IPv4, ESP header, IV, trailer and integrity tag.\n4. Packets that exactly filled 1,500 bytes before are now 8 bytes too big. What happens next depends on the outer header's Don't Fragment bit, which RFC 4301 lets each tunnel SA set, clear or copy from the inner packet. With it clear, the outer packet is fragmented (which works, at a cost). With it set, the packet is dropped, and an ICMP 'packet too big' message must reach the gateway so it can lower the tunnel's path MTU and tell the inner senders. With that ICMP blocked, nobody learns, and the senders keep retransmitting the same size.\n5. Fix: reduce the tunnel MTU and TCP MSS clamp by at least 8 bytes (or measure the new path), and allow the necessary ICMP messages.",
     "link": {
-      "title": "RFC 4303: IP Encapsulating Security Payload",
-      "url": "https://www.rfc-editor.org/rfc/rfc4303"
+      "title": "RFC 3948: UDP Encapsulation of IPsec ESP Packets",
+      "url": "https://www.rfc-editor.org/rfc/rfc3948"
     }
   }
 ]

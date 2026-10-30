@@ -29,7 +29,7 @@ It does **not** hide:
 
 The pre-TLS-1.3 ecosystem retained legacy protocol versions, cipher suites and implementations with weaknesses. TLS 1.2 CBC suites were exposed to timing and padding-oracle implementation attacks; original POODLE targeted SSL 3.0. RSA key transport also lacks forward secrecy: later compromise of its decryption key can expose recorded handshakes using that key. A conventional full TLS 1.2 handshake takes two TLS round trips before client application data, excluding TCP setup and False Start.
 
-TLS 1.3 was originally specified by RFC 8446 (2018), now superseded by RFC 9846 (July 2026). Its core redesign took a hard line:
+TLS 1.3 was first specified in RFC 8446 (2018). RFC 9846 (July 2026) obsoletes RFC 8446: it is a minor revision that keeps the same version number and still interoperates with RFC 8446 implementations, tightens some requirements (for example, a key share must not be reused across connections, and TLS 1.0 and 1.1 must not be negotiated) and describes key exchange generically so that newer key-encapsulation methods fit. The core redesign took a hard line:
 
 | Removed | Why |
 |---|---|
@@ -39,7 +39,9 @@ TLS 1.3 was originally specified by RFC 8446 (2018), now superseded by RFC 9846 
 | Compression | CRIME attack |
 | Renegotiation | Complex, attacked |
 
-What is left is small. RFC 8446 originally defines five cipher suites, all **AEAD** (authenticated encryption), the common ones being `TLS_AES_128_GCM_SHA256`, `TLS_AES_256_GCM_SHA384` and `TLS_CHACHA20_POLY1305_SHA256`. Certificate-authenticated TLS 1.3 uses ephemeral key establishment. RFC 8446 also permits PSK-only `psk_ke`, which lacks forward secrecy against later PSK compromise; PSK with ephemeral DH can provide it for post-handshake traffic. The later resumption unit covers early data’s separate limitations. Secure erasure of ephemeral/session secrets is part of the model.
+What is left is small. The specification (RFC 8446, and now RFC 9846) defines five cipher suites, all **AEAD** (authenticated encryption), the common ones being `TLS_AES_128_GCM_SHA256`, `TLS_AES_256_GCM_SHA384` and `TLS_CHACHA20_POLY1305_SHA256`. Certificate-authenticated TLS 1.3 uses ephemeral key establishment. The specification also permits PSK-only `psk_ke`, which lacks forward secrecy against later PSK compromise; PSK with ephemeral DH can provide it for post-handshake traffic. The later resumption unit covers early data’s separate limitations. Secure erasure of ephemeral/session secrets is part of the model.
+
+**Forward secrecy** means that stealing a server's long-term private key later does not decrypt connections recorded earlier. With RSA key transport, the client encrypted the session secret to the server's certificate key, so that one key unlocked every recorded session. In TLS 1.3's certificate mode, each connection's keys come from fresh ephemeral key shares that are erased afterwards; the certificate key only signs. A stolen certificate key lets an attacker impersonate the server in future connections, but not read the past.
 
 ## Key takeaways
 - TLS protects connection contents, not every observable address, size or timing signal.
@@ -48,9 +50,5 @@ What is left is small. RFC 8446 originally defines five cipher suites, all **AEA
 
 ## Further reading
 - [RFC 9846: TLS 1.3 (2026 revision)](https://www.rfc-editor.org/rfc/rfc9846.html)
-- [RFC 8446: original TLS 1.3 specification](https://www.rfc-editor.org/rfc/rfc8446)
+- [RFC 8446: original TLS 1.3 specification (obsoleted by RFC 9846)](https://www.rfc-editor.org/rfc/rfc8446)
 - [The Illustrated TLS 1.3 Connection](https://tls13.xargs.org/)
-- [RFC 9849: TLS Encrypted Client Hello](https://www.rfc-editor.org/rfc/rfc9849.html)
-- [Ballot SC081v3: reducing certificate validity periods — CA/Browser Forum](https://cabforum.org/2025/04/11/ballot-sc081v3-introduce-schedule-of-reducing-validity-and-data-reuse-periods/)
-- [Certificate Transparency — MDN](https://developer.mozilla.org/en-US/docs/Web/Security/Certificate_Transparency)
-- [ssl: TLS/SSL wrapper for socket objects — Python docs](https://docs.python.org/3/library/ssl.html)

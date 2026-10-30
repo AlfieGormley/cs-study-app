@@ -18,9 +18,9 @@ Replacing WEP requires authenticated encryption and a sound key hierarchy. This 
 | Personal (PSK) | Shared passphrase | Homes, small offices |
 | Enterprise | 802.1X / EAP per user | Companies, eduroam |
 
-In Personal mode the passphrase is stretched into a 256-bit **Pairwise Master Key** (PMK). Stretching means deliberately repeating a hash thousands of times, so that each guess an attacker tries costs thousands of hash computations too:
+In Personal mode the passphrase is stretched into a 256-bit **Pairwise Master Key** (PMK) using PBKDF2 with HMAC-SHA1, 4,096 iterations, and the network name (SSID) as the salt. Stretching means deliberately repeating a hash thousands of times, so that each guess an attacker tries costs thousands of hash computations too. Salting with the SSID means the same passphrase gives different PMKs on differently named networks:
 
-```formula
+```formula reference
 PMK = PBKDF2(HMAC-SHA1, P, SSID,
              4096, 256)
 where
@@ -32,28 +32,7 @@ SSID: the network name, used as the salt so that the same passphrase gives diffe
 In words: the PMK is the passphrase hashed 4,096 times with the network name mixed in, giving a 256-bit key.
 ```
 
-The same derivation in Python:
-
-```python
-import hashlib
-
-def pmk(passphrase, ssid):
-    # This teaching example accepts ASCII.
-    password = passphrase.encode("ascii")
-    name = ssid.encode("ascii")
-    if not 8 <= len(password) <= 63:
-        raise ValueError("password length")
-    if not 1 <= len(name) <= 32:
-        raise ValueError("SSID length")
-    # 32 bytes produce the 256-bit PMK.
-    return hashlib.pbkdf2_hmac(
-        "sha1", password, name, 4096, 32)
-
-# Show only the first eight derived bytes.
-print(pmk("password", "IEEE").hex()[:16])
-```
-
-This ASCII-only passphrase example (not raw hexadecimal PSK provisioning) prints `f42c6fc52df0ebef`, the beginning of the derived 256-bit key for those inputs. Note that the SSID is the salt, so a table for one exact SSID can be reused on other networks with that same SSID, not across arbitrary different names.
+Because the salt is the SSID, a table of precomputed PMKs built for one exact SSID can be reused on every other network with that same name (common defaults such as `linksys` are popular targets), but not across arbitrary different names.
 
 ### The four-way handshake
 
@@ -74,9 +53,9 @@ The PMK is never used to encrypt traffic directly. Instead, after association, t
  AP installs PTK
 ```
 
-Both sides then derive the session key from the PMK and values exchanged in the clear:
+Both sides then derive the session key from the PMK, the two random nonces and both MAC addresses, all of which except the PMK are exchanged in the clear:
 
-```formula
+```formula reference
 PTK = PRF(PMK, N_A, N_S, MAC_AP, MAC_C)
 where
 PTK: Pairwise Transient Key, the session's set of keys for protecting unicast traffic between this client and AP
@@ -93,15 +72,14 @@ In words: the session key mixes the long-term PMK with two fresh random numbers 
 - The **MIC** on M2 proves the client knows the PMK; the MIC on M3 proves the AP does. That mutual proof is what resists a stranger's AP completing this authenticated handshake as yours, as long as the stranger does not know the passphrase.
 - M3 also delivers the **Group Temporal Key** (GTK) used for broadcast and multicast frames.
 
+In WPA2-Personal every device derives the same PMK from the shared passphrase. Fresh nonces keep each session's PTK different, but anyone who knows the passphrase and captures a client's handshake can derive that client's PTK; the next units show how the same captured data enables offline guessing.
+
 ## Key takeaways
 - WPA2-Personal derives a PMK with the SSID as salt and 4,096 PBKDF2 iterations.
 - The four-way handshake derives per-session key material from nonces and addresses.
 - MICs confirm key possession; correct nonce generation and installation still matter.
 
 ## Further reading
-- [Key Reinstallation Attacks (KRACK) — Mathy Vanhoef](https://www.krackattacks.com/)
-- [Dragonblood: analysing WPA3's Dragonfly handshake](https://wpa3.mathyvanhoef.com/)
 - [Wi-Fi Protected Access — Wikipedia](https://en.wikipedia.org/wiki/Wi-Fi_Protected_Access)
-- [Wired Equivalent Privacy — Wikipedia](https://en.wikipedia.org/wiki/Wired_Equivalent_Privacy)
-- [IEEE 802.1X — Wikipedia](https://en.wikipedia.org/wiki/IEEE_802.1X)
-- [RFC 7664: Dragonfly Key Exchange](https://www.rfc-editor.org/rfc/rfc7664)
+- [IEEE 802.11i-2004 — Wikipedia](https://en.wikipedia.org/wiki/IEEE_802.11i-2004)
+- [RFC 8018: PKCS #5 (PBKDF2)](https://www.rfc-editor.org/rfc/rfc8018)

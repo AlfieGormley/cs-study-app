@@ -35,6 +35,13 @@ action        REJECT
 log-status    OK
 ```
 
+> [!analogy] Real-world analogy: an itemised phone bill
+> An itemised phone bill lists every call: which number rang which, when, for how long and whether it connected. It never records what was said. That is often enough to spot a pattern, such as one number ringing hundreds of others in a minute, but it cannot prove what any caller intended.
+>
+> **How it maps:** Each bill line is a flow record: the numbers are the source and destination addresses and ports, the duration and call charges are the timestamps and packet and byte counters, and "connected or not" is like the ACCEPT or REJECT action. A packet capture is the call recording, far more detailed and far bulkier.
+>
+> **Where it stops:** A phone bill normally lists every call, but flow exporters may sample packets, split one connection into several records, publish records only after an aggregation window, and leave documented gaps such as traffic to the Amazon-provided DNS resolver.
+
 `action` reports ACCEPT or REJECT. A rejection can arise from security groups, NACLs or packets arriving after a connection has closed; this field alone does not identify a particular rule. They have blind spots: traffic to the Amazon-provided DNS resolver, DHCP and the instance metadata service is not logged, so DNS-based activity needs Route 53 Resolver query logs instead. The default maximum time window for each record is 10 minutes, with a 1-minute option; Nitro interfaces use at most 1 minute regardless. Publication adds delay, and SKIPDATA records disclose some logging gaps.
 
 A simple scan detector over simplified flow records (source, destination, port, action):
@@ -91,10 +98,6 @@ Segmentation (the earlier firewall and segmentation units) helps detection too: 
 - Distinct destination pairs are a useful scan heuristic, not proof of malicious intent.
 
 ## Further reading
-- [Suricata rules format — Suricata docs](https://docs.suricata.io/en/latest/rules/intro.html)
-- [tcpdump and libpcap](https://www.tcpdump.org/)
-- [Wireshark display filters — Wireshark wiki](https://wiki.wireshark.org/DisplayFilters)
 - [Logging IP traffic using VPC Flow Logs — AWS](https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html)
 - [RFC 7011: IPFIX Protocol Specification](https://www.rfc-editor.org/rfc/rfc7011)
 - [Zeek documentation](https://docs.zeek.org/en/v7.1.1/logs/index.html)
-- [Base rate fallacy — Wikipedia](https://en.wikipedia.org/wiki/Base_rate_fallacy)

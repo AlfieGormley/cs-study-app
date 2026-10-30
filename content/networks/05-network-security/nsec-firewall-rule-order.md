@@ -60,6 +60,13 @@ This prints `allow`, `deny`, `deny`. SSH from inside `10.0.0.0/8` matches rule 1
 
 Swap rules 1 and 3 and internal SSH breaks too, because the broad deny now matches first. Order bugs and broad rules that shadow narrow ones can contradict the intended policy. Good tooling flags **shadowed rules** that can never match.
 
+> [!analogy] Real-world analogy: a door supervisor's ordered checklist
+> A door supervisor works down a written list and acts on the first line that fits each guest: "staff with a badge: let in", "anyone in football shirts: refuse", "ticket holders: let in". Anyone the list does not mention is refused.
+>
+> **How it maps:** Each line is a firewall rule, acting on the first line that fits is first-match evaluation, and "refuse anyone not mentioned" is a default-deny policy. If "refuse football shirts" sits above "staff with a badge", a staff member in a football shirt is turned away: the broad rule shadows the narrower one beneath it.
+>
+> **Where it stops:** A person can use judgement when the list seems wrong; a firewall applies the rules exactly. Real products also differ in how they evaluate rules: AWS security groups have no order at all, and nftables can pass a packet through several chains.
+
 > [!tip] Default deny, both ways
 > Explicit inbound and outbound allowlists can reduce exposure. Egress restrictions can obstruct some command-and-control and exfiltration paths, but allowed services may still be abused; default-deny adoption is not universal.
 
@@ -69,9 +76,6 @@ Swap rules 1 and 3 and internal SSH breaks too, because the broad deny now match
 - Explicit defaults and outbound controls make permitted paths easier to review.
 
 ## Further reading
-- [NIST SP 800-207: Zero Trust Architecture](https://csrc.nist.gov/pubs/sp/800/207/final)
-- [BeyondCorp: A New Approach to Enterprise Security — Google Research](https://research.google/pubs/beyondcorp-a-new-approach-to-enterprise-security/)
-- [Control traffic to resources using security groups — AWS](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html)
+- [Firewall (computing) — Wikipedia](https://en.wikipedia.org/wiki/Firewall_(computing))
 - [Control subnet traffic with network ACLs — AWS](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html)
 - [Simple ruleset for a workstation — nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Simple_ruleset_for_a_workstation)
-- [Firewall (computing) — Wikipedia](https://en.wikipedia.org/wiki/Firewall_(computing))

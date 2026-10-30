@@ -91,7 +91,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "The two numbers in `cost=140936.84..143436.84` are:\n\n- the **startup cost**: work done before the first row comes out;\n- the **total cost**: work to return every row.\n\nFor the Seq Scan the startup cost is 0: it can return a row immediately. For the Sort it is 140,936.84, which already includes the scan's full 17,353 plus the comparison work of sorting. Returning the sorted rows adds the rest:\n\n```formula\nC_run = C_total − C_start\nC_run = 143,436.84 − 140,936.84\nC_run = 2,500\nwhere\nC_run: the cost of handing the sorted rows up once sorting is finished, in planner cost units\nC_total: the Sort's total cost, the second number, 143,436.84\nC_start: the Sort's startup cost, the first number, 140,936.84\nIn words: almost all of a sort's cost is paid before its first row; emitting the million sorted rows adds only 2,500 units (0.0025 per row, the default `cpu_operator_cost`).\n```\n\nUnder a `LIMIT`, the planner weighs startup cost heavily, which is why it often prefers an index that is already in order.",
+    "workedExample": "The two numbers in `cost=140936.84..143436.84` are:\n\n- the **startup cost**: work done before the first row comes out;\n- the **total cost**: work to return every row.\n\nFor the Seq Scan the startup cost is 0: it can return a row immediately. For the Sort it is 140,936.84, which already includes the scan's full 17,353 plus the comparison work of sorting. So almost all of the sort's cost (140,936.84 of 143,436.84) is paid before its first row comes out; handing the million sorted rows upwards adds only 2,500 units.\n\nUnder a `LIMIT`, the planner weighs startup cost heavily, which is why it often prefers an index that is already in order.",
     "link": {
       "title": "Using EXPLAIN — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/using-explain.html"
@@ -113,7 +113,7 @@
       },
       {
         "text": "All 1,000,000, but the sort keeps only the best 10 in a small bounded heap",
-        "explanation": "Correct. A top-N heapsort reads every row but holds only a 10-element bounded heap, which is why memory is 26 kB rather than tens of megabytes. Content gap: no reproducible timing record is available for this illustrative plan."
+        "explanation": "Correct. A top-N heapsort reads every row but holds only a 10-element bounded heap, which is why memory is 26 kB rather than tens of megabytes."
       },
       {
         "text": "All 1,000,000, and they are all fully sorted before the top 10 are returned",
@@ -121,7 +121,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Is any operator under the Limit blocking? Yes, the Sort.\n2. So the Limit can't save the scan: the Seq Scan returns all 1,000,000 rows (`actual rows=1000000.00`).\n3. But the Sort is *bounded*. It keeps a bounded heap of the 10 best rows and discards anything smaller, so it needs about 26 kB.\n4. Cost: each row is compared against a bounded heap of 10 rows instead of being sorted among a million:\n\n```formula\nC_top ≈ n × log_2(k)\nC_top ≈ 1,000,000 × 3.3 ≈ 3,300,000\nC_full ≈ n × log_2(n)\nC_full ≈ 1,000,000 × 20 ≈ 20,000,000\nwhere\nC_top: the rough number of comparisons a top-N heapsort makes\nC_full: the rough number of comparisons a full sort makes\nn: the number of input rows, 1,000,000\nk: the number of rows kept, set by the LIMIT, here 10\nlog_2: the logarithm to base 2: how many times you can halve a number before reaching 1; log_2(10) ≈ 3.3 and log_2(1,000,000) ≈ 20\n≈: approximately equal to\nIn words: keeping only the best 10 rows costs each row about 3 comparisons instead of about 20, and needs only a bounded heap of 10 rows in memory.\n```\n\nTo make the LIMIT truly early-exit, give it an index on `total`: an Index Scan Backward returns rows already in order, so it can stop after 10.",
+    "workedExample": "1. Is any operator under the Limit blocking? Yes, the Sort.\n2. So the Limit can't save the scan: the Seq Scan returns all 1,000,000 rows (`actual rows=1000000.00`).\n3. But the Sort is *bounded*. It keeps a bounded heap of the 10 best rows and discards anything smaller, so it needs about 26 kB.\n4. Work: each row is compared only against the 10 best rows so far, a few comparisons per row, instead of being sorted among a million (about 20 comparisons per row for a full sort).\n\nTo make the LIMIT truly early-exit, give it an index on `total`: an Index Scan Backward returns rows already in order, so it can stop after 10.",
     "link": {
       "title": "LIMIT and OFFSET — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/queries-limit.html"

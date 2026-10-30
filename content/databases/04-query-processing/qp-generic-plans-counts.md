@@ -4,16 +4,14 @@ title: Parameter plans, exact counts and CTEs
 level: advanced
 minutes: 4
 sourceLesson: qp-anti-patterns
-summary: Parameter plans, exact counts and CTEs with worked examples and explicit assumptions.
+summary: How prepared statements choose between custom and generic plans, why skewed values can get a bad cached plan, and the cost of exact counts and SELECT *.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 ## 10. Generic plans for skewed parameters
 
-Prepared statements save planning time by reusing plans. In PostgreSQL 18's default `plan_cache_mode = auto`, a parameterised prepared statement normally starts with five executions planned using the actual parameter values (**custom plans**), then compares a **generic plan** against the custom plans' average estimated cost including planning overhead. Reuse is a cost decision, not a guaranteed switch on the sixth call. A generic plan can't know the parameter:
+Prepared statements save planning time by reusing plans. In PostgreSQL 18's default `plan_cache_mode = auto`, a parameterised prepared statement normally starts with five executions planned using the actual parameter values (**custom plans**), then builds a **generic plan** that ignores the parameter's value. From then on it uses the generic plan if its estimated cost is lower than the custom plans' average estimated cost (which includes a charge for planning). Reuse is a cost decision, not a guaranteed switch on the sixth call.
 
 ```sql
 -- The parameter may vary between calls.
@@ -31,22 +29,21 @@ Seq Scan on orders  (rows=333333)
   Filter: (status = $1)
 ```
 
-The generic plan doesn't know the value, so it assumes an average one, as if every status were equally common:
+The generic plan doesn't know the value, so it assumes an average one, as if every status were equally common: a third of the table, 333,333 rows. For a third of the table a sequential scan looks cheapest, and the plan cannot use the partial index on pending orders, because it cannot prove `$1` is 'pending'.
 
-```formula
-s = 1 / n_distinct = 1 / 3
-n_est = s × n_table
-n_est = 1,000,000 / 3 ≈ 333,333
-where
-s: the selectivity the generic plan assumes for status = $1
-n_distinct: the number of distinct values in the column, here 3 statuses
-n_est: the estimated number of matching rows
-n_table: the number of rows in the table, here 1,000,000
-≈: approximately equal to
-In words: without knowing the parameter, the planner expects a third of the table to match, so a sequential scan looks cheapest.
-```
+What happens next depends on the first five calls. In a PostgreSQL 18.6 test:
 
-It also can't use the partial index, because it can't prove the parameter is 'pending'. If most calls ask for rare values, every call now scans the table. Fixes: `SET plan_cache_mode = force_custom_plan` for that session or role, or write separate statements for the rare and common cases.
+- **Five calls for 'pending'.** Each custom plan used the partial index and cost about 660 units, far below the generic plan's 20,833. PostgreSQL kept making custom plans; `pg_prepared_statements` showed 6 custom and 0 generic plans after the sixth call.
+- **Five calls for 'shipped'** (90% of rows). Each custom plan was a full scan costing more than the generic plan, so from the sixth call PostgreSQL switched to the generic Seq Scan, and kept using it when a later call asked for 'pending'.
+
+So the trap is a skewed column whose early calls use common values: they make the generic plan look acceptable, and rare values then inherit a full scan. The `generic_plans` and `custom_plans` columns of `pg_prepared_statements` show which kind a statement has been using. Fixes: `SET plan_cache_mode = force_custom_plan` for that session or role, or write separate statements for the rare and common cases.
+
+> [!analogy] Real-world analogy: a standard delivery route
+> A courier plans each of the first five deliveries individually. If those happen to be big drops to the main depot, a single standard route to the depot looks as good as custom planning, so the firm adopts it. When a small parcel later needs to go to a village, it still goes the long way via the depot.
+>
+> **How it maps:** individually planned deliveries are custom plans, and the standard route is the generic plan. Adopting the route because it compared well with the first few jobs is `plan_cache_mode = auto` comparing the generic plan's cost with the average custom plan. The village parcel is a rare parameter value served by a plan built for an average one.
+>
+> **Where it stops:** a courier would notice the odd parcel and replan; PostgreSQL does not look at the new value once it has settled on the generic plan, unless the plan is invalidated or the setting forces custom plans.
 
 ## 11. Exact row counts and SELECT *
 

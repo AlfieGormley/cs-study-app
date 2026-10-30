@@ -3,27 +3,27 @@
     "id": "nsec-detection-q8",
     "level": "advanced",
     "type": "single",
-    "prompt": "Assume captured packet bytes average 2 decimal Gbps continuously. Ignoring capture-file overhead, compression and replication, roughly how much storage is needed for 30 days?",
+    "prompt": "A team must be able to investigate incidents up to 30 days old. Captured traffic on their internet link averages 2 Gbps, which is about 21.6 TB of packet bytes a day, and their evidence store holds about 100 TB. Which plan fits that budget while keeping the most useful evidence?",
     "options": [
       {
-        "text": "About 650 TB",
-        "explanation": "Correct. 2 Gbps = 250 MB/s; × 86,400 s ≈ 21.6 TB a day; × 30 ≈ 648 TB."
+        "text": "Keep full packet capture for all 30 days and rely on compression to close the gap",
+        "explanation": "Thirty days at about 21.6 TB a day is roughly 650 TB, more than six times the budget. Most web traffic is now encrypted, and encrypted bytes barely compress, so compression cannot be relied on to close a gap that size."
       },
       {
-        "text": "About 21.6 TB",
-        "explanation": "That is one day, not thirty."
+        "text": "Keep a rolling full capture of about four days, and keep flow records and protocol logs for the full 30 days",
+        "explanation": "Correct. 100 TB holds about four and a half days of full packets. Flow records and protocol logs are far smaller, so they can cover the whole 30 days, and the recent full capture adds packet detail for fresh incidents."
       },
       {
-        "text": "About 5.2 PB",
-        "explanation": "This forgets to divide bits by 8 when converting Gbps to bytes."
+        "text": "Size the store from the link's 10 Gbps capacity rather than the measured average, to be safe",
+        "explanation": "That makes the requirement five times larger, not smaller, and capture volume should be planned from recorded bytes, not the physical link rate. It does not fit a 100 TB budget."
       },
       {
-        "text": "About 65 TB",
-        "explanation": "This is out by a factor of 10; check the per-second figure: 250 MB, not 25 MB."
+        "text": "Capture only inbound packets, which halves the storage and still covers 30 days",
+        "explanation": "Halving 650 TB still leaves about 325 TB, over three times the budget, and dropping one direction throws away half of every conversation, including outbound exfiltration."
       }
     ],
-    "answer": 0,
-    "workedExample": "Convert bits to bytes, then multiply by the seconds in 30 days:\n\n```formula\nV = (R / 8) × T\nR / 8 = 2000 Mbit/s / 8 = 250 MB/s\nV_day = 250 MB/s × 86400 s\nV_day = 21600000 MB ≈ 21.6 TB\nV = 21.6 TB × 30 ≈ 648 TB\nwhere\nV: total storage for the retention period\nR: the captured data rate, 2 Gbps = 2,000 Mbit/s; dividing by 8 converts bits to bytes, since a byte is 8 bits\nT: the recording time, in seconds (s); one day is 86,400 s\nV_day: storage for one day\nMbit: megabit, 10^6 bits\nMB: megabyte, 10^6 bytes (decimal)\nTB: terabyte, 10^12 bytes (decimal); 1 TB = 1,000,000 MB\ns: seconds\n≈: approximately equal to (rounded)\nIn words: 2 Gbps is 250 megabytes a second, about 21.6 terabytes a day, so about 650 terabytes for 30 days.\n```\n\nThis is a packet-byte-rate model, not an exact conversion from physical link utilisation: link-layer framing and gaps consume link capacity but are not all stored. File metadata and replication can add storage, while sampling, truncation or compression can reduce it. Retention must be budgeted for the actual system.",
+    "answer": 1,
+    "workedExample": "1. Storage scales with rate and time: about 21.6 TB a day for 30 days is about 650 TB of full packets.\n2. The budget is about 100 TB, so full capture can cover only about four to five days.\n3. Compression cannot close a sixfold gap when most traffic is encrypted, and capturing one direction both falls short and loses evidence.\n4. So split the evidence by cost: a short rolling buffer of full packets for detailed analysis of recent events, plus flow records and protocol logs, which are much smaller, for the full 30 days.\n5. These are packet-byte figures; file overhead and replication add to them, so measure the real system before committing to a retention period.",
     "link": {
       "title": "tcpdump and libpcap",
       "url": "https://www.tcpdump.org/"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Assume 20-byte IPv4 and 32-byte TCP headers (20 bytes plus 12 bytes of options such as timestamps):\n\n```formula\nL_seg = MTU − (H_IP + H_TCP)\nL_seg = 1500 B − (20 B + 32 B)\nL_seg = 1448 B\nn = (28960 B) / (1448 B) = 20\nwhere\nL_seg: the TCP payload bytes in each full-size segment on the wire (the 1,460-byte maximum segment size minus 12 bytes of TCP options)\nMTU: the link's IP maximum transmission unit, 1,500 bytes\nH_IP: the IPv4 header, 20 bytes\nH_TCP: the TCP header with timestamp options, 32 bytes\nn: the number of wire packets the captured buffer is split into\nB: bytes\nIn words: each wire packet can carry 1,448 payload bytes, so the 28,960-byte captured buffer is exactly 20 full-size segments glued together.\n```\n\nThat exact multiple is a strong hint that the buffer was captured before the NIC split it. A capture before transmit offload completes can show the large buffer and unfinished checksums. Receive coalescing can cause large apparent packets at some capture hooks too. Actual visibility depends on the operating system, driver, offloads and capture point.",
+    "workedExample": "1. On this link each full-size wire packet has room for 1,500 bytes, minus a 20-byte IPv4 header and a 32-byte TCP header (20 bytes plus 12 bytes of options such as timestamps), leaving 1,448 bytes of TCP payload.\n2. The captured buffer holds 28,960 payload bytes, which is exactly 20 of those full-size segments joined together.\n3. That exact multiple is a strong hint that the buffer was captured before the NIC split it. A capture before transmit offload completes can show the large buffer and unfinished checksums. Receive coalescing can cause large apparent packets at some capture hooks too. Actual visibility depends on the operating system, driver, offloads and capture point.",
     "link": {
       "title": "Wireshark display filters — Wireshark wiki",
       "url": "https://wiki.wireshark.org/DisplayFilters"

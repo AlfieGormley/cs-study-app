@@ -4,12 +4,10 @@ title: Join choices and outer, semi and anti variants
 level: intermediate
 minutes: 3
 sourceLesson: qp-join-algorithms
-summary: Join choices and outer, semi and anti variants using explicit models and assumptions.
+summary: How nested loop, hash and merge joins compare, and the outer, semi and anti join variants that appear in plans.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plans and figures below are illustrative model inputs. Actual execution depends on version, workload and settings.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 ## Choosing between them
 
@@ -31,7 +29,7 @@ The illustrative plan costs show why an access path can matter. Joining pending 
 
 Without an index on the inner side, the nested loop is about 2,000 times more expensive. That's the plan you get when an index is missing **and** no equality condition exists, or when the planner wrongly believes the outer side has one row.
 
-At larger scale, joining all 1,000,000 orders to their 3,000,000 order items, the hash join (8 batches, 587 ms) beat a merge join that had to sort 3 million rows through a 35 MB temporary file (850 ms).
+At larger scale, joining all 1,000,000 orders to their 3,000,000 order items with no index on `order_items.order_id`, one illustrative run had the hash join (8 batches, 587 ms) beat a merge join that had to sort 3 million rows through a 35 MB temporary file (850 ms). With an index on `order_items(order_id)`, a merge join can read both inputs in key order without that sort, so the comparison can change; measure on your own data.
 
 A physical path may provide useful ordering to another node, but SQL results have a guaranteed order only with ORDER BY. Outer joins and duplicate groups can limit which path ordering is useful.
 
@@ -40,7 +38,7 @@ A physical path may provide useful ordering to another node, but SQL results hav
 All three algorithms come in variants for other join types, and you'll see the names in plans:
 
 - `Hash Left Join`, `Merge Full Join`: outer joins. Postgres can't run a `FULL OUTER JOIN` as a nested loop, because the nested loop has no cheap way to remember which inner rows never matched.
-- `Semi Join`: from `EXISTS` or `IN`. Stops at the first matching row for each outer row.
+- `Semi Join`: from `EXISTS` or `IN`. Stops at the first matching row for each outer row. The planner may instead remove duplicates from the subquery's rows and use an ordinary join; in a PostgreSQL 18.6 test, `EXISTS` over all orders became a HashAggregate of customer IDs feeding a plain Hash Join.
 - `Anti Join`: from `NOT EXISTS`. Emits outer rows with no match.
 - `Hash Right Join`: the planner swapped sides so the smaller input is hashed, even though the SQL said `LEFT JOIN`.
 

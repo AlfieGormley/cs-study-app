@@ -58,7 +58,7 @@ No base class is needed; duck typing does the job. Add an ABC or `typing.Protoco
 ### When not to use it
 
 - When there's only one family, or the parts don't actually need to match.
-- When families change often. Adding a new *kind* of part (say, `slider()`) means changing every factory.
+- When the set of product kinds changes often. Adding a new *kind* of part (say, `slider()`) means changing every factory; adding a whole new family is the cheap direction.
 
 ### In real libraries
 

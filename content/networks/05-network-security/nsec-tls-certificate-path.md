@@ -35,6 +35,13 @@ Certificate validation includes the following checks (this is not an exhaustive 
 5. The leaf certificate is allowed for server authentication (extended key usage).
 6. Applicable browser policies require **Certificate Transparency** evidence for publicly trusted certificates. A signed certificate timestamp is a log's promise to include the certificate, not itself an inclusion proof; SCTs need not be embedded in the certificate. Monitoring helps detect misissuance.
 
+> [!analogy] Real-world analogy: a passport checked at a border
+> A border officer accepts a passport only if it was issued by an authority the officer's government recognises, it has not expired, the photo and name match the traveller, and it is the right kind of document for entry. A passport printed by an unrecognised office is refused, however genuine it looks.
+>
+> **How it maps:** The passport is the leaf certificate, the issuing office is an intermediate CA, and the government's list of recognised authorities is the client's trust store of root anchors. Checking the photo and name is matching the Subject Alternative Name to the hostname; checking expiry and document type is checking validity dates, CA constraints and extended key usage.
+>
+> **Where it stops:** The officer compares physical features, while a client verifies digital signatures link by link and must also see proof that the server holds the matching private key (CertificateVerify): a copied certificate alone proves nothing. Trust stores also differ between browsers, operating systems and applications, so the "recognised authorities" are not the same everywhere.
+
 > [!example] "It works in Chrome but not in curl"
 > The server sends only its leaf certificate, not the intermediate. Desktop browsers often cope, because they cache intermediates or fetch them from a URL in the certificate. Other clients may fail with "unable to get local issuer certificate"; fetching and caching depend on the TLS backend, trust store and configuration, not just the application name. The fix is on the server: serve the full chain (leaf certificate plus intermediates).
 
@@ -44,10 +51,6 @@ Certificate validation includes the following checks (this is not an exhaustive 
 - Serving required intermediates avoids depending on a particular client’s cache or fetching behaviour.
 
 ## Further reading
-- [RFC 9846: TLS 1.3 (2026 revision)](https://www.rfc-editor.org/rfc/rfc9846.html)
-- [RFC 8446: original TLS 1.3 specification](https://www.rfc-editor.org/rfc/rfc8446)
-- [The Illustrated TLS 1.3 Connection](https://tls13.xargs.org/)
-- [RFC 9849: TLS Encrypted Client Hello](https://www.rfc-editor.org/rfc/rfc9849.html)
-- [Ballot SC081v3: reducing certificate validity periods — CA/Browser Forum](https://cabforum.org/2025/04/11/ballot-sc081v3-introduce-schedule-of-reducing-validity-and-data-reuse-periods/)
+- [RFC 5280: Internet X.509 PKI Certificate and CRL Profile](https://www.rfc-editor.org/rfc/rfc5280)
 - [Certificate Transparency — MDN](https://developer.mozilla.org/en-US/docs/Web/Security/Certificate_Transparency)
-- [ssl: TLS/SSL wrapper for socket objects — Python docs](https://docs.python.org/3/library/ssl.html)
+- [The Illustrated TLS 1.3 Connection](https://tls13.xargs.org/)

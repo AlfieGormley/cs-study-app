@@ -21,9 +21,16 @@ DDoS attacks are classified by the resource they exhaust:
 | Protocol | State tables | packets/s | SYN flood |
 | Application | Server CPU / app | requests/s | HTTP flood |
 
+> [!analogy] Real-world analogy: three ways to stop a restaurant serving
+> A restaurant can be stopped in three different ways. A traffic jam can block the only road in, so no customers arrive. Pranksters can book every table and never turn up, so real diners are turned away while the tables sit empty. Or a few customers can order the most elaborate dishes again and again, so the kitchen falls behind.
+>
+> **How it maps:** The road is link bandwidth (volumetric attacks), the reserved tables are connection state such as half-open TCP entries (protocol attacks), and the overworked kitchen is application CPU or worker threads (application-layer attacks). Each needs its own fix: a wider road or diversion upstream, a booking rule that holds no table until the guest confirms (SYN cookies), or limits and caching in the kitchen.
+>
+> **Where it stops:** Real attacks often mix types, and network traffic can be forged in ways diners cannot: thousands of sources may be spoofed or hijacked devices. A restaurant also cannot clone itself across the world the way an anycast scrubbing network spreads load.
+
 ### Volumetric
 
-Fill the victim's pipe with more traffic than it can carry. If the link is 10 Gbps and 50 Gbps arrives, legitimate packets are dropped upstream, before your servers ever see them. You cannot filter your way out on your own equipment; mitigation must happen upstream, at your ISP or a scrubbing service (Cloudflare, Akamai, AWS Shield) with sufficient capacity and filtering for the particular attack. Cloudflare reported a 29.7 Tbps attack in its [2025 Q3 report](https://blog.cloudflare.com/ddos-threat-report-2025-q3/); this is a provider-reported measurement, not a guaranteed limit on future attacks.
+Fill the victim's pipe with more traffic than it can carry. If the link is 10 Gbps and 50 Gbps arrives, legitimate packets are dropped upstream, before your servers ever see them. You cannot filter your way out on your own equipment; mitigation must happen upstream, at your ISP or a scrubbing service (Cloudflare, Akamai, AWS Shield) with sufficient capacity and filtering for the particular attack. Cloudflare reported a record 31.4 Tbps attack, lasting about 35 seconds, in its [2025 Q4 report](https://blog.cloudflare.com/ddos-threat-report-2025-q4/) (published February 2026, and still its largest reported figure as of October 2026); this is a provider-reported measurement, not a limit on future attacks.
 
 ### Protocol
 
@@ -43,9 +50,6 @@ Send requests that look legitimate but are expensive: searches, logins, uncached
 - A saturated access link needs mitigation before that link.
 
 ## Further reading
-- [UDP-Based Amplification Attacks — CISA](https://www.cisa.gov/news-events/alerts/2014/01/17/udp-based-amplification-attacks)
-- [RFC 2827 (BCP 38): Network Ingress Filtering](https://www.rfc-editor.org/rfc/rfc2827)
 - [RFC 4987: TCP SYN Flooding Attacks and Common Mitigations](https://www.rfc-editor.org/rfc/rfc4987)
-- [Amplification Hell: Revisiting Network Protocols for DDoS Abuse (NDSS 2014)](https://www.ndss-symposium.org/ndss2014/programme/amplification-hell-revisiting-network-protocols-ddos-abuse/)
-- [February 28th DDoS incident report — GitHub blog](https://github.blog/news-insights/company-news/ddos-incident-report/)
 - [Understanding the Mirai Botnet (USENIX Security 2017)](https://www.usenix.org/conference/usenixsecurity17/technical-sessions/presentation/antonakakis)
+- [Slowloris (computer security) — Wikipedia](https://en.wikipedia.org/wiki/Slowloris_(computer_security))

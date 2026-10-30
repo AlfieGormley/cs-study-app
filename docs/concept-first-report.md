@@ -1,6 +1,6 @@
 # Concept-first library review
 
-Status: **in progress**. 34/60 modules and 974/1845 active lessons have current independent editorial reviews.
+Status: **in progress**. 37/60 modules and 1071/1845 active lessons have current independent editorial reviews.
 
 This report counts only active lesson IDs from module.json. Retired subjects (os, architecture, theory, languages; see `content/retired-subjects.json`) are excluded. Pending modules have not been certified by keyword scans or by renderer tests.
 
@@ -17,7 +17,7 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | [databases / SQL Fundamentals](../content/databases/01-sql-fundamentals/verification.json) | Reviewed | 40 | 74 | 18 → 4 | 0 / 4 | 13 → 0 | 270 | 118 | 10 |
 | [databases / Advanced SQL](../content/databases/02-advanced-sql/verification.json) | Reviewed | 41 | 71 | 30 → 3 | 0 / 3 | 22 → 0 | 149 | 135 | 10 |
 | [databases / Relational Theory & Normalisation](../content/databases/03-relational-theory/verification.json) | Reviewed | 35 | 72 | 55 → 34 | 5 / 29 | 96 → 2 | 192 | 160 | 7 |
-| databases / Query Processing & Optimisation | Pending review | 33 | — | — | — | — | — | — | — |
+| [databases / Query Processing & Optimisation](../content/databases/04-query-processing/verification.json) | Reviewed | 33 | 67 | 33 → 20 | 5 / 15 | 32 → 0 | 193 | 149 | 4 |
 | databases / PostgreSQL | Pending review | 13 | — | — | — | — | — | — | — |
 | [dsa / Complexity Analysis](../content/dsa/01-complexity/verification.json) | Reviewed | 35 | 81 | 79 → 17 | 13 / 4 | 211 → 14 | 150 | 181 | 24 |
 | [dsa / Arrays, Lists, Stacks & Queues](../content/dsa/02-linear/verification.json) | Reviewed | 32 | 67 | 23 → 15 | 2 / 13 | 31 → 0 | 293 | 181 | 8 |
@@ -40,7 +40,7 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | [networks / IP, Addressing & Routing](../content/networks/02-ip-routing/verification.json) | Reviewed | 38 | 84 | 28 → 7 | 2 / 5 | 26 → 0 | 438 | 158 | 16 |
 | [networks / Transport Layer: TCP & UDP in Depth](../content/networks/03-tcp/verification.json) | Reviewed | 43 | 81 | 50 → 17 | 4 / 13 | 39 → 1 | 323 | 195 | 15 |
 | [networks / Application-Layer Protocols](../content/networks/04-application/verification.json) | Reviewed | 42 | 69 | 41 → 8 | 4 / 4 | 24 → 0 | 633 | 180 | 8 |
-| networks / Network Security | Pending review | 36 | — | — | — | — | — | — | — |
+| [networks / Network Security](../content/networks/05-network-security/verification.json) | Reviewed | 36 | 67 | 19 → 12 | 2 / 10 | 21 → 0 | 371 | 171 | 8 |
 | networks / Wireless, Mobile & Modern Networks | Pending review | 37 | — | — | — | — | — | — | — |
 | [react / Components and JSX](../content/react/01-components/verification.json) | Reviewed | 8 | 24 | 0 → 0 | 0 / 0 | 0 → 0 | 70 | 102 | 4 |
 | [react / State and Interactive Forms](../content/react/02-state/verification.json) | Reviewed | 9 | 27 | 0 → 0 | 0 / 0 | 0 → 0 | 44 | 80 | 4 |
@@ -52,7 +52,7 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | security / Systems Security | Pending review | 15 | — | — | — | — | — | — | — |
 | security / Security Engineering in Practice | Pending review | 23 | — | — | — | — | — | — | — |
 | [software-engineering / Design Principles & Clean Code](../content/software-engineering/01-principles/verification.json) | Reviewed | 26 | 69 | 4 → 1 | 1 / 0 | 4 → 0 | 294 | 98 | 5 |
-| software-engineering / Design Patterns | Pending review | 28 | — | — | — | — | — | — | — |
+| [software-engineering / Design Patterns](../content/software-engineering/02-design-patterns/verification.json) | Reviewed | 28 | 66 | 4 → 0 | 0 / 0 | 9 → 0 | 284 | 116 | 9 |
 | software-engineering / Testing | Pending review | 22 | — | — | — | — | — | — | — |
 | software-engineering / Version Control & CI/CD | Pending review | 26 | — | — | — | — | — | — | — |
 | software-engineering / Software Architecture at the Code Level | Pending review | 25 | — | — | — | — | — | — | — |
@@ -182,6 +182,36 @@ None recorded in this editorial review.
 - medium confidence, rel-th-decomposition-algorithms: The extra candidate-key relation in 3NF synthesis comes from later refinements of Bernstein (1976), notably Biskup, Dayal & Bernstein (1979). Bernstein 1976 PDF available only as scanned images; Biskup et al. 1979 abstract elided by the publisher. Bibliographic records (Semantic Scholar, bibtex.github.io) and an R implementation citing Bernstein's synthesis with an optional key relation support the wording, which is hedged.
 - medium confidence, rel-th-enumerate-keys: Lucchesi and Osborn (1978) showed that deciding whether an attribute is prime is NP-complete. Original paper paywalled; confirmed by the abstract of Demetrovics & Thi (Acta Cybernetica 11(3), 1994), which states the result and cites Lucchesi & Osborn, plus Crossref metadata for the 1978 JCSS paper.
 - medium confidence, rel-th-precomputed-results: Oracle fast-refresh materialised views and SQL Server indexed views maintain results incrementally, with query-shape restrictions. Carried from the earlier verified text; not re-fetched in this pass (vendor docs listed in the top-level sources).
+
+
+## databases / Query Processing & Optimisation
+
+41 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- V1 qp-hash-partition-io: 'If many rows share a key ... some partitions are too big and must be partitioned again' implied repartitioning fixes key skew. Rehashing cannot split rows that share one join-key value (PostgreSQL nodeHash.c disables further nbatch growth and lets the batch exceed its budget) -> body now says repartitioning helps only for a badly spread hash, and a single very common key must be joined another way or allowed to exceed memory; analogy limit and takeaway updated.
+- V2 qp-join-variants: 'the hash join (8 batches, 587 ms) beat a merge join that had to sort 3 million rows' was presented as a general result, but in the module's own dataset (order_items(order_id) index present) PostgreSQL 18.6 merge-joined two index scans with no sort and finished faster (768 vs 818 ms) though estimated costlier -> reframed as one illustrative run without that index, with a caveat that an index can remove the sort and change the comparison.
+- V3 qp-external-join-io-q1 option 3 explanation: 'only possible when one input fits in memory for an in-memory hash join' -> 'needs one input to fit in memory, as in an in-memory hash join' (a block nested loop with one input in memory also reads each table once).
+- V4 qp-index-page-selectivity: 'the index halved the time' for 23 ms vs 9.3 ms (less than half) -> 'the bitmap scan took well under half the time', labelled as an illustrative run.
+- H1 (hedge, not an error) illustrative-run labels added to single-run figures: qp-pull-and-blocking LIMIT 5 (85 rows/2 pages are position-dependent; my run read 354 rows/7 pages), qp-hash-join-mechanics 16% spill slowdown (27% in my run), qp-composite-index-order '2,400 descents' (2,401 here), qp-plan-operators 47 ms, qp-sargable-predicates 7.6x, qp-subquery-semantics 4x, qp-covering-partial-indexes 25x.
+- Author corrections re-verified and kept: generic-plan behaviour (qp-generic-plans-counts, qp-anti-patterns-q9) against plancache.c and execution; SQLite USE TEMP B-TREE FOR ORDER BY; extended-statistics estimate about 12,400; hash build-side relabel; EXISTS Semi Join hedge; merge-join causal claim removed; refresh-statistics cross-reference; 'fixture' wording; Content-gap notes removed from 11 question objects.
+
+**Scope gaps and exclusions:**
+
+- Original laptop timing provenance is unavailable. Existing active notes label plan numbers as hypothetical teaching inputs, not measured performance promises.
+- Vendor behaviour is verified at the explicit PostgreSQL18/17, MySQL8.0 and cited documentation versions; illustrative cost and cardinality models intentionally state simplifying assumptions. This short-lesson split retains the original scope rather than adding a complete DBMS implementation.
+- Plan figures are illustrative from one generated dataset; the setup script that reproduces most of them (evidence cf2-dbs-query-author2/sql/setup-pg.sql) is not shown to the reader.
+- Parallel query, JIT tuning and join-order hints (pg_hint_plan) are only mentioned or out of scope; all examples are serial.
+- Some questions cite figures 'in the lesson' that appear in a sibling lesson (qp-reading-explain-q7 cites explain-loops; qp-reading-explain-q11 cites the composite-index lesson); left unchanged as the figures are present in the module.
+- The join-variants cost table (23,290 / 25,539 / 30,572 / 46,172,536) is from the original run; mine gave 23,224 / 26,430 / 33,186 (Memoize) / 98.7 million, same ordering, so 'about 2,000 times' holds only for that run (the text calls the table illustrative).
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, qp-selectivity-dependencies: Welsh analogy proportions: one in twenty people from Wales, one in a hundred speaking Welsh, nearly all Welsh speakers from Wales. Framed as a hypothetical stadium. Census 2021 gives 538,300 Welsh speakers aged 3+ (17.8% of Wales), about 0.8% of the UK population, and Wales is about 4.6% of the UK, so the round figures are UK-like but not exact; the share of Welsh speakers living outside Wales was not fetched.
+- medium confidence, all PostgreSQL lessons: Timings, buffer counts, row counts and plan costs in plan excerpts. Machine-, cache-, sample- and data-dependent. Shapes and exact cost-model figures reproduced; single-run numbers differ and are labelled illustrative (lesson headers plus the run-specific labels I added).
+- medium confidence, qp-selectivity-dependencies / qp-statistics-optimiser-q5: Extended-statistics estimate about 12,400 (12,423 in one run). Sample-dependent: my two ANALYZE runs gave 12,283 and 12,343. The text says the figure varies with the sample.
+- medium confidence, qp-index-maintenance / qp-covering-partial-indexes / qp-index-tuning-q11: Date index size '6.9 MB'. pg_size_pretty shows 6,912 kB (6.75 MiB); the figure is 6,912 kB divided by 1,000. Not material to any answer; left unchanged.
 
 
 ## dsa / Complexity Analysis
@@ -807,6 +837,86 @@ None recorded in this editorial review.
 - medium confidence, app-dns-header-and-labels: q2: the NXDOMAIN clears at about 10:10. Follows RFC 2308 under the prompt's stated assumption; resolvers can impose their own maximum (BIND 3 h, Unbound 1 h by default) and, if configured, a minimum negative TTL that could lengthen it.
 
 
+## networks / Network Security
+
+24 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- nsec-dos-resources: Cloudflare 29.7 Tbps (2025 Q3 report) was no longer Cloudflare's largest reported attack -> record 31.4 Tbps, about 35 seconds, from the 2025 Q4 report (5 Feb 2026), dated "as of October 2026" after checking the H1 2026 and 2026 Q3 reports; link updated.
+- nsec-amplification-budget: "reflected through DNS resolvers with a BAF of about 50" contradicted the table's 28.7 for open resolvers (inherited from baseline) -> "DNS servers with a BAF of about 50 (a round figure near the table's authoritative-server measurement)".
+- nsec-tls-handshake-proof: added RFC 9846 s4.1.3's limit on the DOWNGRD sentinel: it protects only when the TLS 1.2 handshake signs the server random (ephemeral key exchange), not with static RSA.
+- nsec-vpns-q9 workedExample: "some gateways fragment ... others drop it and rely on an ICMP message reaching the sender" -> RFC 4301 s8 behaviour: the outer DF bit is set, cleared or copied per SA; with DF clear the outer packet is fragmented, with DF set the ICMP must reach the gateway so it can lower the SA path MTU and signal the inner senders.
+- nsec-vpns-q9 option 3 explanation: presented ESP padding as always 0-3 bytes for 4-byte alignment -> depends on the cipher's alignment and packet length (0-3 bytes for AES-GCM).
+- nsec-wireless-q9 workedExample: stale "lesson 1's MITM principle" -> "the man-in-the-middle principle from the threat units".
+- nsec-krack-key-state: the fact wireless-q6 needs (KRACK does not recover the passphrase or PMK) existed only inside the collapsed analogy -> visible sentence sourced from krackattacks.com, including that changing the password does not help.
+- nsec-wpa2-derived-keys: the key fact that every WPA2-Personal passphrase holder derives the same PMK (and can derive a captured client's PTK) existed only in the analogy limit -> visible sentence.
+- nsec-alert-base-rates reference formula: "tp / (tp + f(1 − p))" read as a function call -> "tp / (tp + (1 − p)f)".
+- Wrong-sense links: "MAC-table exhaustion" (bare MAC -> medium access control) -> "exhausting the switch's MAC address table" (nsec-packet-identities); takeaway "Segment remote users" (verb -> TCP segment) -> "Put remote users in their own network segment" (nsec-vpn-access-boundaries).
+- Seven reviewer meta-notes removed from learner-visible text: "Content omitted after review" in nsec-amplification-controls, nsec-zero-trust-access, nsec-tls-mutual-authentication, nsec-vpn-access-boundaries and nsec-enterprise-wifi-identities; "Content gap" in nsec-vpn-access-boundaries and nsec-ids-placement-signatures.
+- Nine analogies removed as forced, redundant or repeated (32 -> 23): nsec-amplification-controls, nsec-tls-security-properties, nsec-tls-mutual-authentication, nsec-tunnel-byte-budgets, nsec-ipsec-replay-window, nsec-vxlan-isolation, nsec-vpn-access-boundaries, nsec-wpa2-derived-keys, nsec-krack-key-state (reasons in analogyReview).
+- Glossary nxdomain: NODATA contrast made exact: NODATA is RCODE 0 (NOERROR) with an empty answer (RFC 2308 s2.2; RFC 9499).
+
+**Scope gaps and exclusions:**
+
+- No new substantive course topic was dropped. Existing disclosed gaps remain: universal attack success/provider capacities, complete Target forensics, live endpoint chain guarantees, trusted-root/adoption counts, vendor exploit-frequency comparisons, universal hardware guessing rates, WEP exact deprecation/test-vector attribution, industry dwell/retention and detector precision rankings are not supplied without comparable evidence.
+- No live kernel nftables-policy application was performed: this disposable environment returned netlink Operation not permitted. No permission was lifted and no retry bypass was attempted.
+- WireGuard/IPsec/enterprise Wi-Fi deployments were checked against primary specifications; no live VPN, radio, RADIUS or physical-NIC deployment is claimed.
+- Synthetic packet fixtures check tool semantics and one example signature, not production detection coverage or malicious intent.
+- No formal cryptographic security proof, unbounded implementation correctness or real throughput guarantee is claimed.
+- The independent verifier did not lift nftables netlink restrictions; the actual EPERM result is retained. Only offline packet fixtures, local TLS inspection, verified remote TLS and configuration parsing were executed.
+- No browser render at 390 px in this pass; rendering was checked only through the build, the analogy-format audit and the formula checker.
+- No question tests the downgrade-requirements paragraph in nsec-tls-handshake-proof directly (author gap, confirmed); identity rules did not justify adding a question.
+- DNSSEC is not taught here; it is covered by networks/04-application.
+- Shadowed dead glossary entries left untouched (author gap, confirmed owner): nat-gateway (owned by networks/02-ip-routing) and the alias "Wi-Fi association" (owned by networks/02).
+- Pre-existing cross-module links in unchanged text remain: "padding" opens networks/01 frame-padding (definition generic first, Ethernet example), generic "rate limiting" opens networks/02 icmp-rate-limiting (generic first sentence), "handshake" opens networks/03 handshake.
+- Historical figures not re-verified beyond the fetched sources (PTW frame counts, Target breach report, AWS timeouts) keep their earlier verification.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, nsec-packet-identities: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-authentication-replay: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-dos-resources: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-amplification-budget: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-amplification-controls: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-firewall-rule-order: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-firewall-state-cloud: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-segmentation-boundaries: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-zero-trust-access: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-tls-security-properties: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-tls-handshake-proof: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-tls-resumption-replay: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-tls-certificate-path: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-tls-certificate-operations: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-tls-ech-privacy: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-tls-mutual-authentication: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-tunnel-byte-budgets: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-tunnel-pmtu: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-ipsec-security-associations: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-ipsec-replay-window: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-wireguard-peer-routing: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-vxlan-isolation: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-vpn-access-boundaries: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-wifi-wep-reused-ivs: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-wep-keying-integrity: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-wpa2-derived-keys: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-wpa2-offline-guesses: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-krack-key-state: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-wpa3-sae-transition: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-enterprise-wifi-identities: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-ids-placement-signatures: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-alert-base-rates: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-packet-filter-reading: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-capture-offloads-storage: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-encrypted-traffic-evidence: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-flow-record-investigations: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+- medium confidence, nsec-dos-resources: Cloudflare's record 31.4 Tbps attack (2025 Q4 report, Feb 2026) is still the largest it has reported as of October 2026. Provider-reported measurement; the "still largest" part rests on the H1 2026 and 2026 Q3 reports (fetched 2026-10-30) not reporting a larger one, and a new record can be announced at any time. Dated and attributed in the text.
+- medium confidence, nsec-tls-certificate-operations: Maximum validity 398/200/100/47 days by issue date (15 Mar 2026, 15 Mar 2027, 15 Mar 2029). Verified in BR v2.3.1 (4 Oct 2026) s6.3.2, but CA/Browser Forum ballots can change the schedule; the lesson dates and hedges it.
+- medium confidence, nsec-tls-certificate-operations: Let's Encrypt turned off OCSP in August 2025 and publishes revocation only via CRLs; BR SC063 made OCSP optional from March 2024. Verified in the Let's Encrypt post (6 Aug 2025) and the BR revision table; provider policy can change.
+- medium confidence, nsec-ipsec-security-associations: vpns-q9: after moving behind NAT, full-size packets exceed the link by 8 bytes and stall when ICMP is blocked. NAT-T overhead and RFC 4301 DF handling verified; actual behaviour depends on the gateway's DF-bit policy and where the 1,500-byte limit sits, which the worked example now states.
+- medium confidence, nsec-capture-offloads-storage: Most web traffic is encrypted and encrypted bytes barely compress; teams commonly keep summaries longer than full packets. General practice statements, hedged in the text; no single measurement cited.
+
+
 ## react / Components and JSX
 
 0 question objects changed. Every changed question has a specific independent-review reason in the linked record.
@@ -1042,6 +1152,58 @@ None recorded in this editorial review.
 - medium confidence, sep-solid-responsibility: Clean Architecture (2017) states SRP as 'a module should be responsible to one, and only one, actor'. Book text not fetched; supported by Wikipedia's citation of the book, the publisher's chapter list (Chapter 7, SRP; published 10 September 2017) and Martin's consistent 2014 essay.
 - medium confidence, sep-knowledge-abstractions: The rule of three is attributed to Don Roberts and popularised by Fowler's Refactoring. Book not fetched; Wikipedia and a university lecture quoting the book agree. The text says 'attributed to'.
 - medium confidence, sep-clear-function-calls: sep-clean-code-q7: TypeError message 'along the lines of takes 0 positional arguments but 1 was given'. CPython 3.14.4 adds '(and 2 keyword-only arguments)'; the hedge covers it and the key is unaffected, so the unchanged question was left as is.
+
+
+## software-engineering / Design Patterns
+
+12 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- {"lesson":"pattern-matching-families","before":"When families change often. Adding a new *kind* of part (say, `slider()`) means changing every factory.","after":"When the set of product kinds changes often. Adding a new *kind* of part ... means changing every factory; adding a whole new family is the cheap direction.","reason":"The bullet said changing families is the costly case, contradicting the takeaway and GoF (new kinds of product are hard; new families are easy)."}
+- {"lesson":"pattern-incremental-builders","before":"popularised by Joshua Bloch's *Effective Java*","after":"recommended in the second edition (2008) of Joshua Bloch's *Effective Java*","reason":"Influence claim replaced by a verifiable one: Item 2 'Consider a builder ...' is in the 2008 edition's table of contents; the 2001 edition has no builder item."}
+- {"lesson":"pattern-names-and-catalogue","before":"An opening is a fixed sequence of moves that you can play exactly.","after":"An opening is defined by a fixed sequence of first moves that you can play exactly.","reason":"Analogy limit implied the whole game is fixed; only the opening moves are."}
+- {"lesson":"pattern-names-and-catalogue","before":"*Class* patterns ... *object* patterns ...","after":"*Class patterns* ... *object patterns* ... Most of the 23 are object patterns.","reason":"Made the scope terms reach the new gof-pattern-scope dictionary entry and added the GoF 1.5 note that most patterns have object scope."}
+- {"lesson":"pattern-observer-lifecycles","before":"Where it stops: ... a handler that raises can stop the rest.","after":"... And a forgotten software subscriber costs more than wasted post: the subject's reference keeps the whole object alive in memory.","reason":"The analogy mapped the lapsed listener to wasted post, understating the real cost (memory retention, continued callbacks)."}
+- {"lesson":"pattern-visitors-and-extension","before":"JEP 441, which added it,","after":"JEP 441, which made this a standard feature in Java 21,","reason":"Pattern matching for switch was previewed in earlier JEPs (Java 17-20); JEP 441 finalised it."}
+- {"lesson":"pattern-factory-callables","question":"pattern-creational-q8","before":"A base-class algorithm deferring object creation to a subclass method is the GoF factory method.","after":"... is the factory method shape. Strictly, the GoF intent is letting subclasses decide which class to instantiate ... best described as a factory-method-style hook; of these options, factory method is still the closest fit.","reason":"Overclaimed relative to the lesson's own hedge and the Django docs (get_queryset returns the items to list, usually the same QuerySet class)."}
+- {"lesson":"pattern-incremental-builders","question":"pattern-creational-q5","before":"the telescoping-constructor problem builders were invented to fix; Builders exist in Java largely because ...","after":"the long positional-argument problem that fluent builders are used to avoid; Fluent builders are common in Java largely because ...","reason":"The GoF Builder was not invented for optional parameters; the explanations now match the lesson's two meanings of builder."}
+- {"glossary":"builder-pattern","before":"A GoF creational pattern: a separate object collects settings step by step and creates the finished object in a final build() call ...","after":"A creational pattern. In the GoF original, a director object drives a builder through construction steps so the same steps can produce different representations ... The common modern form collects settings step by step ...","reason":"The definition attributed the fluent many-options builder to the GoF; the GoF intent is one construction process, different representations (RTFReader director example). Not shadowed by any earlier SE module."}
+- {"glossary":"factory-method-pattern","before":"example: Django's ListView calls self.get_queryset(); your subclass decides which records it returns.","after":"example: An Exporter base class calls self.make_writer(); CsvExporter overrides it to return a CsvWriter. Django's ListView.get_queryset() is a looser, factory-method-style hook.","reason":"The only example was the looser Django hook; it now leads with a case that chooses the product class, matching the GoF intent and the lesson. Not shadowed."}
+- {"glossary":"oopsla","before":"was presented at its workshops","after":"was submitted to its workshops","reason":"c2.com copy of the paper says 'Submitted to the OOPSLA-87 workshop'."}
+- {"glossary":"effective-java","before":"Its advice to use a builder when a constructor has many parameters popularised the fluent Builder style in Java. (source: Wikipedia Joshua Bloch)","after":"Its second edition (2008) added the item \"Consider a builder when faced with many constructor parameters\", which helped spread the fluent Builder style in Java. (source: InformIT 2nd edition page)","reason":"Builder advice is not in the 2001 first edition; the source now shows the item."}
+- {"glossary":"jdk-enhancement-proposal","before":"the public document that describes a planned change to the Java platform ... usually referred to ... (source: JEP 441)","after":"the public OpenJDK document that proposes a change to the JDK, explains its motivation and design, and ends up as the record of what changed and why ... often referred to ... (source: JEP 1)","reason":"Definition and source now follow JEP 1, which defines the process; 'usually' softened."}
+- {"glossary":"copy-replace","before":"copy.replace(), added in Python 3.13, works on any class that supports it.","after":"copy.replace(), added in Python 3.13, works on named tuples, dataclasses and other classes that define __replace__().","reason":"Precision from the copy module docs; a plain class raises TypeError (executed)."}
+
+**Scope gaps and exclusions:**
+
+- The original selected catalogue remains: chain of responsibility, interpreter, mediator and memento are introduced, without new standalone implementations.
+- No production Qt/Java UI, Spring deployment, Celery broker, remote payment/cloud effect or production server database was deployed. Exact Python fences, real Django 5.2.18/SQLite, and documented API semantics were checked; illustrative fixtures do not prove omitted business operations.
+- Several naturally small named-pattern units are below 400 words; they keep coherent boundaries, realistic three-minute study targets and focused questions.
+- Library API statements are tied to fetched documentation; PBKDF2’s million iterations is explicitly Django 5.2-specific and CPython integer caching is explicitly an implementation detail.
+- Chain of responsibility, mediator, interpreter and memento are named only (now stated in the catalogue lesson).
+- Five structural lessons keep one question each; not expanded under the identity rules.
+- No 390 px browser render was run by the verifier.
+- Gang of Four co-authors (Helm, Johnson, Vlissides), Norvig and Wadler have no individual dictionary entries; baseline coverage decision, not changed.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, pattern-copying-prototypes: Java cloning preference is conventional design advice, rather than an API rule. Core technical behaviour verified; retained ancillary historical/descriptive judgement has the stated limited provenance.
+- medium confidence, pattern-tangled-responsibilities: Koenig naming attribution and original Blob naming rely on secondary historical accounts; attribution is qualified. Core technical behaviour verified; retained ancillary historical/descriptive judgement has the stated limited provenance.
+- medium confidence, pattern-legacy-and-duplication: Golden-hammer/lava-flow names and rule of three are contextual design heuristics; source dates not primary-verified were removed. Core technical behaviour verified; retained ancillary historical/descriptive judgement has the stated limited provenance.
+- medium confidence, glossary:anti-pattern: anti-pattern Koenig attribution rests on secondary historical accounts; now explicitly commonly attributed.
+- medium confidence, glossary:andrew-koenig: andrew-koenig Original 1995 article unavailable; credited wording makes attribution explicit.
+- medium confidence, glossary:kent-beck: kent-beck Biographical association checked through author/book accounts and secondary biography; unsupported priority/rediscovery details removed.
+- medium confidence, glossary:copy-constructor: copy-constructor Java preference is design advice rather than an API guarantee.
+- medium confidence, glossary:telescoping-constructor: telescoping-constructor Historical motivation and pattern terminology are conventional author advice rather than a Java requirement.
+- medium confidence, glossary:god-object: god-object Core responsibilities/coupling description checked; original AntiPatterns Blob naming depends on secondary book accounts.
+- medium confidence, glossary:lava-flow: lava-flow Core legacy-code risk checked against Foote/Fowler; exact AntiPatterns label definition uses secondary historical catalogue.
+- medium confidence, glossary:golden-hammer: golden-hammer Named heuristic, not a measured universal rule. Exact Maslow/date attribution removed from lesson.
+- medium confidence, glossary:characterization-test: characterization-test Core preserve-existing-behaviour concept checked; terminology also rests on secondary description of Feathers’s practice.
+- medium confidence, glossary:dylan: dylan Language behaviour and Apple manual primary; ancillary early-1990s history is secondary.
+- medium confidence, pattern-incremental-builders: The 2001 first edition of Effective Java has no builder item (so the 2008 edition added it). Second-edition contents fetched from the publisher; first-edition contents seen only in unofficial copies via search (Item 2 there is the singleton item).
+- medium confidence, glossary:effective-java: The book's builder item helped spread the fluent Builder style in Java. Influence claim, hedged ('helped spread'); the item itself is verified.
+- high confidence, pattern-costs-and-scales: GoF section 1.8 warning wording. Matched against the book text in a scanned copy and a quotation site; no publisher-hosted excerpt was found, so the URL cited is the quotation.
 
 
 ## synth / Sound & Digital Audio

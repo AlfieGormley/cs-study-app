@@ -2,14 +2,12 @@
 id: qp-query-round-trips
 title: OR branches and N+1 round trips
 level: advanced
-minutes: 4
+minutes: 3
 sourceLesson: qp-anti-patterns
-summary: OR branches and N+1 round trips with worked examples and explicit assumptions.
+summary: Why an OR across differently indexed columns can force a scan, and why N+1 queries are slow even when each query is fast.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 ## 8. OR across different columns
 
@@ -44,21 +42,23 @@ for c in customers:
 
 That's 1 query plus one per customer: 12,501 queries for York. Each query might take only 0.05 ms to run, but every one pays a network round trip, whose latency depends on the deployment. With a 0.5 ms round trip:
 
-```formula
+```formula reference
 t_total ≈ n_q × (t_exec + t_RTT)
-t_total ≈ 12,501 × (0.05 ms + 0.5 ms)
-t_total ≈ 12,501 × 0.55 ms
-t_total ≈ 6,900 ms ≈ 6.9 s
 where
 t_total: the total time the application spends waiting on the database
-n_q: the number of queries: 1 for the customers plus 1 per customer, here 12,501
-t_exec: the time the database spends running one query, here 0.05 ms
-t_RTT: the network round-trip time (RTT) for one query, here 0.5 ms
-ms: millisecond, a thousandth of a second
-s: second
+n_q: the number of queries: 1 for the customers plus 1 per customer
+t_exec: the time the database spends running one query
+t_RTT: the network round-trip time (RTT) for one query
 ≈: approximately equal to
-In words: twelve and a half thousand tiny queries add up to about 7 seconds, over 6 of them spent waiting on the network.
+In words: every query pays its own execution time plus a network round trip, so many tiny queries add up. Twelve and a half thousand queries at 0.05 ms each plus a 0.5 ms round trip is about 7 seconds, over 6 of them spent waiting on the network.
 ```
+
+> [!analogy] Real-world analogy: one shopping trip per item
+> Imagine driving to the supermarket, buying one tin, driving home, then going back for the next item on the list. Each purchase at the till is quick, but the drives dominate the afternoon. Taking the whole list in one trip costs one drive.
+>
+> **How it maps:** each drive is a network round trip, the quick purchase is the query's execution time, and the shopping list is the set of customer IDs. Going back for every item is the N+1 pattern; one trip with the list is a batched query such as `WHERE customer_id = ANY(...)` or a JOIN.
+>
+> **Where it stops:** a car boot has a fixed size, while a batched query's limits are softer: very large ID lists or result sets still cost memory and transfer time, so huge batches may need splitting.
 
 That's for data one query could return:
 

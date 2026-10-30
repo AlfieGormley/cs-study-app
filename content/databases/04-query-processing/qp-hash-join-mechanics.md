@@ -4,16 +4,14 @@ title: Hash joins and memory batches
 level: intermediate
 minutes: 4
 sourceLesson: qp-join-algorithms
-summary: Hash joins and memory batches with worked examples and explicit assumptions.
+summary: How a hash join builds a table from one input and probes it with the other, how PostgreSQL picks the build side, and what spilling into batches looks like.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 ## Hash join
 
-Prefer a build input with a small projected size, subject to join semantics and available paths. Read all of it into an in-memory hash table keyed on the join column (the **build** phase). Then stream the larger input and look each row up in the table (the **probe** phase).
+Pick the input that is smaller after its filters and column projection, subject to join semantics. Read all of it into an in-memory hash table keyed on the join column (the **build** phase). Then stream the larger input and look each row up in the table (the **probe** phase).
 
 ```python
 def hash_join(build, probe, bkey, pkey):
@@ -29,7 +27,16 @@ def hash_join(build, probe, bkey, pkey):
 
 This miniature joins non-NULL, hashable keys using Python equality. SQL equality does not match NULL keys: a SQL-style inner hash join must omit them rather than treating Python None as an ordinary matching key.
 
-Let n and m be the two input row counts. With well-distributed hashing, building and probing cost expected O(n + m): the work grows in proportion to the total number of input rows (big-O notation ignores constant factors). On top of that comes the cost of emitting the result. Duplicate keys can produce the product of the input row counts in output rows, and those cannot be emitted in time that grows only with the inputs. In Postgres:
+Let n and m be the two input row counts. With well-distributed hashing, building and probing cost expected O(n + m): the work grows in proportion to the total number of input rows (big-O notation ignores constant factors). On top of that comes the cost of emitting the result. Duplicate keys can produce the product of the input row counts in output rows, and those cannot be emitted in time that grows only with the inputs.
+
+> [!analogy] Real-world analogy: a cloakroom
+> At a theatre cloakroom, coats go on numbered hooks as people arrive. After the show, each person hands over a ticket and the attendant walks straight to that hook rather than searching every coat.
+>
+> **How it maps:** hanging coats is the build phase, filling a hash table keyed on the join column. Handing over tickets is the probe phase: each row of the other input goes straight to its bucket. The rack must be complete before anyone collects, which is why the build side is a blocking step.
+>
+> **Where it stops:** one ticket matches one coat, but a join key can match many build rows, and every match is emitted. A cloakroom also never needs to send half its coats to a store room; a hash join that runs out of memory must split its work into batches on disk.
+
+Here is an illustrative join of the pending orders to customers, where the query above the join needs only a few narrow customer columns:
 
 ```
 Hash Join  (actual rows=30066.00)
@@ -43,18 +50,18 @@ Hash Join  (actual rows=30066.00)
 Execution Time: 36.958 ms
 ```
 
+Here customers was the build side. The choice follows the estimates, not the table names: when the same join selected every column of both tables, PostgreSQL 18.6 hashed the 30,000 filtered orders instead, because after filtering they were the smaller input.
+
 `Batches: 1` means the whole hash table fitted in memory. Postgres caps the memory a hash table may use with two settings:
 
-```formula
+```formula reference
 L_hash = M_work × k_hash
-L_hash = 4 MB × 2
-L_hash = 8 MB
 where
-L_hash: the nominal memory budget for one hash operation before batching, rather than a strict cap on all executor memory, in megabytes (MB)
+L_hash: the nominal memory budget for one hash operation before it splits into batches, rather than a strict cap on all executor memory, in megabytes (MB)
 M_work: the `work_mem` setting, the memory budget for one sort or hash operation; default 4 MB
 k_hash: the `hash_mem_multiplier` setting, which lets hash operations use a multiple of `work_mem`; default 2.0 since PostgreSQL 15
 MB: megabyte; in PostgreSQL settings 1 MB = 1,024 kB
-In words: by default a hash table may grow to twice `work_mem`, which is 8 MB.
+In words: by default a hash table may grow to twice `work_mem`, which is 8 MB, before PostgreSQL splits the join into batches.
 ```
 
 The customers hash table used 4,540 kB, about 4.4 MB, so it fits in one batch. The budget applies per operation and can also multiply across concurrent processes and sessions. Actual overhead and skew make it unsafe to treat it as an exact bound on query memory.
@@ -70,7 +77,7 @@ Buffers: temp read=2421 written=2421
 Execution Time: 159.560 ms
 ```
 
-Same answer, but 4 batches, temporary file I/O and about 16% slower (160 ms against 138 ms). The effect of spilling on elapsed execution time depends on workload, storage and cache state.
+Same answer, but 4 batches, temporary file I/O and, in this illustrative run, about 16% slower (160 ms against 138 ms). The effect of spilling on elapsed execution time depends on workload, storage and cache state.
 
 Hash joins need a hash-joinable equality clause and do not promise result order. They are often attractive for large unsorted inputs; width, skew, result size and other paths still matter.
 

@@ -53,7 +53,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "SQL's logical order (FROM, then WHERE, then GROUP BY...) defines what the result *means*. The planner may compute it any way that produces the same result.\n\nFor this inner join, applying the orders-only filter before joining preserves the result. Outer joins and NULL-sensitive conditions need separate reasoning. Doing it first:\n\n```formula\nr = n_all / n_kept\nr = 1,000,000 / 30,066 ≈ 33\nwhere\nr: how many times fewer order rows reach the join when the filter is pushed down into the scan\nn_all: the order rows the join would receive without pushdown: every order, 1,000,000\nn_kept: the order rows that survive the status filter in the scan, 30,066 pending orders\n≈: approximately equal to\nIn words: filtering first means the join handles about 33 times fewer order rows.\n```\n\nThat's about 33 times fewer probe-side input rows; total join work also includes building the hash table and producing matches.",
+    "workedExample": "SQL's logical order (FROM, then WHERE, then GROUP BY...) defines what the result *means*. The planner may compute it any way that produces the same result.\n\nFor this inner join, applying the orders-only filter before joining preserves the result. Outer joins and NULL-sensitive conditions need separate reasoning. Doing it first pays off: the scan keeps 30,066 of the 1,000,000 orders, so about 33 times fewer order rows reach the join.\n\nTotal join work also includes building the hash table and producing matches.",
     "link": {
       "title": "Planner/optimiser — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/planner-optimizer.html"
@@ -91,7 +91,7 @@
       3,
       4
     ],
-    "workedExample": "Work up from the leaves:\n\n1. `Seq Scan customers` returns 100,000 rows into `Hash` (build side).\n2. `Seq Scan orders` filters in place: 30,066 pass, 969,934 removed.\n3. `Hash Join` probes with each pending order: 30,066 joined rows.\n4. `HashAggregate` groups by city: 8 rows.\n5. `Sort` (top-N) sorts those 8 and `Limit` takes 3.\n\nThe Limit is above two blocking operators, so it saves nothing below them. Content gap: no reproducible benchmark record is available for the illustrative plan; no measured page-I/O or runtime claim is made.",
+    "workedExample": "Work up from the leaves:\n\n1. `Seq Scan customers` returns 100,000 rows into `Hash` (build side).\n2. `Seq Scan orders` filters in place: 30,066 pass, 969,934 removed.\n3. `Hash Join` probes with each pending order: 30,066 joined rows.\n4. `HashAggregate` groups by city: 8 rows.\n5. `Sort` (top-N) sorts those 8 and `Limit` takes 3.\n\nThe Limit is above two blocking operators, so it saves nothing below them.",
     "link": {
       "title": "Using EXPLAIN — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/using-explain.html"

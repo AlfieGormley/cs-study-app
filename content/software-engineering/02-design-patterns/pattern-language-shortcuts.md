@@ -21,8 +21,10 @@ In a 1996 talk, Peter Norvig argued that **16 of the 23** patterns have qualitat
 | Singleton | A module-level object |
 | Factory method | Classes are callables |
 | Template method | Often just pass a hook |
+| Builder (many options) | Keyword arguments, `dataclass` |
+| Visitor | `match` statements, `singledispatch` |
 
-Older Java examples often use an interface and explicit classes; Java 8 and later also support lambdas and method references for functional-interface strategies. In Python, `sorted` takes a `key` function, and that *is* the strategy pattern:
+Other languages have moved too. Older Java examples use an interface and explicit classes; Java 8 added lambdas and method references for strategies, and Java 21 finalised pattern matching for `switch`, which, combined with sealed types, can replace many visitors. In Python, `sorted` takes a `key` function, and that *is* the strategy pattern:
 
 ```python
 words = ["pear", "Fig", "apple"]

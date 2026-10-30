@@ -2,7 +2,7 @@
 id: nsec-tunnel-byte-budgets
 title: Tunnels and inner packet budgets
 level: advanced
-minutes: 5
+minutes: 4
 summary: Plain encapsulation provides reachability without proving confidentiality or authenticity.
 sourceLesson: nsec-vpns
 ---
@@ -23,63 +23,28 @@ Every tunnel adds headers. The physical link's MTU (usually 1,500 bytes for Ethe
 +--------+-------+-----+---------------+
 ```
 
-Because the outer packet still has to fit the link, the room left for the inner packet is the link MTU minus every header the tunnel adds:
+Because the outer packet still has to fit the link, every byte the tunnel adds comes out of the room left for the packet inside:
 
-```formula
+```formula essential
 MTU_inner = MTU_link − H_total
-H_total = H_1 + H_2 + … + H_k
 where
 MTU_inner: the largest inner IP packet that fits without fragmentation, in bytes
 MTU_link: the maximum transmission unit (MTU) of the underlying link or path, in bytes; usually 1,500 for Ethernet
-H_total: the total overhead the tunnel adds, in bytes
-H_1: the size of the first added header, in bytes (for example, an outer IPv4 header, 20 bytes)
-H_2: the size of the second added header, in bytes
-H_k: the size of the last added header, in bytes
-k: the number of headers the tunnel adds
-…: and so on, for every header in between
-In words: every byte of tunnel header comes straight out of the space available for the packet inside.
+H_total: the total of every header and trailer the tunnel adds, in bytes
+In words: whatever the tunnel adds is subtracted from the space available for the packet inside.
 ```
 
-Applying it to three common tunnels, with the header sizes used in the code below:
+For three common tunnels on a 1,500-byte link, with the header sizes listed:
 
-```formula
-M_GRE = 1500 − (20 + 4) = 1476 B
-M_WG = 1500 − (40 + 8 + 32) = 1420 B
-M_VX = 1500 − (20 + 8 + 8 + 14)
-M_VX = 1500 − 50 = 1450 B
-where
-M_GRE: inner MTU for GRE over IPv4: a 20-byte outer IPv4 header plus a 4-byte basic GRE header
-M_WG: inner MTU for WireGuard over IPv6: a 40-byte outer IPv6 header, an 8-byte UDP header, and 32 bytes of WireGuard data overhead (a 16-byte header plus a 16-byte authentication tag)
-M_VX: inner MTU for VXLAN over IPv4: outer IPv4 (20), UDP (8), the VXLAN header (8) and the inner Ethernet header it carries (14)
-B: bytes
-In words: on a 1,500-byte link, these tunnels leave 1,476, 1,420 and 1,450 bytes for the inner IP packet.
-```
+| Tunnel | Added bytes | Inner budget |
+|---|---|---|
+| GRE over IPv4 | IPv4 20 + GRE 4 = 24 | 1,476 |
+| WireGuard over IPv6 | IPv6 40 + UDP 8 + WireGuard 32 = 80 | 1,420 |
+| VXLAN over IPv4 | IPv4 20 + UDP 8 + VXLAN 8 + inner Ethernet 14 = 50 | 1,450 |
 
-The same arithmetic as code, with a header-size table you can extend:
+WireGuard's 32 bytes are a 16-byte data header and a 16-byte authentication tag. VXLAN counts the inner Ethernet header because it carries whole Ethernet frames. These are inner IP budgets for these exact header assumptions (basic GRE, no options, untagged VXLAN), not universal interface defaults. Options, VLAN tags, extra tunnels and a smaller path MTU all shrink the budget; WireGuard's padding is bounded so it does not exceed the selected MTU.
 
-```python
-HDR = {"ipv4": 20, "ipv6": 40, "udp": 8,
-       "wg": 32, "vxlan": 8, "eth": 14,
-       "gre": 4}
-
-def inner_mtu(link_mtu, *layers):
-    if type(link_mtu) is not int:
-        raise TypeError("integer MTU")
-    # Count only the named added layers.
-    used = sum(HDR[x] for x in layers)
-    if link_mtu <= used:
-        raise ValueError("no capacity")
-    # Space left for the inner packet.
-    return link_mtu - used
-
-# GRE, WireGuard and VXLAN byte budgets.
-print(inner_mtu(1500, "ipv4", "gre"))
-print(inner_mtu(1500, "ipv6", "udp", "wg"))
-print(inner_mtu(1500, "ipv4", "udp",
-                "vxlan", "eth"))
-```
-
-This prints `1476`, `1420` and `1450`: inner IP size budgets for these exact header assumptions: basic GRE over IPv4, WireGuard over IPv6, and untagged VXLAN over IPv4. They are not universal interface defaults. Options, VLAN tags, extra tunnels and path MTU change the budget; WireGuard padding is bounded so it does not exceed the selected MTU.
+What goes wrong when the budget is ignored? Hosts inside keep sending 1,500-byte packets, which no longer fit once wrapped. Depending on the tunnel and the Don't Fragment setting, they are fragmented (slower and fragile) or dropped with an error that must reach the sender. The next unit diagnoses that failure.
 
 ## GRE: a plain tunnel
 
@@ -87,13 +52,11 @@ This prints `1476`, `1420` and `1450`: inner IP size budgets for these exact hea
 
 ## Key takeaways
 - Plain encapsulation provides reachability without proving confidentiality or authenticity.
-- Subtract every added byte from the underlay IP MTU to obtain the inner budget.
+- Every byte a tunnel adds comes out of the inner packet budget.
 - Header models and padding rules matter more than a memorised tunnel default.
 
 ## Further reading
-- [RFC 4301: Security Architecture for the Internet Protocol](https://www.rfc-editor.org/rfc/rfc4301)
-- [RFC 4303: IP Encapsulating Security Payload (ESP)](https://www.rfc-editor.org/rfc/rfc4303)
-- [WireGuard: Next Generation Kernel Network Tunnel (whitepaper)](https://www.wireguard.com/papers/wireguard.pdf)
+- [RFC 4459: MTU and Fragmentation Issues with In-the-Network Tunneling](https://www.rfc-editor.org/rfc/rfc4459)
+- [RFC 2784: Generic Routing Encapsulation (GRE)](https://www.rfc-editor.org/rfc/rfc2784)
 - [WireGuard: protocol and cryptography](https://www.wireguard.com/protocol/)
 - [RFC 7348: Virtual eXtensible Local Area Network (VXLAN)](https://www.rfc-editor.org/rfc/rfc7348)
-- [RFC 4459: MTU and Fragmentation Issues with In-the-Network Tunneling](https://www.rfc-editor.org/rfc/rfc4459)

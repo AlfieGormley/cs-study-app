@@ -2,58 +2,52 @@
 id: qp-selectivity-dependencies
 title: Ranges and dependent filters
 level: intermediate
-minutes: 5
+minutes: 4
 sourceLesson: qp-statistics-optimiser
-summary: Ranges and dependent filters with worked examples and explicit assumptions.
+summary: How the planner estimates ranges from a histogram, why it multiplies selectivities for combined filters, and how extended statistics fix correlated columns.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 ## Range selectivity and dependencies
 
-Selectivity is the fraction of input rows retained by a condition; cardinality is the number retained. The numerical statistics below are illustrative, rather than measurements of the small executable fixtures.
+Selectivity is the fraction of input rows a condition keeps; cardinality is the number kept.
 
 ### A range, from the histogram
 
-`WHERE ordered_on >= '2026-01-01'`: the histogram has 100 buckets, each holding 1% of the non-MCV rows. The date leaves one third of the bucket above it; that bucket runs from 2025-12-18 to 2026-01-08, and 8 more buckets lie above it. Count the buckets above the constant, including the part of the bucket it falls in:
+`WHERE ordered_on >= '2026-01-01'`: the column's histogram splits the non-MCV rows into 100 buckets that each hold the same number of rows. The planner counts the buckets lying above the constant, plus the part of the bucket the constant falls in, assuming values are spread evenly within that bucket:
 
-```formula
+```formula reference
 s_hist ≈ (b_full + b_part) / b_total
-s_hist ≈ (8 + 1/3) / 100
-s_hist ≈ 0.083 (8.3%)
 where
-s_hist: the fraction of the histogram's rows that satisfy the condition
-b_full: the number of complete buckets lying entirely above the constant, here 8
-b_part: the fraction of the constant's own bucket that lies above it, here 1/3, found by assuming values are spread evenly across the bucket (linear interpolation)
-b_total: the number of buckets in the histogram, here 100
+s_hist: the fraction of the histogram's rows that satisfy the range condition
+b_full: the number of complete buckets lying entirely on the matching side of the constant
+b_part: the fraction of the constant's own bucket on the matching side, found by assuming values are spread evenly across the bucket (linear interpolation)
+b_total: the number of buckets in the histogram, usually 100 at the default statistics target
 ≈: approximately equal to
-In words: about 8⅓ of the 100 equal-sized buckets lie above 1 January, so about 8.3% of the rows do.
+In words: count whole buckets on the matching side and add the matching share of the bucket the constant falls in. Here 8 full buckets and a third of another lie above 1 January, so about 8.3% of the rows match.
 ```
 
-The planner applies that fraction to the non-MCV rows and adds the frequencies of any MCVs that satisfy the condition, which is why its final estimate, 84,278 rows, is slightly above 8.3%. The actual count is 86,346.
+The planner applies that fraction to the non-MCV rows and adds the frequencies of any MCVs that satisfy the condition, giving 84,278 rows. The actual count is 86,346.
+
+Because each bucket holds the same number of rows, buckets are narrow where values are dense and wide where they are sparse. That is how an equal-count histogram follows a skewed distribution without storing every value.
 
 ### Combining conditions: the independence assumption
 
-For conditions A and B, PostgreSQL normally multiplies their selectivities when it has no applicable dependency information, assuming the columns are **independent**: knowing a row's value in one column tells you nothing about the other. For `status = 'pending' AND ordered_on >= '2026-01-01'`:
+For conditions A and B, PostgreSQL normally multiplies their selectivities when it has no statistics about how the columns relate. It assumes the columns are **independent**: knowing a row's value in one column tells you nothing about the other.
 
-```formula
+```formula essential
 s_AND = s_A × s_B
-n_est = s_A × s_B × n_table
-n_est = 0.030767 × 0.084278 × 1,000,000
-n_est ≈ 2,593
 where
-s_AND: the selectivity of the combined condition A AND B
-s_A: the selectivity of the first condition, here 0.030767 for status = 'pending'
-s_B: the selectivity of the second condition, here 0.084278 for the date range (84,278 of 1,000,000 rows)
-n_est: the estimated number of rows satisfying both conditions
-n_table: the number of rows in the table, here 1,000,000
-≈: approximately equal to
-In words: if 3% of orders are pending and 8.4% are recent, and the two are unrelated, about 3% of the recent orders are pending: about 2,600 rows.
+s_AND: the estimated selectivity of the combined condition A AND B
+s_A: the selectivity of condition A alone
+s_B: the selectivity of condition B alone
+In words: if the columns are unrelated, the share of rows passing both filters is the share passing one, times the share passing the other.
 ```
 
-The illustrative calculation assumes status and date are independent; that assumption needs checking on real data. But consider `customers`, where every Glasgow customer is in Scotland:
+For `status = 'pending' AND ordered_on >= '2026-01-01'`, about 3% of orders are pending and 8.4% are recent, so the planner expects about 3% of the recent orders to be pending: about 2,600 rows. That is reasonable here, because nothing links status to date in this dataset.
+
+Now consider `customers`, where every Glasgow customer is in Scotland:
 
 ```sql
 -- Both filters describe the same group.
@@ -62,22 +56,16 @@ WHERE city = 'Glasgow'
   AND country = 'Scotland';
 ```
 
-The eight cities are equally common; Glasgow and Scotland each cover 1/8 of customers in this fixture, so the planner multiplies:
+Each condition alone keeps one eighth of customers. Multiplying gives one sixty-fourth, about 1,560 rows. The actual count is 12,500, one eighth, because knowing the city already tells you the country. The estimate is 8 times too low.
 
-```formula
-n_est = s_city × s_country × n_table
-n_est = 1/8 × 1/8 × 100,000
-n_est ≈ 1,560
-where
-n_est: the planner's estimated number of matching customers
-s_city: the selectivity of city = 'Glasgow', 1/8
-s_country: the selectivity of country = 'Scotland', 1/8
-n_table: the number of customers, 100,000
-≈: approximately equal to (the exact product is 1,562.5)
-In words: treating city and country as unrelated, the planner expects one eighth of one eighth of the customers.
-```
+The error can go the other way. If `orders` had a `shipped_on` date that pending orders never have, `status = 'pending' AND shipped_on IS NOT NULL` would still be estimated as the product of the two shares, although the true answer is zero. Errors like these feed straight into join and access-path choices for multi-column filters.
 
-The actual count is 12,500, one eighth of the customers. The planner is out by a factor of 8 because knowing the city already tells you the country. Errors like this can affect plan choices for multi-column filters.
+> [!analogy] Real-world analogy: guessing who in a crowd is Welsh and speaks Welsh
+> If one in twenty people in a stadium is from Wales and one in a hundred speaks Welsh, multiplying suggests one in two thousand is both. But nearly everyone who speaks Welsh is from Wales, so the true figure is close to one in a hundred: the guess is twenty times too low.
+>
+> **How it maps:** the two shares are single-column selectivities, multiplying them is the independence assumption, and the strong link between the two traits is a correlation between columns that per-column statistics cannot see.
+>
+> **Where it stops:** a person can use general knowledge to spot the link; the planner sees only the statistics it has collected, so it cannot know about the link until you create extended statistics on those columns.
 
 ### Extended statistics
 
@@ -91,7 +79,7 @@ CREATE STATISTICS cust_city_country
 ANALYZE customers;
 ```
 
-ANALYZE then records that `city` determines `country` with degree 1.0, and the estimate becomes about 12,700. Other kinds are `ndistinct` (for `GROUP BY a, b` estimates) and `mcv` (common *combinations* of values).
+ANALYZE then records that `city` determines `country` with degree 1.0, and the estimate becomes about 12,400 (12,423 in a PostgreSQL 18.6 run; the exact figure varies with the sample). Other kinds are `ndistinct` (for `GROUP BY a, b` estimates) and `mcv` (common *combinations* of values).
 
 ## Key takeaways
 - Histograms describe non-MCV rows and interpolate within buckets.

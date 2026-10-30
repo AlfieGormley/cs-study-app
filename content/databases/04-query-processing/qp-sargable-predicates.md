@@ -4,12 +4,10 @@ title: Functions, casts and search predicates
 level: advanced
 minutes: 4
 sourceLesson: qp-anti-patterns
-summary: Functions, casts and search predicates with worked examples and explicit assumptions.
+summary: Why wrapping an indexed column in a function or cast stops the index being searched, and how to rewrite the condition so it can be.
 ---
 
-These examples use PostgreSQL 18. SQL Fundamentals supplies the shop relations: `customers(id, name, email, city, country)`, `orders(id, customer_id, status, ordered_on, total)`, `products(id, price)` and `order_items(order_id)`. IDs join orders to customers and items to orders. Dates use `date`, IDs use `integer`, and totals use `numeric`. Each query fragment uses these names; ellipses and standalone WHERE clauses need the surrounding SELECT shown by their context.
-
-All historical plan fragments and timings in this unit are **illustrative inputs**, not reproduced benchmarks or promises. Their row/page counts describe a hypothetical dataset; actual plans vary with statistics, indexes, settings, cache state and PostgreSQL version. Assume serial execution unless a parallel worker process is shown.
+Examples use PostgreSQL 18 and the module's scaled-up shop tables (1,000,000 orders, 100,000 customers; the first lesson lists them). Plans are abbreviated and illustrative: real plans and timings depend on the data, statistics, settings, cache state and version. Assume serial execution.
 
 Most slow queries aren't exotic. They are a handful of recurring shapes that stop the planner using an index, make it misestimate, or make it do work the application didn't need. Each section below shows the anti-pattern, an illustrative PostgreSQL 18-style plan, and the fix.
 
@@ -47,7 +45,14 @@ Index Only Scan using orders_date_idx
 Execution Time: 8.652 ms
 ```
 
-That's 7.6 times faster, with an accurate estimate. A condition the database can answer with an index is called **sargable** (from "search argument"). The same trap catches `date(created_at) = ...`, `lower(email) = ...`, `col + 1 = 10` and `coalesce(col, 0) = 5`. Either rewrite it so the bare column is compared, or create an expression index that matches it.
+In this illustrative run that is 7.6 times faster, with an accurate estimate. A condition the database can answer with an index is called **sargable** (from "search argument"). The same trap catches `date(created_at) = ...`, `lower(email) = ...`, `col + 1 = 10` and `coalesce(col, 0) = 5`. Either rewrite it so the bare column is compared, or create an expression index that matches it.
+
+> [!analogy] Real-world analogy: a dictionary sorted by spelling
+> A printed dictionary is sorted by spelling, so you can find "garden" in seconds. Ask it for every word whose *third* letter is "r", or every word ending in "-ing", and the alphabetical order no longer helps: you would read every page.
+>
+> **How it maps:** the dictionary is a B-tree index on a column, sorted by the column's own value. A condition on the bare column is a normal look-up. Wrapping the column in a function, such as `extract(year ...)` or a cast, asks about a transformed value the index is not sorted by, so the database falls back to checking every row.
+>
+> **Where it stops:** you could build a second dictionary sorted by the transformed word, and that is exactly what an expression index is; a real dictionary also has no planner deciding whether reading it cover to cover would be cheaper.
 
 ## 2. Type mismatches
 

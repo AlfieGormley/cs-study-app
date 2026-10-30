@@ -25,33 +25,36 @@ Its flaws compound:
 
 ### IV reuse
 
- Stream ciphers must never reuse a keystream. A 24-bit IV has only about 16.8 million possible values, and repeats come much sooner than that. If each frame picks an IV independently and uniformly at random (repeats allowed), the **birthday approximation** says when the chance that *some* two frames share an IV reaches 50 %:
+Stream ciphers must never reuse a keystream. WEP's keystream depends only on the shared key and the 24-bit IV, so two frames with the same IV under the same key use the same keystream. A 24-bit IV has only about 16.8 million possible values, and if IVs are chosen at random, a repeat arrives much sooner than that, because every pair of frames is a chance to collide. This is the **birthday problem**: in a room of just 23 people, two probably share a birthday, although there are 365 possible days.
 
-```formula
-N = 2^24 = 16777216
-n_50 ≈ √(2 ln(2) N)
-n_50 ≈ 1.18√(N) = 1.18 × 4096
-n_50 ≈ 4800
+```formula reference
+n_50 ≈ 1.18√(N)
 where
-N: the number of possible IVs: 24 copies of 2 multiplied together, because the IV is 24 bits long
-n_50: the number of frames after which the chance of at least one repeated IV reaches 50 %
+n_50: the number of randomly chosen IVs after which the chance that at least two are equal reaches 50 %
+N: the number of possible IVs; 2^24 = 16,777,216 for WEP's 24-bit IV
 √: square root
-ln: the natural logarithm (logarithm to base e ≈ 2.718); ln(2) ≈ 0.693
-≈: approximately equal to (rounded)
-In words: because any pair of frames can collide, a repeat becomes an even bet after only about the square root of the number of IVs, roughly 4,800 frames, not after 16.8 million.
+≈: approximately equal to
+1.18: the constant √(2 ln 2) from the birthday approximation; ln is the natural logarithm
+In words: with random choices, a repeat becomes an even bet after only about the square root of the number of possible values, which for WEP is about 4,800 frames rather than 16.8 million.
 ```
 
-   This is why it is called the birthday problem: in a room of just 23 people, two probably share a birthday. Counter-based IV choices have different repeat behaviour until wraparound. For equal IVs under the same WEP key, XORing the encrypted payloads cancels their keystream and reveals the XOR of the plaintexts; recovering either plaintext needs further information.
+So with independent, uniformly random IVs a repeated IV is an even bet after about 4,800 frames: a few seconds on a busy network. Counter-based IV choices behave differently until the counter wraps round, but a 24-bit counter still wraps after 16.8 million frames, and every device using the same shared key draws from the same small space.
+
+For equal IVs under the same WEP key, XORing the two encrypted payloads cancels the keystream and reveals the XOR of the two plaintexts; recovering either plaintext needs further information, such as predictable headers.
+
+> [!analogy] Real-world analogy: a one-time pad used twice
+> Two spies share a pad of random pages and are meant to use each page once. If one page is used for two messages, an interceptor who lines the two ciphertexts up can cancel the page out and is left with the two messages mixed together, which predictable phrases ("Dear Sir") can then untangle.
+>
+> **How it maps:** The page is the RC4 keystream chosen by the key and IV, and using a page twice is IV reuse. Lining up and cancelling is XORing the two ciphertexts. WEP's 24-bit IV is like a pad with too few pages: with random page choices, a repeat comes after a few thousand messages.
+>
+> **Where it stops:** A real one-time pad is perfectly secure if never reused; RC4 in WEP had further weaknesses (the next unit) that allowed recovery of the key itself, not just individual messages.
 
 ## Key takeaways
 - Radio reception extends the observation boundary beyond a cable.
 - WEP’s small IV space can repeat keystreams under the same key.
-- The birthday estimate assumes independent uniform random IV choices.
+- With random IVs, a repeat is likely after only a few thousand frames (the birthday problem).
 
 ## Further reading
-- [Key Reinstallation Attacks (KRACK) — Mathy Vanhoef](https://www.krackattacks.com/)
-- [Dragonblood: analysing WPA3's Dragonfly handshake](https://wpa3.mathyvanhoef.com/)
-- [Wi-Fi Protected Access — Wikipedia](https://en.wikipedia.org/wiki/Wi-Fi_Protected_Access)
 - [Wired Equivalent Privacy — Wikipedia](https://en.wikipedia.org/wiki/Wired_Equivalent_Privacy)
-- [IEEE 802.1X — Wikipedia](https://en.wikipedia.org/wiki/IEEE_802.1X)
-- [RFC 7664: Dragonfly Key Exchange](https://www.rfc-editor.org/rfc/rfc7664)
+- [Birthday problem — Wikipedia](https://en.wikipedia.org/wiki/Birthday_problem)
+- [Wi-Fi Protected Access — Wikipedia](https://en.wikipedia.org/wiki/Wi-Fi_Protected_Access)

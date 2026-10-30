@@ -74,6 +74,8 @@ print(Show().visit(e), "=",
 
 Since Python 3.10, structural pattern matching gives another option: one function with `match node:` and a `case Add(l, r):` arm per type (with `__match_args__` set on the classes). `functools.singledispatch` dispatches a function on its first argument's type.
 
+Java has moved the same way. Since Java 21, a `switch` can match on the type of a value from a sealed interface, and the compiler checks that every permitted type is handled. JEP 441, which made this a standard feature in Java 21, describes the visitor as the cumbersome alternative. A classic visitor still earns its keep when many independent passes must each cover a large, stable node family, as in a compiler.
+
 ### The expression problem
 
 Visitor sits on one side of a famous trade-off, named the **expression problem** by Philip Wadler in 1998:

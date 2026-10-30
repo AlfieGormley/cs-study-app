@@ -3,27 +3,27 @@
     "id": "tcp-performance-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "In an ideal timing model, a browser makes a new TCP + full TLS 1.3 connection at RTT 50 ms, without Fast Open, early data, handshake retries, loss or DNS delay. A 10,000-byte response fits the available initial window. Ignore serialization and processing. When does the complete response arrive?",
+    "prompt": "A mobile app's small API calls (about 10 KB each) take about 150 ms on a 50 ms RTT path. A trace shows every call opens a new TCP connection and a full TLS 1.3 handshake, and each response fits within the initial congestion window. Which change would cut the latency the most?",
     "options": [
       {
-        "text": "After about 50 ms",
-        "explanation": "One RTT is only enough for the TCP handshake. TLS and the request itself each need another round trip."
+        "text": "Upgrade the server's link from 1 Gbit/s to 10 Gbit/s",
+        "explanation": "A 10 KB response takes well under a millisecond to serialise at either speed. The time is spent in round trips, not in transmission."
       },
       {
-        "text": "After about 150 ms",
-        "explanation": "Correct. 1 RTT for TCP, 1 RTT for TLS 1.3, then 1 RTT for the request and the response, which fits in one window."
+        "text": "Reuse one open connection (HTTP keep-alive or connection pooling) for successive calls",
+        "explanation": "Correct. With a usable open connection, a call needs only the request/response round trip: about 50 ms instead of about 150 ms."
       },
       {
-        "text": "After about 250 ms",
-        "explanation": "The stated model requires three round trips: TCP setup, TLS setup, and request/response."
+        "text": "Increase the client's receive window",
+        "explanation": "The response already fits in the first flight; a bigger window cannot remove the two handshake round trips."
       },
       {
-        "text": "It depends mainly on the link bandwidth",
-        "explanation": "Serialization is explicitly ignored in this model. On a slow link it would matter: 10,000 bytes alone take 8 ms at 10 Mbit/s."
+        "text": "Switch the server's congestion control from CUBIC to BBR",
+        "explanation": "With the response inside the initial window, congestion-control growth does not limit this exchange. The handshakes do."
       }
     ],
     "answer": 1,
-    "workedExample": "1. TCP handshake: SYN, SYN+ACK. **1 RTT** (the ACK can carry the ClientHello).\n2. TLS 1.3: ClientHello, ServerHello...Finished. **1 RTT**.\n3. HTTP request and response: 10,000 bytes require seven segments, within the 10-segment initial window. **1 RTT**.\n\n```formula\nN = ⌈10,000 B / 1,460 B⌉ = ⌈6.8⌉ = 7\nT = 3 × RTT = 3 × 50 ms = 150 ms\nwhere\nN: segments needed for the response\nT: time until the whole response has arrived\nRTT: round-trip time, 50 ms\n⌈ ⌉: ceiling: round up to a whole number\nB: bytes\nms: milliseconds\nIn words: 7 segments fit in the 10-segment initial window, so three round trips of 50 ms finish the job.\n```\n\nUnder the stated assumptions this is 150 ms. An already usable connection with sufficient send window reduces the model to one request/response RTT, or 50 ms.",
+    "workedExample": "1. Count the round trips for a fresh call: one for the TCP handshake, one for TLS 1.3, and one for the request and its response, since 10 KB fits in a 10-segment initial window. Three round trips of 50 ms is about 150 ms, which matches the measurement.\n2. Bandwidth barely matters: 10 KB is tiny compared with what the link moves in a round trip.\n3. A bigger receive window or a different congestion-control algorithm does not remove any round trips for a response that already fits in the first flight.\n4. Reusing an open connection removes both handshake round trips, leaving about 50 ms per call. TLS resumption with early data, TCP Fast Open or QUIC can cut setup on new connections, with their own conditions.",
     "link": {
       "title": "RFC 9000: QUIC",
       "url": "https://www.rfc-editor.org/rfc/rfc9000"

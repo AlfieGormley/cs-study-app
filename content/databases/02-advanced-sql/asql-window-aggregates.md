@@ -11,6 +11,13 @@ sourceLesson: asql-window-functions
 
 A window function computes a value for each row from a set of related rows (its *window*), and leaves every row in place.
 
+> [!analogy] Real-world analogy: a mark sheet with the class average
+> A school can report results two ways. A summary sheet lists one line per class with its average mark. A mark sheet lists every pupil, with their class's average printed on the same line as their own mark.
+>
+> **How it maps:** The summary sheet is `GROUP BY`: one row per group, the individual pupils gone. The mark sheet is a window function: `AVG(mark) OVER (PARTITION BY class)` keeps every pupil's row and adds the group figure beside it. The class is the partition.
+>
+> **Where it stops:** A window can do more than repeat one group figure: with ORDER BY and a frame, each row can see a different set of rows (running totals, moving averages), which no printed class average does.
+
 ```
 GROUP BY customer      window over customer
 +------+-------+       +-----+-------+-----+
@@ -61,38 +68,9 @@ FROM orders;
 | 104 | 200 | 30.8 |
 | ... | ... | ... |
 
-Each row gets its share of the 650 total. The query computes this percentage for every row:
+Each row gets its share of the 650 total: order 101's 120 is 18.46…% of 650, which `ROUND(..., 1)` shows as 18.5.
 
-```formula
-pct = round(100 × t / T, 1)
-pct = round(100 × 120 / 650, 1)
-pct = round(18.46…, 1) = 18.5 %
-where
-pct: the row's share of all revenue, as a percentage (%)
-t: this row's order total, here 120 (order 101); the lesson's totals are plain amounts with no currency given
-T: the sum of every order total in the window, here 650; `SUM(total) OVER ()` computes it
-round(x, 1): round x to 1 decimal place, as SQL's ROUND(x, 1) does
-100: converts a fraction (0.1846) into a percentage (18.46)
-…: the digits carry on (18.4615…)
-%: per cent, parts per hundred
-In words: divide the row's total by the grand total, multiply by 100 to get a percentage, then round to one decimal place.
-```
-
-Note the `100.0` in the SQL. With `total` stored as SQLite integers or PostgreSQL integer (not bigint/numeric), `100 * total / SUM(...)` does **integer division**, which throws away the fraction:
-
-```formula
-pct = trunc(100 × 45 / 650)
-pct = trunc(6.92…) = 6
-where
-pct: the percentage SQL returns when every operand is an integer
-45: order 102's total
-650: the grand total of all orders
-trunc(x): truncation: drop everything after the decimal point, rounding towards zero
-…: the digits carry on (6.923…)
-In words: when every value is a whole number, SQL keeps only the whole-number part of the division, so 6.92 becomes 6.
-```
-
-Writing `100.0` makes one operand a decimal, so the division keeps its fraction and 45 gives 6.9.
+Note the `100.0` in the SQL. With `total` stored as SQLite integers or PostgreSQL integer (not numeric), `100 * total / SUM(...)` does **integer division**, which throws away the fraction. Order 102's 45 then shows 6 rather than 6.9: 4500 / 650 is 6.92…, and integer division keeps only the whole-number part. Writing `100.0` makes one operand a decimal, so the division keeps its fraction.
 
 Comparing a row with its group:
 
@@ -104,19 +82,7 @@ SELECT customer_id AS cust, id,
 FROM orders;
 ```
 
-Each row's `diff` is its own total minus the average of its partition:
-
-```formula
-diff = t − avg_c
-avg_c = (120 + 60 + 60) / 3 = 80
-diff = 120 − 80 = +40
-where
-diff: how far this order is above (+) or below (−) its customer's average order
-t: this order's total, here 120 (Ana's order 101)
-avg_c: the mean (average) total of all orders by the same customer c: their sum divided by how many there are
-c: the customer the row belongs to, here Ana; `PARTITION BY customer_id` decides which rows share c
-In words: subtract the customer's average order from this order; a positive answer means a bigger-than-usual order for that customer.
-```
+Each row's `diff` is its own total minus the average of its customer's orders. Ana's orders average 80, so her 120 shows +40: a bigger-than-usual order for her.
 
 So Ana's three orders (120, 60, 60) show +40, −20 and −20. For exact non-NULL arithmetic these differences sum to zero; floating-point calculations can have rounding error.
 

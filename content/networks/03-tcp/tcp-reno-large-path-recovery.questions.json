@@ -3,27 +3,27 @@
     "id": "tcp-congestion-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "In an ideal Reno model, a full-flight flow sends 10 Gbit/s of payload at a fixed 100 ms RTT with 1,500 payload bytes per segment (ignore headers). Its window is about 83,333 segments. After halving that window for a loss event, assume growth of exactly one segment per RTT, no further loss and no other limits. Roughly how long to regain the original window?",
+    "prompt": "A single Reno flow runs over a 10 Gbit/s path with a 100 ms RTT. Filling the path needs about 83,000 full-sized segments in flight. The flow sees one isolated loss (signalled by three duplicate ACKs) roughly every ten minutes, with nothing else limiting it. Why does its average throughput stay far below 10 Gbit/s?",
     "options": [
       {
-        "text": "About 1.7 s",
-        "explanation": "That's how long slow start would take to grow from 1 to at least 83,333 segments (17 ideal doubling rounds). But after duplicate ACKs Reno is in congestion avoidance, growing linearly."
+        "text": "Each loss triggers a retransmission timeout, and slow start from one segment wastes the bandwidth",
+        "explanation": "Isolated losses with duplicate ACKs use fast retransmit and fast recovery, not a timeout. The problem is the slow regrowth afterwards."
       },
       {
-        "text": "About 8 s",
-        "explanation": "Adding roughly 41,667 segments at one per 0.1-second RTT takes about 4,167 seconds, far longer than 8 seconds."
+        "text": "Each loss halves the window, and regaining about 41,000 segments at one segment per 100 ms round trip takes over an hour, so the next loss arrives long before the window recovers",
+        "explanation": "Correct. Additive increase does not scale with the window. On a long fat pipe, even rare losses keep a Reno flow far below capacity."
       },
       {
-        "text": "About 70 minutes",
-        "explanation": "Correct. The window halves to ~41,667 segments, then grows by one segment per 100 ms RTT: 41,667 × 0.1 s ≈ 4,167 s ≈ 69 minutes."
+        "text": "10 Gbit/s links cannot carry TCP at full rate",
+        "explanation": "TCP can fill such links with suitable windows and congestion control; the issue here is Reno's recovery speed."
       },
       {
-        "text": "About 100 ms, one RTT",
-        "explanation": "Fast recovery avoids a timeout, but it doesn't restore the old window; it halves it."
+        "text": "The receive window must be the limit, because 83,000 segments is too many to buffer",
+        "explanation": "Nothing else limits the flow by assumption. The scenario isolates congestion-control behaviour."
       }
     ],
-    "answer": 2,
-    "workedExample": "1. Window at 10 Gbit/s, then the time to regain half of it at one segment per RTT:\n\n```formula\nW = R RTT / (S × 8)\nW = 10^10 × 0.1 / (1,500 × 8)\nW ≈ 83,333\nT = (W / 2) × RTT\nT = 41,667 × 0.1 s ≈ 4,167 s\nT ≈ 69 min\nwhere\nW: the full window, in segments\nR: the rate, 10 Gbit/s = 10^10 bits per second\nRTT: round-trip time, 0.1 s\nS: payload bytes per segment, 1,500\nT: the time to grow from W / 2 back to W\ns: seconds\nmin: minutes\n≈: approximately equal to\nIn words: about 41,667 round trips of 0.1 s each is over an hour.\n```\n\n2. After duplicate ACKs: cwnd ≈ 41,667.\n3. Additive increase: +1 segment per RTT, so it needs ~41,667 RTTs, about 69 minutes.\n\n4. This is an ideal recovery calculation. RFC 3649 discusses the related difficulty of maintaining very large average Reno windows; its average-window loss-rate calculation is a distinct model.",
+    "answer": 1,
+    "workedExample": "1. After three duplicate ACKs, Reno halves its window: from about 83,000 segments to about 41,500.\n2. In congestion avoidance it adds one segment per round trip, so regaining 41,500 segments takes 41,500 round trips of 0.1 s each: about 70 minutes.\n3. With a loss roughly every ten minutes, only about 6,000 round trips pass between losses, so each cycle wins back only about 6,000 segments before the next halving.\n4. If losses keep arriving at that pace, each recovered by fast recovery without a timeout, the window settles into a much smaller sawtooth. Its peak is where half the peak plus about 6,000 segments of regrowth gets back to the peak: roughly 12,000 segments, falling to 6,000 after each loss. That averages about 9,000 segments, or roughly 1 Gbit/s: far below the 83,000 segments needed to fill the path. This idealised model ignores slow start, timeouts and RTT changes. RFC 3649 estimates that sustaining 10 Gbit/s on such a path would need at most one congestion event every 1⅔ hours.\n5. This scaling problem is why high-speed algorithms such as CUBIC regrow by elapsed time instead of one segment per round trip.",
     "link": {
       "title": "RFC 3649: HighSpeed TCP for Large Congestion Windows",
       "url": "https://www.rfc-editor.org/rfc/rfc3649"

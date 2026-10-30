@@ -4,7 +4,7 @@ sourceLesson: tcp-flow-control
 title: Diagnosing split-write latency
 level: intermediate
 minutes: 3
-summary: Diagnosing split-write latency, with worked examples and explicit assumptions.
+summary: How Nagle and delayed ACKs combine into a write-write-read stall, and the fixes that remove it.
 ---
 
 ## When Nagle meets delayed ACK
@@ -58,15 +58,6 @@ def send_request(s, header, body):
 
 ## Further reading
 
-- [RFC 7323: TCP Extensions for High Performance](https://www.rfc-editor.org/rfc/rfc7323)
-- [RFC 896: Congestion Control in IP/TCP Internetworks (Nagle)](https://www.rfc-editor.org/rfc/rfc896)
-- [RFC 1122: Requirements for Internet Hosts](https://www.rfc-editor.org/rfc/rfc1122)
 - [Nagle's algorithm — Wikipedia](https://en.wikipedia.org/wiki/Nagle%27s_algorithm)
-- [Linux ip-sysctl documentation (tcp_rmem, tcp_wmem)](https://docs.kernel.org/networking/ip-sysctl.html)
-- [Bandwidth-delay product — Wikipedia](https://en.wikipedia.org/wiki/Bandwidth-delay_product)
 - [Linux TCP socket options](https://man7.org/linux/man-pages/man7/tcp.7.html)
-- [Linux socket buffer accounting](https://man7.org/linux/man-pages/man7/socket.7.html)
 - [Go TCPConn.SetNoDelay](https://pkg.go.dev/net#TCPConn.SetNoDelay)
-
-> [!note] Content omitted after review
-> Universal Linux/Windows delayed-ACK times, a universal 6 MB autotuning limit and one-write/one-packet guarantees are omitted because they are not supported across versions and configurations. Timing scenarios are explicit examples, not benchmarks.

@@ -35,24 +35,20 @@ FROM m;
 | 2026-02 | 305 | 165 | 140 |
 | 2026-03 | 180 | 305 | -125 |
 
-The `diff` column is a month-over-month change:
+The query is SQLite: `strftime` is SQLite's date formatter. PostgreSQL writes the month key as `to_char(ordered_on, 'YYYY-MM')` and gives the same rows.
 
-```formula
-diff_m = rev_m − rev_{m−1}
-diff_Feb = 305 − 165 = 140
-diff_Mar = 180 − 305 = −125
-where
-diff_m: the change in revenue from the previous month to month m
-rev_m: the revenue of month m, the SUM of that month's order totals
-rev_{m−1}: the revenue of the month before m; this is what LAG(rev) reads
-m: a month, counted in window order
-diff_Feb, diff_Mar: the February and March changes, worked out from the table above
-In words: each month's change is its revenue minus the previous month's revenue; a negative answer means revenue fell.
-```
+The `diff` column is the month-over-month change: this month's revenue minus the previous row's. February is 140 up on January; March is 125 down on February, so its change is negative.
 
 The first row has no predecessor, so `LAG` returns NULL, and NULL minus anything is NULL. Supply a default with the third argument, `LAG(rev, 1, 0)`, and an offset with the second (`LAG(rev, 12)` for year-over-year when every calendar month is present).
 
 Note the pattern: aggregate in a CTE first, then apply the window. Windows run after `GROUP BY`, so you *can* write `LAG(SUM(total)) OVER (...)` in one query, but the two-step form is easier to read.
+
+> [!analogy] Real-world analogy: the previous page of a diary
+> Someone keeps a diary but only writes on days when something happened. "The previous page" is the last day they wrote, which is not necessarily yesterday.
+>
+> **How it maps:** LAG reads the previous row in the window order, like turning back one page. If a month has no row, LAG skips straight to the last month that does, just as the previous page can be weeks earlier.
+>
+> **Where it stops:** A diary's first page has nothing before it, and LAG returns NULL there unless you supply a default. And SQL needs the window ORDER BY to define "previous"; the table has no page order of its own.
 
 The offset counts rows, not calendar time. If February is missing, March’s preceding row is January. A year-over-year chart therefore needs a complete month series before applying a twelve-row offset. Generate calendar months and left join sales first, as in the series unit, and decide whether a missing month means zero sales or unavailable information.
 

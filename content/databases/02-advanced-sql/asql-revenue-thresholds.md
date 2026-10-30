@@ -26,22 +26,7 @@ WHERE running >= 400;
 -- 2026-02-14 (running = 425)
 ```
 
-The query finds the first row whose running total reaches the threshold:
-
-```formula
-S_i = t_1 + t_2 + … + t_i
-S_3 = 120 + 45 + 60 = 225
-S_4 = 225 + 200 = 425 ≥ 400
-where
-S_i: the running total after the i-th order in date order
-t_1, t_2, t_i: the totals of the 1st, 2nd and i-th orders
-…: and every order in between
-i: the position in date order, starting at 1
-S_3, S_4: the running totals after the 3rd and 4th orders
-≥: greater than or equal to
-400: the threshold the question asks about
-In words: keep adding totals in date order; the first row where the sum is at least 400 is the 4th order, on 14 February.
-```
+The query finds the first row whose running total reaches the threshold. In date order the running total is 120, 165, 225 and then 425: the fourth order, on 14 February, is the first to reach 400. Filtering with `running >= 400` keeps that row and every later one, and `MIN(ordered_on)` picks the earliest.
 
 The window must be computed before filtering, hence the CTE. If two orders could share a date, decide whether the running total should step per order (`ROWS`, with a tie-breaker) or per day (the default `RANGE`).
 

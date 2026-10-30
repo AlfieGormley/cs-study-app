@@ -13,6 +13,13 @@ Use staff ids Mia 1, Raj 2, Sam 3, Tom 4, Uma 5 and Vic 6. Mia manages Raj and S
 
 Hierarchies in real data are not always trees. Suppose someone sets Mia's manager to Vic, creating a loop. The earlier root-based anchor (`manager_id IS NULL`) would now find no rows. To demonstrate the cycle, start explicitly at Mia (`WHERE id = 1`); then the recursive term keeps finding rows: Mia, Raj, Tom, Vic, Mia, Raj...
 
+> [!analogy] Real-world analogy: chalk marks in a maze
+> An explorer in a maze of corridors chalks each room they pass through and refuses to enter a room that already carries their mark. Without the chalk, a loop of corridors could keep them walking in circles forever.
+>
+> **How it maps:** The rooms are staff rows and the corridors are `manager_id` links. The chalk marks are a path column carried in each row: before following a link, the recursive term checks that the next id is not already in the path. The CYCLE clause does the chalking for you.
+>
+> **Where it stops:** Every recursive row carries its own path, as if each explorer had a private chalk colour. Two different routes can reach the same room without either being a cycle, so a path check stops loops but does not remove every repeated visit.
+
 Three defences:
 
 1. **`UNION` instead of `UNION ALL`.** `UNION` discards rows already produced. If the rows are just `(id, name)`, the second Mia is a duplicate and the loop stops (6 rows). But add a `depth` column and every row is unique again, so `UNION` no longer saves you.

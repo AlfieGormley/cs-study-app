@@ -22,25 +22,14 @@ WHERE total > ALL (
 -- 104 (200 beats 120, 60, 60)
 ```
 
-In maths notation, the two quantifiers say:
+The two quantifiers read like English:
 
-```formula
-x > ALL(S)  means  x > s for all s ∈ S
-x > ANY(S)  means  x > s for some s ∈ S
-200 > 120, 200 > 60, 200 > 60
-where
-x: the value from the row of the enclosing query, here an order total
-S: the set of values the subquery returns, here Ana's totals {120, 60, 60}
-s: any one value in S
-∈: "is a member of"
-ALL: SQL's quantifier "every value in the set"
-ANY: SQL's quantifier "at least one value in the set"
-In words: > ALL passes only if x beats every value the subquery returns; > ANY passes if x beats at least one of them.
-```
+- `x > ALL (subquery)` passes only if x is greater than **every** value the subquery returns.
+- `x > ANY (subquery)` passes if x is greater than **at least one** of them.
 
-Order 104 (200) beats all three of Ana's totals, so it is the only result. If the subquery is empty there is no comparison value to fail against, so `x > ALL(S)` is TRUE (it is *vacuously* true) and `x > ANY(S)` is FALSE.
+Order 104 (200) beats all three of Ana's totals, so it is the only result. If the subquery returns no rows, there is no value for ALL to fail against, so `> ALL` is TRUE for every row of the outer query (it is *vacuously* true), while `> ANY` has nothing to beat and is FALSE.
 
-`= ANY (...)` is the same as `IN`. **SQLite does not support `ANY`/`ALL`**; for a nonempty set of non-NULL values, `> (SELECT MAX(...))` gives the same result as `> ALL (...)`. NULLs also matter: MAX ignores them, while ALL can return UNKNOWN. Watch the empty-set edge case: `> ALL` of an empty set is TRUE, whereas comparing with `MAX` of an empty set gives NULL, which filters everything out.
+`= ANY (...)` is the same as `IN`. **SQLite does not support `ANY`/`ALL`**; for a nonempty set of non-NULL values, `> (SELECT MAX(...))` gives the same result as `> ALL (...)`. NULLs also matter: MAX ignores them, while a NULL among the ALL values makes a comparison that would otherwise pass UNKNOWN (PostgreSQL 18: `5 > ALL` of 1 and NULL is NULL). Watch the empty-set edge case: `> ALL` of an empty set is TRUE, whereas comparing with `MAX` of an empty set gives NULL, which filters everything out.
 
 Both databases accept row-value comparisons such as `WHERE (id, city) IN (SELECT ...)`.
 

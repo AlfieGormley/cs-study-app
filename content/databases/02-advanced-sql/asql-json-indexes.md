@@ -35,6 +35,13 @@ WHERE payload @> '{"type":"cart"}';
 -- 2, 4
 ```
 
+> [!analogy] Real-world analogy: a bookmark tab versus a book's index
+> A reference book can have coloured tabs for one chapter you use constantly, or an index at the back listing every term and the pages it appears on.
+>
+> **How it maps:** The expression index is the tab: it covers one chosen expression, `payload ->> 'type'`, and serves queries that use exactly that expression. The GIN index is the back-of-book index: it records the keys and values inside every document, so a containment query such as `@>` can look up which rows contain them.
+>
+> **Where it stops:** A book index helps any reader looking up a word. A GIN index helps only the operators its operator class supports, and the planner may still choose a scan when the table is small or the filter matches many rows.
+
 `@>` means "contains this sub-document" and `?` means "has this top-level key". A default GIN index on `jsonb` supports `@>`, `?`, `?|` and `?&`. The `jsonb_path_ops` operator class often yields a smaller and more selective index, depending on the documents and query. It supports @>, @? and @@ but not the key-existence operators. The default jsonb_ops class supports those JSON path operators too. Index support means the predicate is eligible for that access path; a small table or unselective filter can still favour a scan.
 
 > [!warning] When JSON is the wrong tool

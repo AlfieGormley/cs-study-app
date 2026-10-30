@@ -32,20 +32,14 @@ ORDER BY c.city;
 | York | 1 | 45 |
 | NULL | 8 | 650 |
 
-The NULL row is the total (Postgres sorts NULLs last in ascending order). The number of rows follows from the groupings ROLLUP asks for:
+The NULL row is the total (Postgres sorts NULLs last in ascending order). ROLLUP computes the full grouping, then each shorter prefix of its column list, down to the empty grouping that makes the grand total. With one column that is two groupings: one row per city (3) plus one grand-total row, 4 rows. CUBE instead computes every combination of the listed columns: for (city, name) that is both columns, city alone, name alone and neither.
 
-```formula
-G_ROLLUP = k + 1
-G_CUBE = 2^k
-N = 3 + 1 = 4
-where
-G_ROLLUP: how many groupings ROLLUP computes: the full list, then each shorter prefix, down to the empty grouping (the grand total)
-G_CUBE: how many groupings CUBE computes: every subset of the listed columns
-k: the number of columns listed inside ROLLUP or CUBE, here 1 (city)
-2^k: k copies of 2 multiplied together
-N: the rows in this ROLLUP (c.city) result: 3 city rows plus 1 grand-total row
-In words: ROLLUP of k columns makes k + 1 levels of subtotal, while CUBE makes every combination, 2^k of them; each grouping set contributes one row per distinct value combination.
-```
+> [!analogy] Real-world analogy: an itemised bill with subtotals
+> A restaurant bill for a group lists each item under the person who ordered it, a subtotal under each person, and a grand total at the bottom.
+>
+> **How it maps:** The item lines are the most detailed grouping, each person's subtotal is a shorter prefix of the grouping list, and the grand total is the empty grouping. `ROLLUP (person, item)` produces all three levels in one result.
+>
+> **Where it stops:** A printed bill labels its subtotal lines. SQL marks them only by putting NULL in the rolled-up columns, which can look identical to a genuinely missing value; `GROUPING()` tells them apart.
 
 Use the `GROUPING(c.city)` function to tell "total" NULLs apart from real NULL cities. `GROUPING SETS` and `CUBE` generalise this to any combination of groupings, within one query; the physical plan can use multiple sorts or aggregation phases.
 

@@ -25,29 +25,14 @@ While the working table has rows:
   Make those rows the new working table.
 ```
 
+Each pass sees only the rows produced by the *previous* pass, not the whole result so far. The loop stops at the first pass that produces no rows, and the CTE returns the anchor rows plus every batch appended along the way.
 
-Each pass sees only the rows produced by the *previous* pass, not the whole result so far. The loop stops when a pass produces no rows. In set notation:
-
-```formula
-W_0 = A
-W_{k+1} = R(W_k)
-T = W_0 + W_1 + … + W_m
-W_{m+1} = ∅
-where
-W_0: the anchor's rows, the first working table
-A: the rows the anchor (non-recursive term) returns
-W_k: the working table after pass k: only the rows that pass produced
-W_{k+1}, W_{m+1}: the rows the next pass produces; W_{m+1}, the pass after the last productive one, is empty
-W_1, W_m: the working tables after pass 1 and after the last pass that produced rows
-R: the recursive term, run with the CTE's name standing for W_k
-k: the pass number, 0 for the anchor, then later passes
-m: the number of the last pass that produced any rows
-T: everything the CTE returns
-+: here, append one batch of rows after another, keeping duplicates (UNION ALL)
-…: and every batch in between
-∅: the empty set: no rows
-In words: start with the anchor's rows, repeatedly feed only the newest rows into the recursive term, append whatever it produces, and stop at the first pass that produces nothing.
-```
+> [!analogy] Real-world analogy: a phone tree
+> A club passes news on with a phone tree. The organiser calls a few members; in each round, only the people who were called in the previous round make calls. When a round has nobody left to call, the news has finished spreading.
+>
+> **How it maps:** The organiser's first calls are the anchor rows. Each round is one pass of the recursive term, and "the people called last round" is the working table that pass reads. The full list of everyone called is the CTE's result, and the round that calls nobody is the empty pass that ends the loop.
+>
+> **Where it stops:** A real caller remembers who has already heard the news. With `UNION ALL`, a recursive CTE remembers nothing: if the data loops back, it keeps calling the same people forever. Preventing that is your job (see the cycles unit).
 
 With `UNION` instead of `UNION ALL`, each pass also discards rows already in the result before they go into the next working table.
 
@@ -64,21 +49,7 @@ SELECT i FROM n;
 -- 1, 2, 3, 4, 5
 ```
 
-Pass 1 sees {1} and makes {2}; pass 2 sees {2} and makes {3}; and so on until the pass that sees {5} makes nothing, because `5 < 5` is false. **The `WHERE` is the termination condition.** Without it there is no logical stop condition; execution may eventually error or be cancelled. Pass by pass:
-
-```formula
-i_0 = 1
-i_{k+1} = i_k + 1   if i_k < 5
-i_4 = 5
-where
-i_0: the anchor's value, 1
-i_k: the value in the working table after pass k
-i_{k+1}: the value the next pass makes from it
-i_4: the value after pass 4
-k: the pass number, starting at 0 for the anchor
-<: strictly less than
-In words: each pass adds 1 to the previous pass's value, but only while that value is below 5. Pass 5 reads 5, and 5 < 5 is false, so it makes nothing and the loop stops; so the CTE returns the five rows 1 to 5.
-```
+Pass 1 sees {1} and makes {2}; pass 2 sees {2} and makes {3}; and so on until the pass that sees {5} makes nothing, because `5 < 5` is false. So the CTE returns the five rows 1 to 5. **The `WHERE` is the termination condition**, and it tests the row being *read*, not the row being made. Without it there is no logical stop condition; execution may eventually error or be cancelled.
 
 SQLite accepts recursive self-reference without the RECURSIVE modifier, but PostgreSQL requires it. Write it explicitly for both engines. A NULL-valued row is still a row: termination depends on an empty working table, not on a particular value. PostgreSQL has no built-in default recursion-depth cap; use a terminating predicate and a suitable statement timeout when testing.
 

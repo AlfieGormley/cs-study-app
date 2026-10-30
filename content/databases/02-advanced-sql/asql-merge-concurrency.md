@@ -7,7 +7,7 @@ summary: MERGE chooses the first applicable WHEN clause for each candidate row.
 sourceLesson: asql-json-upsert
 ---
 
-stock(product_id PRIMARY KEY, qty) starts with product 1 at 15 for the MERGE example. PostgreSQL 15 introduced MERGE; version 17 added its RETURNING clause, and version 18 added old/new row references for INSERT RETURNING.
+stock(product_id PRIMARY KEY, qty) starts with product 1 at 15 for the MERGE example. PostgreSQL 15 introduced MERGE; version 17 added its RETURNING clause, and version 18 added `old` and `new` row references to RETURNING for INSERT, UPDATE, DELETE and MERGE.
 
 ### MERGE (Postgres 15+)
 
@@ -29,21 +29,9 @@ WHEN NOT MATCHED THEN
   VALUES (v.pid, v.delta);
 ```
 
-The first `WHEN MATCHED` clause tests the quantity the row would end up with:
+The first `WHEN MATCHED` clause tests the quantity the row would end up with: if applying the change would leave zero or less in stock, it deletes the row instead of updating it. Product 1 (qty 15) would drop to 0, so it is deleted; product 3 has no match and is inserted with 4. MERGE tries the WHEN clauses in order and uses the first one whose condition is true, which is why the DELETE clause comes before the plain UPDATE. Postgres 17 added `RETURNING` with `merge_action()` to report which branch each row took. SQLite has no `MERGE`.
 
-```formula
-q_stock + δ ≤ 0
-15 + (−15) = 0 ≤ 0
-where
-q_stock: the existing quantity, s.qty, here 15 for product 1
-δ: delta, the change the source row asks for, v.delta, here −15
-≤: less than or equal to
-In words: if applying the change would leave zero or fewer in stock, delete the row instead of updating it.
-```
-
-Product 1 (qty 15) would drop to 0, so it is deleted; product 3 has no match and is inserted with 4. MERGE tries the WHEN clauses in order and uses the first one whose condition is true, which is why the DELETE clause comes before the plain UPDATE. Postgres 17 added `RETURNING` with `merge_action()` to report which branch each row took. SQLite has no `MERGE`.
-
-Prefer `ON CONFLICT` for concurrent upserts in Postgres. It is built on the unique index and, in the absence of independent errors, resolves a concurrent conflict by inserting or updating (unless an update WHERE rejects the row). Other constraints, deadlocks or serialization failures can still require error handling or retries. `MERGE` joins first and can still fail with a unique violation if another transaction inserts the same key concurrently.
+Prefer `ON CONFLICT` for concurrent upserts in Postgres. It is built on the unique index and, in the absence of independent errors, resolves a concurrent conflict by inserting or updating (unless an update WHERE rejects the row). Other constraints, deadlocks or serialization failures can still raise errors that the application must handle or retry. `MERGE` joins first and can still fail with a unique violation if another transaction inserts the same key concurrently.
 
 ### Other upsert details
 

@@ -4,7 +4,7 @@ sourceLesson: tcp-connections
 title: Close states and tuple reuse in production
 level: intermediate
 minutes: 3
-summary: Close states and tuple reuse in production, with worked examples and explicit assumptions.
+summary: The full close state machine, TIME_WAIT pressure on busy clients, and what piles of CLOSE_WAIT usually mean.
 ---
 
 ## TIME_WAIT in production
@@ -65,9 +65,5 @@ $ ss -Htan state close-wait | wc -l
 ## Further reading
 
 - [RFC 9293: Transmission Control Protocol](https://www.rfc-editor.org/rfc/rfc9293)
-- [RFC 4987: TCP SYN Flooding Attacks and Common Mitigations](https://www.rfc-editor.org/rfc/rfc4987)
-- [SYN cookies — Wikipedia](https://en.wikipedia.org/wiki/SYN_cookies)
 - [Coping with the TCP TIME-WAIT state on busy Linux servers — Vincent Bernat](https://vincent.bernat.ch/en/blog/2014-tcp-time-wait-state-linux)
-- [SYN packet handling in the wild — Cloudflare blog](https://blog.cloudflare.com/syn-packet-handling-in-the-wild/)
-- [RFC 6528: Defending against Sequence Number Attacks](https://www.rfc-editor.org/rfc/rfc6528)
 - [Linux TCP configuration defaults](https://kernel.org/doc/html/latest/networking/ip-sysctl.html)

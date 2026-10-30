@@ -4,49 +4,34 @@ sourceLesson: tcp-congestion
 title: Reno recovery on a large-delay path
 level: advanced
 minutes: 3
-summary: Reno recovery on a large-delay path, with worked examples and explicit assumptions.
+summary: Why one-segment-per-round-trip growth cannot refill the huge windows of fast, long-distance paths.
 ---
 
 ## Why Reno fails on fast, long paths
 
-Additive increase is one segment per RTT, no matter how big the window. Consider a model counting 1,500 payload bytes per segment, ignoring headers, at 10 Gbit/s and 100 ms RTT. First the window needed, then the time to win back half of it at one segment per round trip:
+Additive increase is one segment per RTT, no matter how big the window. After a halving, the time to climb back is therefore proportional to both the window size and the round trip:
 
-```formula
-W = R RTT / (S × 8)
-W = 10^10 bit/s × 0.1 s / (12,000 bit)
-W ≈ 83,333
+```formula reference
 T_rec = (W / 2) × RTT
-T_rec = 41,667 × 0.1 s ≈ 4,167 s ≈ 69 min
 where
-W: the congestion window needed to fill the path, in segments
-R: the target rate; 10 Gbit/s is 10^10 bits per second (bit/s)
-RTT: round-trip time, in seconds (s); 100 ms is 0.1 s
-S: payload bytes per segment, 1,500; × 8 turns it into 12,000 bits
-T_rec: the time to grow back from W / 2 to W at one segment per RTT
-bit: binary digit; 8 bits make a byte
+T_rec: the time to grow from half the window back to the full window at one segment per round trip, in seconds (s)
+W: the full congestion window before the loss, in segments
+RTT: round-trip time, in seconds (s)
 s: seconds
-min: minutes
-≈: approximately equal to
-In words: a 10 Gbit/s, 100 ms path needs about 83,000 segments in flight, and after one halving Reno needs over an hour of loss-free round trips to get back.
+In words: Reno regains one segment per round trip, so winning back half a window takes half a window's worth of round trips; a path that needs a huge window takes a very long time to recover.
 ```
 
-After one loss halves the window, getting back to W takes about 41,667 RTTs: **over an hour**, during which a single further loss starts the climb again. In the distinct average-window model in RFC 3649, sustaining this average rate requires roughly one congestion event per five billion packets ([RFC 3649](https://www.rfc-editor.org/rfc/rfc3649)). This illustrates Reno’s scaling limitation under the stated assumptions, not an absolute impossibility for every high-speed path or workload.
+Consider a model counting 1,500 payload bytes per segment, ignoring headers, at 10 Gbit/s and 100 ms RTT. Filling that path takes about 83,333 segments in flight. After one loss halves the window, getting back takes about 41,667 round trips of 100 ms: **over an hour**, during which a single further loss starts the climb again. RFC 3649 puts the same problem the other way round: to *sustain* that average rate, Reno could tolerate at most one congestion event every 5,000,000,000 packets, roughly one every 1⅔ hours ([RFC 3649](https://www.rfc-editor.org/rfc/rfc3649)). This illustrates Reno's scaling limitation under the stated assumptions, not an absolute impossibility for every high-speed path or workload.
+
+So on a **long fat pipe**, loss-driven Reno spends most of its time far below capacity, even when losses are rare by everyday standards. That is the motivation for CUBIC (next lesson), which regrows its window by elapsed time rather than one segment per round trip.
 
 ## Key takeaways
 
 - Large bandwidth-delay products need large in-flight windows.
-- One-segment-per-RTT Reno growth can take over an hour to undo one halving in the stated 10 Gbit/s model.
+- One-segment-per-RTT Reno growth can take over an hour to undo one halving in the stated 10 Gbit/s model, so occasional losses keep it far below capacity.
 - This comparison is a scaling illustration rather than a universal performance prediction.
 
 ## Further reading
 
-- [Congestion Avoidance and Control — Van Jacobson (1988)](https://ee.lbl.gov/papers/congavoid.pdf)
 - [RFC 5681: TCP Congestion Control](https://www.rfc-editor.org/rfc/rfc5681)
 - [RFC 9438: CUBIC for Fast and Long-Distance Networks](https://www.rfc-editor.org/rfc/rfc9438)
-- [BBR: Congestion-Based Congestion Control — Google Research](https://research.google/pubs/bbr-congestion-based-congestion-control-2/)
-- [RFC 3168: Explicit Congestion Notification](https://www.rfc-editor.org/rfc/rfc3168)
-- [TCP congestion control — Wikipedia](https://en.wikipedia.org/wiki/TCP_congestion_control)
-- [Linux v6.12 BBRv1 implementation](https://github.com/torvalds/linux/blob/v6.12/net/ipv4/tcp_bbr.c)
-- [BBRv3 IETF draft, July 2026](https://datatracker.ietf.org/doc/html/draft-ietf-ccwg-bbr-06)
-
-- [Chiu and Jain: increase/decrease algorithms, original paper](https://pages.cs.wisc.edu/~suman/courses/740/papers/chiu89isdn.pdf)

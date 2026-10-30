@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. The receiver advertises an acceptable sequence range, reflecting buffering and update policy rather than exactly reporting free memory.\n2. In the simplified ordinary new-data model, the remaining budget is:\n\n```formula\nA = max(0, min(rwnd, cwnd) − F)\nwhere\nA: the bytes of new data the sender may send now\nrwnd: the receive window the receiver advertised\ncwnd: the sender's congestion window\nF: bytes in flight (sent, not yet acknowledged)\nmin: the smaller of the values in brackets\nmax: the larger; max(0, …) stops it going negative\nIn words: fill the smaller window, minus what is already in flight.\n```\n\n3. rwnd provides receiver flow control; cwnd controls network congestion. Recovery, probes and window shrinkage require additional rules.",
+    "workedExample": "1. The receiver advertises an acceptable sequence range, reflecting its buffering and update policy rather than exactly reporting free memory.\n2. The sender may not send new data beyond that range, so a slow application on the receiver eventually slows the sender down: that is flow control and backpressure.\n3. Congestion control is a separate mechanism, run by the sender with its own congestion window, to avoid overloading the network. In the simplified model the sender respects whichever window is smaller, minus the data already in flight.\n4. Reordering is handled by sequence numbers and buffering, and forged segments are a security problem that the window does not solve. Recovery, probes and window shrinkage require additional rules.",
     "link": {
       "title": "RFC 9293: Transmission Control Protocol",
       "url": "https://www.rfc-editor.org/rfc/rfc9293"
@@ -33,27 +33,27 @@
     "id": "tcp-flow-control-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "A sender has MSS 1,460 bytes and a congestion window (cwnd) of 40 segments, the receiver advertises a receive window (rwnd) of 256 KiB (262,144 bytes), and 30,000 bytes are currently unacknowledged. How many more bytes may it send right now? Use the simplified new-data budget, with consistent ACK/window origins, no recovery/probe exceptions, and sufficient queued data; ignore pacing and packetisation.",
+    "prompt": "A bulk upload is slower than expected. The receiving team raises its socket buffer, and the advertised receive window grows from 256 KiB to 4 MiB, but throughput does not change. On the sender, `ss -ti` shows a congestion window of 40 segments (about 58 KB) with about 30 KB unacknowledged, and the application always has data queued. What explains the unchanged throughput?",
     "options": [
       {
-        "text": "232,144 bytes",
-        "explanation": "This uses rwnd as the limit. The sender must respect the smaller of rwnd and cwnd, and cwnd is far smaller here."
+        "text": "The receiver has not yet started advertising the bigger window",
+        "explanation": "The scenario says the advertised window did grow to 4 MiB. The question is why a bigger receive window made no difference."
       },
       {
-        "text": "58,400 bytes",
-        "explanation": "That's the whole congestion window, but 30,000 bytes of it are already in flight."
+        "text": "The congestion window is the tighter limit, so the sender's budget is set by cwnd, not rwnd; a bigger receive window cannot help until cwnd grows past it",
+        "explanation": "Correct. The sender may send at most the smaller window minus what is in flight. With cwnd about 58 KB against an rwnd of 256 KiB or 4 MiB, rwnd was never the binding limit."
       },
       {
-        "text": "28,400 bytes",
-        "explanation": "Correct. The usable window is the smaller of 262,144 and 40 × 1,460 = 58,400 bytes; subtract the 30,000 in flight to get 28,400."
+        "text": "The sender must fill the whole receive window before the congestion window applies",
+        "explanation": "There is no such ordering. Both limits apply at once, and the smaller one wins."
       },
       {
-        "text": "0 bytes, because rwnd must be reached first",
-        "explanation": "There's no such rule. The sender may send whenever in-flight data is below the smaller of rwnd and cwnd."
+        "text": "A larger receive window always increases throughput, so the measurement must be wrong",
+        "explanation": "Only the tighter limit matters. Raising a limit that is not binding leaves throughput unchanged."
       }
     ],
-    "answer": 2,
-    "workedExample": "Convert cwnd to bytes, take the smaller window, then subtract what is in flight:\n\n```formula\ncwnd = 40 × 1,460 B = 58,400 B\nW = min(rwnd, cwnd)\nW = min(262,144 B, 58,400 B) = 58,400 B\nA = W − F = 58,400 B − 30,000 B\nA = 28,400 B\nwhere\ncwnd: the congestion window, 40 segments of 1,460 bytes\nrwnd: the receive window, 262,144 bytes\nW: the effective window, the smaller of the two\nmin: the smaller of the values in brackets\nA: the bytes the sender may still send now\nF: the bytes in flight, 30,000\nB: bytes\nIn words: the congestion window (58,400 bytes) is the tighter limit, and 30,000 of it is used, leaving 28,400 bytes.\n```\n\nThat's about 19 full segments. Here the sender’s congestion window is the tighter modelled constraint. That alone does not prove current network congestion, and the byte budget does not require immediate transmission.",
+    "answer": 1,
+    "workedExample": "1. In the simplified model the sender's budget for new data is the smaller of the receive window and the congestion window, minus the bytes already in flight.\n2. Before the change: rwnd 256 KiB, cwnd about 58 KB. The congestion window was already the smaller one.\n3. After the change: rwnd 4 MiB, cwnd still about 58 KB. The smaller window is unchanged, so the budget is unchanged: about 58 KB minus the 30 KB in flight, roughly 28 KB more.\n4. So the flow is limited by the sender's congestion control (or by something the congestion window reflects, such as loss on the path), not by the receiver. A cwnd limit alone does not prove the network is congested right now; look at loss, RTT and the congestion-control state next.",
     "link": {
       "title": "RFC 5681: TCP Congestion Control",
       "url": "https://www.rfc-editor.org/rfc/rfc5681"

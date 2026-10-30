@@ -4,7 +4,7 @@ sourceLesson: tcp-sockets
 title: Short I/O, EOF and operation deadlines
 level: intermediate
 minutes: 3
-summary: Short I/O, EOF and operation deadlines, with worked examples and explicit assumptions.
+summary: Short reads, partial writes, end of stream and timeouts: the rules for using socket calls correctly.
 ---
 
 ## Partial reads, partial writes and EOF
@@ -36,7 +36,3 @@ Choose operation timeouts and application deadlines. A silent peer can otherwise
 
 - [Python socket module documentation](https://docs.python.org/3/library/socket.html)
 - [Socket Programming HOWTO — Python docs](https://docs.python.org/3/howto/sockets.html)
-- [Python selectors module documentation](https://docs.python.org/3/library/selectors.html)
-- [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/)
-- [The C10K problem — Dan Kegel](http://www.kegel.com/c10k.html)
-- [SYN packet handling in the wild — Cloudflare blog](https://blog.cloudflare.com/syn-packet-handling-in-the-wild/)

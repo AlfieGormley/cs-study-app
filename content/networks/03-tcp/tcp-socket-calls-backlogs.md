@@ -4,12 +4,12 @@ sourceLesson: tcp-sockets
 title: Socket lifecycle and pending queues
 level: intermediate
 minutes: 3
-summary: Socket lifecycle and pending queues, with worked examples and explicit assumptions.
+summary: What each socket call does in TCP, and how the SYN and accept queues behave under load.
 ---
 
 Python's **socket API** wraps the operating system's networking calls. Similar concepts appear in other languages, but high-level runtimes, platforms and socket modes differ in their errors, buffering and lifetime rules.
 
-This lesson separates byte-stream framing from connection setup and demonstrates bounded-message helpers. The servers remain teaching examples; the selector example is deliberately faulty for a debugging exercise.
+This lesson follows a TCP connection through the socket calls on each side, then looks at the two kernel queues that hold connections before the application accepts them. Framing, short reads and complete servers follow in the next lessons.
 
 ## The calls and what they do in TCP
 
@@ -63,8 +63,5 @@ If the application is too slow to accept and that queue fills, one Linux path wi
 ## Further reading
 
 - [Python socket module documentation](https://docs.python.org/3/library/socket.html)
-- [Socket Programming HOWTO — Python docs](https://docs.python.org/3/howto/sockets.html)
-- [Python selectors module documentation](https://docs.python.org/3/library/selectors.html)
-- [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/)
-- [The C10K problem — Dan Kegel](http://www.kegel.com/c10k.html)
 - [SYN packet handling in the wild — Cloudflare blog](https://blog.cloudflare.com/syn-packet-handling-in-the-wild/)
+- [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/)

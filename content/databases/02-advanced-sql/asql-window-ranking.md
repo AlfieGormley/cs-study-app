@@ -38,42 +38,20 @@ WINDOW w AS (ORDER BY total DESC);
 - **`RANK`**: ties share a rank and leave a **gap** (4, 4, then 6). Like a sports table.
 - **`DENSE_RANK`**: ties share a rank with **no gap** (4, 4, then 5). Use it for "the Nth highest distinct value".
 
-You can work out either rank by counting what sorts ahead of the row:
+> [!analogy] Real-world analogy: a race with a dead heat
+> Two runners are judged a dead heat for third place. The results printout still has to put one of their names on the line above the other, the official placings give both third place and award no fourth, and a count of different finishing times would call the next runner the fourth time recorded.
+>
+> **How it maps:** The printout's line numbers are `ROW_NUMBER`: every row gets its own number, even among ties. The official placings are `RANK`: tied rows share a rank and the next rank is skipped. Counting different finishing times is `DENSE_RANK`: tied rows share a rank and no number is skipped.
+>
+> **Where it stops:** Whoever prints the results can choose a rule for which tied runner goes first, such as alphabetical order; `ROW_NUMBER` follows no rule of its own, so the order among tied rows is unspecified unless the window ORDER BY includes a tie-breaker. Placing conventions also vary between sports; the analogy uses the common one in which a shared place skips the next.
 
-```formula
-RANK = 1 + N_ahead
-DENSE_RANK = 1 + D_ahead
-RANK = 1 + 5 = 6
-DENSE_RANK = 1 + 4 = 5
-where
-RANK: the value RANK() gives the row
-DENSE_RANK: the value DENSE_RANK() gives the row
-N_ahead: the number of rows that sort strictly before this one (tied rows don't count); for a 45 these are 200, 120, 90, 60 and 60, so 5
-D_ahead: the number of distinct sort values strictly before this one; for a 45 these are 200, 120, 90 and 60, so 4
-In words: for an order of 45, five rows but only four distinct values sort ahead. RANK counts every row ahead of you, so ties ahead push you down further; DENSE_RANK counts only different values ahead, so it never skips a number.
-```
+You can predict either rank by counting what sorts ahead of the row. **RANK is 1 plus the number of rows strictly ahead**, so ties ahead push it down. **DENSE_RANK is 1 plus the number of distinct values strictly ahead**, so it never skips a number. For an order of 45, five rows (200, 120, 90, 60, 60) but only four distinct values sort ahead: RANK 6, DENSE_RANK 5.
 
 So DENSE_RANK can never be larger than RANK, and the two agree up to and including the first group of tied rows; they differ from the row after it.
 
 The `WINDOW w AS (...)` clause names a window so you don't repeat it. Both SQLite and Postgres support it.
 
-`NTILE(k)` splits the rows of each partition into k NTILE groups, numbered 1 to k, as equally as possible (quartiles with `NTILE(4)`). When the rows don't divide evenly, the leftover rows go one each to the first NTILE groups:
-
-```formula
-q = ⌊n / k⌋
-r = n mod k
-q = ⌊8 / 3⌋ = 2,  r = 8 mod 3 = 2
-where
-n: the number of rows in the partition, here 8
-k: the number of NTILE groups asked for, the argument of NTILE(k), here 3
-q: the size of the smaller NTILE groups
-r: how many NTILE groups get one extra row (size q + 1); these are the first r NTILE groups
-⌊ ⌋: floor: round down to a whole number
-mod: the remainder after whole-number division (8 = 2 × 3 + 2, so 8 mod 3 = 2)
-In words: share the rows out evenly, then give the leftover rows one each to the first NTILE groups.
-```
-
-So 8 rows in 3 NTILE groups have sizes 3, 3 and 2. NTILE works on row positions, so two tied values can land in different NTILE groups. `PERCENT_RANK` and `CUME_DIST` give relative SQL ranking positions as fractions between 0 and 1.
+`NTILE(k)` splits the rows of each partition into k NTILE groups, numbered 1 to k, as equally as possible (quartiles with `NTILE(4)`). When the rows don't divide evenly, the groups differ in size by at most one, and the leftover rows go one each to the first NTILE groups. So 8 rows in 3 NTILE groups have sizes 3, 3 and 2. NTILE works on row positions, so two tied values can land in different NTILE groups. `PERCENT_RANK` and `CUME_DIST` give relative SQL ranking positions as fractions between 0 and 1.
 
 ## Key takeaways
 - ROW_NUMBER numbers rows; RANK and DENSE_RANK give peers equal ranks.

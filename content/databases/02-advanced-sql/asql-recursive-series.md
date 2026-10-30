@@ -11,7 +11,7 @@ A sparse sales table cannot produce a row for a month it never recorded. The sho
 
 ### Filling gaps in a series
 
-Reports need a row for every month, even months with no sales. Generate the months, then `LEFT JOIN`:
+Reports need a row for every month, even months with no sales. Generate the months, then `LEFT JOIN`. This version is SQLite: `date(m, '+1 month')` and `strftime` are SQLite date functions.
 
 ```sql
 -- Supply months that orders cannot.
@@ -49,6 +49,13 @@ FROM generate_series(
   date '2026-04-01',
   interval '1 month') AS m;
 ```
+
+> [!analogy] Real-world analogy: a register with every date pre-printed
+> A club keeps two records. Its diary has an entry only for days when something happened. Its attendance register has a line pre-printed for every meeting date, and the secretary copies figures in from the diary, writing 0 on lines with nothing to copy.
+>
+> **How it maps:** The orders table is the diary: no orders, no April entry. The calendar CTE pre-prints the register lines. The LEFT JOIN copies matching orders onto each line, and COALESCE writes the 0 on an empty line.
+>
+> **Where it stops:** The database does not know which months your report covers: you choose the range in the anchor and termination test. And an empty line is really NULL, meaning "no matching rows", until you decide that it should be shown as zero sales.
 
 The LEFT JOIN is doing essential work: the generated April row has no matching order, so its order columns are NULL. SUM ignores NULL values and has no contributing value there, so it returns NULL. COALESCE supplies zero. Putting an order-date filter in WHERE after the join could discard that calendar row again; restrict matching orders in ON.
 

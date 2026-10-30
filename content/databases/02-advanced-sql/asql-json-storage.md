@@ -60,6 +60,13 @@ SELECT '{"b":2,"a":1,"a":3}'::json,
 -- {"a": 3, "b": 2}
 ```
 
+> [!analogy] Real-world analogy: a photocopy versus a typed-up record
+> An office receives handwritten forms. It can file a photocopy of each form exactly as written, or type the answers into its records system, one field per box.
+>
+> **How it maps:** `json` is the photocopy: the exact text, spacing, key order and any repeated keys are kept, and every lookup has to read the original again. `jsonb` is the typed-up record: decomposed into keys and values, so lookups and indexes work on fields directly. If a form answered the same question twice, the typed record keeps only the last answer, just as jsonb keeps the last duplicate key.
+>
+> **Where it stops:** A clerk may mistype; jsonb keeps the JSON values themselves (strings, numbers, booleans, nulls), though it may rewrite how a value is spelled: `1.230e-5` comes back as `0.00001230`. What it does not keep is the original text: whitespace, key order and all but the last of any duplicate keys.
+
 Use `jsonb` unless you must preserve the exact input text. It costs a little more on insert (JSON decoding) and avoids decoding the original input again for JSON processing; the performance difference depends on the operation and workload.
 
 ## Key takeaways

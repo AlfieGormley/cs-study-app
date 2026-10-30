@@ -4,7 +4,7 @@ sourceLesson: tcp-udp-ports
 title: UDP sockets and TCP connection tuples
 level: basic
 minutes: 3
-summary: UDP sockets and TCP connection tuples, with worked examples and explicit assumptions.
+summary: How the kernel hands each arriving packet to the right socket: destination port for UDP, the full connection tuple for TCP.
 ---
 
 ## Demultiplexing: sockets and 5-tuples
@@ -50,6 +50,13 @@ TCP 198.51.100.7:51001 -> 203.0.113.5:443
 
 Both arrive at the same server port, but they differ in one field, so they are different connections. This is why a server can handle hundreds of thousands of connections on a single port: capacity depends on resources such as memory, file descriptors, CPU and distinct connection tuples; one server port does not impose a 65,535-connection total limit.
 
+> [!analogy] Real-world analogy: One restaurant door, many tables
+> Every party enters a restaurant through the same front door. The host greets each party and seats it at its own table, and from then on the waiter serves each table separately.
+>
+> **How it maps:** The front door is the listening socket on port 443; the host is `accept()`, which hands back a new socket for each connection. Each table is an accepted socket, and the kernel finds the right table for an arriving segment by the full tuple: who the guests are (client address and port) as well as which door they used.
+>
+> **Where it stops:** A restaurant runs out of tables quickly, whereas a server's limit comes from memory, file descriptors and CPU. And UDP has no host at all: an unconnected UDP socket is a single counter where every datagram for that port lands, whoever sent it.
+
 > [!example] Ephemeral port exhaustion
 > A client connects repeatedly to one backend, `10.0.0.5:5432`. Four of the five fields are fixed; only the source port varies. With Linux's default range, with a single fixed source address and automatic allocation confined to that range, at most 28,232 distinct local ports are available before other reservations and constraints. TIME_WAIT can further restrict tuple reuse (the connection-management units). Proxies hit this; fixes are connection pooling, extra source IPs, or more backend IPs.
 
@@ -61,16 +68,6 @@ Both arrive at the same server port, but they differ in one field, so they are d
 
 ## Further reading
 
-- [RFC 768: User Datagram Protocol](https://www.rfc-editor.org/rfc/rfc768)
-- [RFC 8085: UDP Usage Guidelines](https://www.rfc-editor.org/rfc/rfc8085)
-- [User Datagram Protocol — Wikipedia](https://en.wikipedia.org/wiki/User_Datagram_Protocol)
-- [Ephemeral port — Wikipedia](https://en.wikipedia.org/wiki/Ephemeral_port)
-- [RFC 6335: IANA port number procedures](https://www.rfc-editor.org/rfc/rfc6335)
-- [Memcrashed: amplification attacks from port 11211 — Cloudflare blog](https://blog.cloudflare.com/memcrashed-major-amplification-attacks-from-port-11211/)
 - [Linux UDP socket semantics](https://man7.org/linux/man-pages/man7/udp.7.html)
-- [Linux IP sysctl defaults](https://kernel.org/doc/html/latest/networking/ip-sysctl.html)
-- [RFC 6935: IPv6 UDP checksum exceptions](https://www.rfc-editor.org/rfc/rfc6935)
-- [RFC 2675: IPv6 jumbograms](https://www.rfc-editor.org/rfc/rfc2675)
-- [RFC 9868: UDP transport options](https://www.rfc-editor.org/rfc/rfc9868)
-- [RFC 4588: RTP retransmission](https://www.rfc-editor.org/rfc/rfc4588)
-- [DNS Flag Day 2020 guidance](https://www.dnsflagday.net/2020/)
+- [RFC 768: User Datagram Protocol](https://www.rfc-editor.org/rfc/rfc768)
+- [Ephemeral port — Wikipedia](https://en.wikipedia.org/wiki/Ephemeral_port)

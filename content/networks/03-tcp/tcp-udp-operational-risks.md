@@ -4,7 +4,7 @@ sourceLesson: tcp-udp-ports
 title: Congestion, reflection and UDP deployment
 level: basic
 minutes: 3
-summary: Congestion, reflection and UDP deployment, with worked examples and explicit assumptions.
+summary: The duties UDP leaves to the application: congestion control, reflection attacks, NAT timeouts and fragmentation.
 ---
 
 ## Pitfalls of UDP
@@ -14,6 +14,13 @@ summary: Congestion, reflection and UDP deployment, with worked examples and exp
 - **NAT and firewalls.** Idle mapping lifetimes vary. RFC 4787 specifies a normal minimum of two minutes, with a defined exception for some well-known destination ports; actual equipment may differ. Applications needing inbound reachability must account for the relevant timeout and keepalive policy. Some corporate networks block UDP outright, so clients supporting HTTP/2 or HTTP/1.1 can fall back to TCP; a QUIC-only application has no automatic TCP fallback.
 - **Fragmentation.** Oversized datagrams may fail locally or require permitted fragmentation. Fragment loss or filtering can prevent reassembly; UDP does not retransmit the missing data.
 
+> [!analogy] Real-world analogy: Catalogue requests in someone else's name
+> A prankster fills in hundreds of free postcards asking companies to post a heavy catalogue, writing a neighbour's address as the sender's address. Each postcard is light, but the neighbour's doormat is buried under catalogues.
+>
+> **How it maps:** The postcards are small spoofed UDP queries; the companies are open servers that reply without checking who asked; the catalogues are much larger responses, all delivered to the victim whose address was forged. The size ratio is the amplification factor.
+>
+> **Where it stops:** Network traffic arrives in seconds rather than days, and many networks can filter forged source addresses before they leave. Some UDP-based protocols also limit replies to an address they have not validated; QUIC, for example, caps a server at three times the bytes it has received until the client's address is validated.
+
 ## Key takeaways
 
 - UDP applications must account for congestion; choosing datagrams does not remove network responsibility.
@@ -22,19 +29,6 @@ summary: Congestion, reflection and UDP deployment, with worked examples and exp
 
 ## Further reading
 
-- [RFC 768: User Datagram Protocol](https://www.rfc-editor.org/rfc/rfc768)
 - [RFC 8085: UDP Usage Guidelines](https://www.rfc-editor.org/rfc/rfc8085)
-- [User Datagram Protocol — Wikipedia](https://en.wikipedia.org/wiki/User_Datagram_Protocol)
-- [Ephemeral port — Wikipedia](https://en.wikipedia.org/wiki/Ephemeral_port)
-- [RFC 6335: IANA port number procedures](https://www.rfc-editor.org/rfc/rfc6335)
 - [Memcrashed: amplification attacks from port 11211 — Cloudflare blog](https://blog.cloudflare.com/memcrashed-major-amplification-attacks-from-port-11211/)
-- [Linux UDP socket semantics](https://man7.org/linux/man-pages/man7/udp.7.html)
-- [Linux IP sysctl defaults](https://kernel.org/doc/html/latest/networking/ip-sysctl.html)
-- [RFC 6935: IPv6 UDP checksum exceptions](https://www.rfc-editor.org/rfc/rfc6935)
-- [RFC 2675: IPv6 jumbograms](https://www.rfc-editor.org/rfc/rfc2675)
-- [RFC 9868: UDP transport options](https://www.rfc-editor.org/rfc/rfc9868)
-- [RFC 4588: RTP retransmission](https://www.rfc-editor.org/rfc/rfc4588)
-- [DNS Flag Day 2020 guidance](https://www.dnsflagday.net/2020/)
-
-> [!note] Scope and omitted evidence
-> This lesson does not claim universal game update rates, media packet sizes, NAT timeouts, socket capacity or loss-recovery latency. Those require a specified implementation or measurement. Advanced UDP options and offload APIs are noted but not taught in detail here.
+- [User Datagram Protocol — Wikipedia](https://en.wikipedia.org/wiki/User_Datagram_Protocol)

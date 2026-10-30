@@ -23,23 +23,7 @@ SELECT id, total,
 FROM orders;
 ```
 
-The frame holds the current row and up to two before it, so the average divides by however many rows the frame actually has:
-
-```formula
-avg3_i = (t_{i−2} + t_{i−1} + t_i) / 3
-for i ≥ 3
-avg3_1 = 120 / 1 = 120
-avg3_2 = (120 + 45) / 2 = 82.5
-avg3_3 = (120 + 45 + 60) / 3 = 75
-where
-avg3_i: the three-order moving average on row i
-i: the row's position in date order, starting at 1
-t_i, t_{i−1}, t_{i−2}: the order totals on row i and on the one and two rows before it
-avg3_1, avg3_2, avg3_3: the moving average on rows 1, 2 and 3
-≥: greater than or equal to; the general line applies only from row 3 onward
-3: the frame size: 2 PRECEDING plus the current row
-In words: from the third row on, average the current order and the two before it; the first two rows have fewer rows in their frame, so they average only 1 and 2 values.
-```
+The frame holds the current row and up to two before it, so the average divides by however many rows the frame actually has. From the third row on, it averages the current order and the two before it. The first row's frame holds only itself (average 120), and the second row's holds two orders (120 and 45, average 82.5).
 
 Partial windows at the start are a common source of misleading charts.
 

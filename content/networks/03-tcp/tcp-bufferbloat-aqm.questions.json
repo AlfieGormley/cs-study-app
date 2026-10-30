@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "A large increase in RTT during upload is consistent with a shared standing queue. Identify the bottleneck and queue discipline before concluding. If traffic shares a FIFO, a packet waits for the backlog ahead of it to drain:\n\n```formula\nT_q ≈ 8 × Q / R\nT_q ≈ 8 × 250,000 / 2,000,000 = 1 s\nwhere\nT_q: queueing delay, in seconds (s)\nQ: bytes queued ahead of the packet, e.g. 250,000\nR: link rate, bits per second, e.g. 2,000,000\ns: seconds\n≈: approximately equal to\nIn words: 2 million queued bits on a 2 Mbit/s uplink add a second of delay.\n```\n\nAQM and appropriate shaping at a controlled router can reduce queueing, with configuration and throughput trade-offs.",
+    "workedExample": "1. A large increase in RTT that appears only while the upload runs is the signature of a standing queue at a shared bottleneck, usually the home uplink.\n2. If traffic shares a FIFO, each packet waits for the backlog ahead of it to drain: about a quarter of a megabyte queued on a 2 Mbit/s uplink adds roughly a second.\n3. The upload keeps that queue full because a loss-based sender grows its window until the buffer is full and drops packets, so every other packet through that queue inherits the delay.\n4. Identify the bottleneck and queue discipline before concluding. AQM (such as fq_codel) and appropriate shaping at a controlled router can reduce queueing, with configuration and throughput trade-offs.",
     "link": {
       "title": "Introduction to bufferbloat — bufferbloat.net",
       "url": "https://www.bufferbloat.net/projects/bloat/wiki/Introduction/"
@@ -33,27 +33,27 @@
     "id": "tcp-performance-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A FIFO has 500,000 queued bytes ahead of a newly admitted packet, served at a constant 10 Mbit/s. Ignore overhead, priorities and the new packet’s own transmission. How long does it wait?",
+    "prompt": "An ISP doubles the buffer in a customer's cable modem, from about 250 KB to 500 KB, to reduce packet drops during large uploads. The uplink rate is unchanged, the modem holds everything in one first-in, first-out queue, and the uploads use a loss-based congestion control such as CUBIC with no AQM or ECN. What happens to a video call that shares the uplink while an upload runs?",
     "options": [
       {
-        "text": "About 50 ms",
-        "explanation": "This treats 500 KB as 500 kilobits. Convert bytes to bits first: 500 KB is 4 Mbit."
+        "text": "Its latency improves, because fewer packets are dropped",
+        "explanation": "Fewer drops on the bulk upload do not make the call's packets travel faster. They still wait behind everything queued ahead of them."
       },
       {
-        "text": "About 4 ms",
-        "explanation": "This is off by a factor of 100. 4 Mbit at 10 Mbit/s takes 0.4 s to drain."
+        "text": "Nothing changes, because the uplink rate is the same",
+        "explanation": "The rate is the same, but the queue in front of each packet is longer, so each packet waits longer."
       },
       {
-        "text": "About 0.4 s",
-        "explanation": "Correct. 500,000 B × 8 = 4,000,000 bits; ÷ 10,000,000 bit/s = 0.4 s."
+        "text": "Its queueing delay roughly doubles, because the upload fills the bigger buffer and the call's packets wait behind twice the backlog, with no gain in upload throughput",
+        "explanation": "Correct. A loss-based sender keeps growing its window until the full buffer drops packets. Wait time is backlog divided by drain rate, so twice the backlog at the same rate is about twice the delay."
       },
       {
-        "text": "None, because CUBIC avoids filling buffers",
-        "explanation": "The question supplies a backlog. Neither CUBIC nor BBR guarantees that queues remain empty."
+        "text": "The upload becomes twice as fast, so it finishes sooner and the call is affected for less time",
+        "explanation": "The upload is limited by the uplink rate, which is already fully used. A bigger buffer adds waiting, not capacity."
       }
     ],
     "answer": 2,
-    "workedExample": "```formula\nT_q = Q × 8 / R\nT_q = 500,000 × 8 bit / (10^7 bit/s)\nT_q = 0.4 s\nwhere\nT_q: how long the packet waits, in seconds (s)\nQ: queued bytes ahead, 500,000\nR: service rate, 10 Mbit/s = 10^7 bit/s\nbit: binary digit; × 8 converts bytes\ns: seconds\nIn words: 4 million bits at 10 million bits a second take 0.4 s.\n```\n\nThis is the wait behind the specified backlog. CoDel’s 5 ms default target is not a hard guarantee for every packet.",
+    "workedExample": "1. A loss-based sender such as CUBIC keeps increasing its window until packets are dropped. With a tail-drop FIFO, that means it keeps the buffer close to full.\n2. Doubling the buffer therefore roughly doubles the standing backlog during the upload.\n3. A packet's wait is the backlog ahead of it divided by the drain rate. Same uplink rate, twice the backlog: about twice the queueing delay for every packet that shares the queue, including the video call's.\n4. The upload gains nothing: the uplink was already sending as fast as it can. This is bufferbloat.\n5. The fixes target the queue, not the buffer size alone: AQM such as CoDel or fq_codel, ECN, or shaping at a router you control.",
     "link": {
       "title": "Introduction to bufferbloat — bufferbloat.net",
       "url": "https://www.bufferbloat.net/projects/bloat/wiki/Introduction/"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Case A clears before a full interval of excessive delay, so it does not trigger the persistent-delay response under these assumptions. Case B satisfies both the persistent-delay and backlog conditions and enters dropping/marking behaviour. The control law schedules increasingly frequent signals:\n\n```formula\nt_next = t + I / √n\nt_next = t + 100 ms / √4 = t + 50 ms\nwhere\nt_next: when CoDel drops or marks next\nt: when it last dropped or marked\nI: the interval, 100 ms\nn: drops or marks so far in this episode\n√: square root\nms: milliseconds\nIn words: the gap shrinks with each signal: 100 ms, then 71, 58, 50 ms…\n```\n\nActual delay still depends on traffic response; 5 ms is a target, not a per-packet guarantee.",
+    "workedExample": "1. CoDel watches how long packets wait (their sojourn time), and in particular the minimum over each 100 ms interval.\n2. Case A spikes but empties within 20 ms, so the minimum delay over a full interval does not stay above the 5 ms target. That is a burst, which is exactly what buffers are for, and CoDel leaves it alone (barring a full buffer, which the question excludes).\n3. Case B stays at 30–40 ms for seconds, with enough backlog: the minimum over every interval is above target. That is a standing queue, so CoDel enters its dropping (or ECN-marking) state.\n4. While the delay stays above target, its control law shrinks the gap between signals in proportion to one over the square root of how many signals it has sent so far, so it signals more and more often until senders respond.\n5. Actual delay still depends on how the traffic responds; 5 ms is a target, not a per-packet guarantee.",
     "link": {
       "title": "RFC 8289: Controlled Delay Active Queue Management",
       "url": "https://www.rfc-editor.org/rfc/rfc8289"

@@ -4,7 +4,7 @@ sourceLesson: tcp-flow-control
 title: Zero windows, persist probes and tiny windows
 level: intermediate
 minutes: 3
-summary: Zero windows, persist probes and tiny windows, with worked examples and explicit assumptions.
+summary: What happens when the receiver's buffer fills, how persist probes avoid deadlock, and how to avoid tiny segments.
 ---
 
 ## Zero windows and the persist timer
@@ -15,41 +15,21 @@ Later the application reads, and the receiver sends a **window update**. But tha
 
 The fix is the **persist timer**. With data awaiting transmission against a zero window, the sender uses **zero-window probes** to solicit the current window. Probe segment construction depends on the implementation; it should not be confused with permission for unrestricted out-of-window data. The receiver must reply with an ACK carrying its current window, so a delivered probe/reply exchange can reveal the reopened window. Continued loss or endpoint failure can still prevent progress. Probes back off exponentially, like retransmissions.
 
+> [!analogy] Real-world analogy: A full warehouse and a lost "send more" message
+> A warehouse tells its supplier "we're full, stop delivering". Later it clears space and emails "send more", but the email goes astray. The supplier waits for the go-ahead; the warehouse waits for lorries. Nothing moves until the supplier rings now and then to ask "any room yet?", and the answer restarts deliveries.
+>
+> **How it maps:** "We're full" is a zero window; the lost email is a lost window update, a pure ACK that TCP never retransmits; the supplier's periodic call is the persist timer's zero-window probe, and the reply carries the current window.
+>
+> **Where it stops:** The supplier would ring at a steady pace, whereas TCP backs its probes off exponentially. And the probe and its reply are ordinary TCP segments that can themselves be lost, so progress still depends on some of them getting through.
+
 In `ss -ti` or a packet capture, repeated zero windows show a receiver-side flow-control restriction. Check application reads, memory pressure, socket policy and reassembly state; the capture alone does not uniquely identify a slow application or exclude concurrent network problems.
 
 ## Silly window syndrome
 
-If a receiver advertises a window as soon as a few bytes free up, and a sender fills it immediately, the connection degenerates into tiny segments: 40 bytes of headers carrying 10 bytes of data. Only a fifth of what crosses the wire is useful:
+If a receiver advertises a window as soon as a few bytes free up, and a sender fills it immediately, the connection degenerates into tiny segments: 40 bytes of IPv4 and TCP headers carrying, say, 10 bytes of data, so four-fifths of what crosses the wire is overhead. That is **silly window syndrome**, and there are fixes on both sides:
 
-```formula
-E = D / (D + H)
-E = 10 B / (10 B + 40 B) = 0.2 = 20 %
-where
-E: efficiency, the fraction of each packet that is application data
-D: data bytes per segment, here 10 bytes (B)
-H: header bytes per segment; 20 for IPv4 plus 20 for TCP = 40 bytes
-B: bytes
-In words: with 10-byte segments, 80 % of the bytes sent are headers.
-```
-
-That is **silly window syndrome**, and there are fixes on both sides:
-
-- **Receiver** (Clark's algorithm): don't advertise a larger window until it can grow by at least one MSS or half the buffer, whichever is smaller (see the formula below).
+- **Receiver** (Clark's algorithm): don't advertise a larger window until it can grow by at least one MSS or half the buffer, whichever is smaller. With a 1,460-byte MSS and a 64 KiB buffer, that means waiting until a full segment's worth of space has freed up.
 - **Sender**: don't send tiny segments when you could wait and send a full one. That leads to Nagle.
-
-Clark's receiver rule as a formula:
-
-```formula
-G_min = min(MSS, M / 2)
-G_min = min(1,460 B, 65,536 B / 2) = 1,460 B
-where
-G_min: the smallest increase in free space worth advertising, in bytes (B)
-MSS: maximum segment size, the most data one segment carries; 1,460 bytes is typical on Ethernet
-M: the receive buffer size; here 64 KiB = 65,536 bytes
-min: whichever of the values in brackets is smaller
-B: bytes
-In words: wait until a full segment's worth of space (or half the buffer, if that is smaller) has freed up before opening the window again.
-```
 
 ## Key takeaways
 
@@ -59,12 +39,4 @@ In words: wait until a full segment's worth of space (or half the buffer, if tha
 
 ## Further reading
 
-- [RFC 7323: TCP Extensions for High Performance](https://www.rfc-editor.org/rfc/rfc7323)
-- [RFC 896: Congestion Control in IP/TCP Internetworks (Nagle)](https://www.rfc-editor.org/rfc/rfc896)
 - [RFC 1122: Requirements for Internet Hosts](https://www.rfc-editor.org/rfc/rfc1122)
-- [Nagle's algorithm — Wikipedia](https://en.wikipedia.org/wiki/Nagle%27s_algorithm)
-- [Linux ip-sysctl documentation (tcp_rmem, tcp_wmem)](https://docs.kernel.org/networking/ip-sysctl.html)
-- [Bandwidth-delay product — Wikipedia](https://en.wikipedia.org/wiki/Bandwidth-delay_product)
-- [Linux TCP socket options](https://man7.org/linux/man-pages/man7/tcp.7.html)
-- [Linux socket buffer accounting](https://man7.org/linux/man-pages/man7/socket.7.html)
-- [Go TCPConn.SetNoDelay](https://pkg.go.dev/net#TCPConn.SetNoDelay)

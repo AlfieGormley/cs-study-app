@@ -39,6 +39,13 @@ WHERE id NOT IN (2, 3, NULL);
 
 Work through it for Ana (id 1). `1 NOT IN (2, 3, NULL)` means `1 <> 2 AND 1 <> 3 AND 1 <> NULL`. The last term is UNKNOWN, and `TRUE AND UNKNOWN` is UNKNOWN. `WHERE` keeps only TRUE rows, so Ana is dropped. So is everyone else.
 
+> [!analogy] Real-world analogy: a banned list with one unreadable entry
+> A door supervisor admits only guests they can confirm are *not* on a banned list. One entry on the list is smudged and unreadable. For any guest who isn't clearly on the list, the honest answer becomes "I can't tell", so nobody gets in.
+>
+> **How it maps:** `NOT IN` asks "is this id different from every value in the list?" The NULL is the smudged entry: `id <> NULL` is UNKNOWN, so the combined answer is never TRUE, and WHERE admits only TRUE. `NOT EXISTS` instead looks for a matching row; a NULL simply fails to match, so it never blocks anyone.
+>
+> **Where it stops:** UNKNOWN follows fixed rules of SQL's three-valued logic, not real uncertainty about reading the list: a NULL is never "possibly 4". The analogy also explains only the negative test; with plain `IN`, a definite match is still TRUE, as described below.
+
 In real code the NULL arrives through a subquery: `WHERE id NOT IN (SELECT referrer_id FROM ...)` where one row has a NULL `referrer_id`. The query silently returns nothing.
 
 > [!tip] Prefer NOT EXISTS

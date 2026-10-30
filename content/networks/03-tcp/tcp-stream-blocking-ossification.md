@@ -4,7 +4,7 @@ sourceLesson: tcp-performance
 title: Stream delivery gaps and ossification
 level: advanced
 minutes: 3
-summary: Stream delivery gaps and ossification, with worked examples and explicit assumptions.
+summary: Why one lost segment stalls every HTTP/2 stream on a TCP connection, and why TCP is hard to change.
 ---
 
 ## Head-of-line blocking
@@ -19,6 +19,13 @@ loss in js:        ^
 css: delivered
 later bytes wait for gap recovery
 ```
+
+> [!analogy] Real-world analogy: One checkout queue for several shoppers' items
+> Several shoppers put their items on one conveyor belt at a single till, separated by dividers. If the cashier must re-check the price of one item, everything behind it on the belt waits, including the next shoppers' items, even though their purchases have nothing to do with it.
+>
+> **How it maps:** The belt is the single TCP byte stream; each shopper's items are an HTTP/2 stream; the price check is a lost segment being retransmitted. Because TCP must hand over bytes strictly in order, data for unrelated streams waits behind the gap.
+>
+> **Where it stops:** A cashier could set the problem item aside and carry on; TCP cannot, because it knows nothing about streams. QUIC behaves like separate belts sharing one cashier: a gap holds up only its own stream, although all streams still share congestion and flow control.
 
 Multiple HTTP/1.1 connections have separate TCP delivery ordering; HTTP/2 multiplexes streams on a connection. A TCP gap blocks later bytes on that connection, not resources already delivered or other connections. Recovery has no fixed one-RTT duration. Which HTTP version is faster depends on the workload, implementation and path.
 
@@ -40,12 +47,5 @@ These constraints contribute to **ossification**: deployed equipment’s assumpt
 
 ## Further reading
 
-- [The Macroscopic Behavior of the TCP Congestion Avoidance Algorithm — Mathis et al.](https://www.cs.utexas.edu/~lam/395t/papers/Mathis1998.pdf)
-- [Introduction to bufferbloat — bufferbloat.net](https://www.bufferbloat.net/projects/bloat/wiki/Introduction/)
-- [RFC 8289: Controlled Delay Active Queue Management](https://www.rfc-editor.org/rfc/rfc8289)
 - [RFC 9000: QUIC](https://www.rfc-editor.org/rfc/rfc9000)
 - [The QUIC Transport Protocol: Design and Internet-Scale Deployment — Google (SIGCOMM 2017)](https://research.google/pubs/the-quic-transport-protocol-design-and-internet-scale-deployment/)
-- [RFC 7413: TCP Fast Open](https://www.rfc-editor.org/rfc/rfc7413)
-- [RFC 9001: Using TLS to Secure QUIC](https://www.rfc-editor.org/rfc/rfc9001)
-- [RFC 9002: QUIC Loss Detection and Congestion Control](https://www.rfc-editor.org/rfc/rfc9002)
-- [Mathis and Mahdavi: Deprecating the TCP Macroscopic Model (2019 editorial)](https://ccronline.sigcomm.org/wp-content/uploads/2019/10/acmdl19-323.pdf)

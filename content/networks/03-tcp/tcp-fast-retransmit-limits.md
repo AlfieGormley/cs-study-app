@@ -4,7 +4,7 @@ sourceLesson: tcp-reliability
 title: Duplicate ACKs and fast retransmit limits
 level: intermediate
 minutes: 3
-summary: Duplicate ACKs and fast retransmit limits, with worked examples and explicit assumptions.
+summary: What the sender does after three duplicate ACKs, and the small-window and tail losses where that signal never comes.
 ---
 
 ## Fast retransmit
@@ -33,10 +33,5 @@ Fast retransmit needs **enough data after the loss** to generate three duplicate
 
 ## Further reading
 
-- [RFC 6298: Computing TCP's Retransmission Timer](https://www.rfc-editor.org/rfc/rfc6298)
-- [RFC 2018: TCP Selective Acknowledgment Options](https://www.rfc-editor.org/rfc/rfc2018)
-- [RFC 8985: The RACK-TLP Loss Detection Algorithm for TCP](https://www.rfc-editor.org/rfc/rfc8985)
 - [RFC 5681: TCP Congestion Control (fast retransmit)](https://www.rfc-editor.org/rfc/rfc5681)
-- [RFC 7323: TCP Extensions for High Performance](https://www.rfc-editor.org/rfc/rfc7323)
-- [Congestion Avoidance and Control — Van Jacobson (1988)](https://ee.lbl.gov/papers/congavoid.pdf)
-- [Linux retransmission timer controls](https://kernel.org/doc/html/latest/networking/ip-sysctl.html)
+- [RFC 8985: The RACK-TLP Loss Detection Algorithm for TCP](https://www.rfc-editor.org/rfc/rfc8985)

@@ -39,7 +39,16 @@ INSERT OR REPLACE INTO stock
 -- after:  (4, 8, NULL)
 ```
 
-The `note` column was lost because the new row didn't supply it. In SQLite, delete triggers fire for that deletion only if recursive triggers are enabled, and foreign keys with `ON DELETE CASCADE` can remove child rows. Use `ON CONFLICT ... DO UPDATE` to change only the columns you name.
+The `note` column was lost because the new row didn't supply it.
+
+> [!analogy] Real-world analogy: replacing a form instead of correcting it
+> A clerk asked to change one answer on a filed form can either correct that answer, or shred the form and file a fresh one containing only what the request mentioned.
+>
+> **How it maps:** `ON CONFLICT ... DO UPDATE` corrects the named columns of the existing row. `INSERT OR REPLACE` shreds the old row and inserts a new one, so every column the INSERT did not supply falls back to its default.
+>
+> **Where it stops:** Shredding a form affects only that form. Deleting a row can also have knock-on effects elsewhere in the database, described below.
+
+The delete is real. In SQLite, delete triggers fire for that deletion only if recursive triggers are enabled, and foreign keys with `ON DELETE CASCADE` can remove child rows. Use `ON CONFLICT ... DO UPDATE` to change only the columns you name.
 
 A related SQLite parsing quirk: in `INSERT ... SELECT ... FROM t ON CONFLICT ...`, the parser reads `ON` as a join condition on `t` and fails with `near "DO": syntax error`. Give the `SELECT` a `WHERE` clause (even `WHERE true`) to fix it.
 

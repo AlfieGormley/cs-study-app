@@ -38,21 +38,21 @@ WHERE rn IN ((n + 1) / 2,
              (n + 2) / 2);
 ```
 
-The two `IN` positions come from integer division:
+The two `IN` positions come from integer division, which drops any fraction. For an even count they point at the two middle rows; for an odd count both point at the same single middle row:
 
-```formula
+```formula reference
 p_lo = ⌊(n + 1) / 2⌋
 p_hi = ⌊(n + 2) / 2⌋
-n = 8: ⌊9 / 2⌋ = 4, ⌊10 / 2⌋ = 5
-n = 7: ⌊8 / 2⌋ = 4, ⌊9 / 2⌋ = 4
 where
 p_lo, p_hi: the row numbers (rn) of the lower and upper middle rows
 n: the number of non-NULL totals, COUNT(*) OVER ()
 ⌊ ⌋: floor: round down to a whole number, which is what integer division does for positive numbers
-In words: for an even count the two expressions pick the two middle rows, and for an odd count they both pick the single middle row; averaging them gives the median.
+In words: for an even count the two expressions pick the two middle rows, and for an odd count they both pick the single middle row; averaging those rows gives the median.
 ```
 
 With eight rows the positions are fourth and fifth (both 60), so the median is 60. With seven rows both expressions select the fourth row, the single middle observation.
+
+SQLite also has an optional percentile extension with `median()`, `percentile_cont()` and `percentile_disc()`; SQLite's usual spelling is `percentile_cont(total, 0.5)`, without WITHIN GROUP. The `sqlite3` command-line tool has included these functions since 3.47.0, so `median(total)` returns 60 there. The SQLite library is different: the extension has been built into its amalgamation (single-file source) only since 3.51.0, and stays disabled unless the build enables it (`SQLITE_ENABLE_PERCENTILE`). An application's embedded SQLite library may not have it, so the window-function query above is the portable choice.
 
 ## Key takeaways
 - Number only the non-NULL observations before selecting middle rows.

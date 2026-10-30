@@ -4,10 +4,17 @@ sourceLesson: tcp-congestion
 title: Congestion collapse and the sender window
 level: advanced
 minutes: 3
-summary: Congestion collapse and the sender window, with worked examples and explicit assumptions.
+summary: Why the Internet once collapsed under retransmissions, and how the congestion window keeps senders in check.
 ---
 
 In October 1986, throughput between Lawrence Berkeley Laboratory and UC Berkeley, 400 yards apart, fell from 32 kbit/s to **40 bit/s**, a factor of 800. Jacobson and Karels attributed much of the problem to transport implementations’ response to congestion: when packets were lost, senders retransmitted aggressively, which caused more loss, which caused more retransmissions. The network was busy carrying copies of packets that would be dropped anyway. This was **congestion collapse**.
+
+> [!analogy] Real-world analogy: Everyone redialling after a busy tone
+> After a big event, everyone tries to phone home at once. Calls fail, so everyone immediately redials, and the redials add to the load. Soon the exchange spends its effort on attempts that cannot succeed, and fewer calls get through than if people had waited a moment.
+>
+> **How it maps:** Each redial is an aggressive TCP retransmission; the jammed exchange is the overloaded router queue dropping packets; the falling number of completed calls is the collapse in useful throughput. Jacobson's fix is the equivalent of each caller waiting longer after every failure and starting gently when lines clear.
+>
+> **Where it stops:** Callers can hear a busy tone, but a TCP sender gets no direct signal and has to infer congestion from missing or marked ACKs. And the telephone network can refuse new calls centrally, whereas the Internet relies on every sender restraining itself.
 
 Van Jacobson's 1988 fix, still at the heart of TCP, is that each sender must **infer** how much the network can take and back off when it is overloaded. Signals include ACK progress, losses, delays and, when deployed, explicit congestion marks from routers.
 
@@ -15,21 +22,20 @@ Van Jacobson's 1988 fix, still at the heart of TCP, is that each sender must **i
 
 The sender keeps a second window alongside the receiver's rwnd: the **congestion window** (cwnd), a sender-side limit on outstanding data derived from its congestion-control policy, not a direct measurement of network storage. In a simplified steady-state model, new-data sending respects whichever of cwnd and rwnd is smaller; recovery, probes, pacing and earlier in-flight data require more detailed accounting.
 
-For a continuously backlogged, window-limited flow under stable conditions, the sender delivers about one congestion window per round trip:
+For a continuously backlogged, window-limited flow under stable conditions, the sender delivers about one congestion window per round trip. That is the same window/RTT relationship as for the receive window, with cwnd as the limit:
 
-```formula
+```formula reference
 X ≈ cwnd / RTT
-X ≈ 100 × 1,460 B / (0.05 s)
-X ≈ 2,920,000 B/s ≈ 23.4 Mbit/s
 where
-X: the sending rate, in bytes per second (B/s) or megabits per second (Mbit/s)
-cwnd: the congestion window, in bytes; here 100 segments of 1,460 bytes
-RTT: round-trip time, in seconds (s); 50 ms is 0.05 s
+X: the sending rate, in bytes per second (B/s)
+cwnd: the congestion window, in bytes
+RTT: round-trip time, in seconds (s)
 B/s: bytes per second
-Mbit/s: megabits per second; multiply bytes per second by 8 and divide by a million
 ≈: approximately equal to
-In words: a 100-segment window over a 50 ms round trip moves about 23 Mbit/s; double the window or halve the RTT and the rate doubles.
+In words: a congestion-window-limited sender delivers about one window per round trip, so doubling the window or halving the round trip roughly doubles the rate.
 ```
+
+For example, a 100-segment window of 1,460-byte segments over a 50 ms round trip moves about 23 Mbit/s. Two consequences follow. Congestion control changes the rate by changing the window. And if the round trip changes, say after a route change or a growing queue, the rate changes too, even though the window has not.
 
 Congestion control is the set of rules for growing and shrinking cwnd. Every algorithm answers the same three questions:
 
@@ -47,11 +53,4 @@ Congestion control is the set of rules for growing and shrinking cwnd. Every alg
 
 - [Congestion Avoidance and Control — Van Jacobson (1988)](https://ee.lbl.gov/papers/congavoid.pdf)
 - [RFC 5681: TCP Congestion Control](https://www.rfc-editor.org/rfc/rfc5681)
-- [RFC 9438: CUBIC for Fast and Long-Distance Networks](https://www.rfc-editor.org/rfc/rfc9438)
-- [BBR: Congestion-Based Congestion Control — Google Research](https://research.google/pubs/bbr-congestion-based-congestion-control-2/)
-- [RFC 3168: Explicit Congestion Notification](https://www.rfc-editor.org/rfc/rfc3168)
 - [TCP congestion control — Wikipedia](https://en.wikipedia.org/wiki/TCP_congestion_control)
-- [Linux v6.12 BBRv1 implementation](https://github.com/torvalds/linux/blob/v6.12/net/ipv4/tcp_bbr.c)
-- [BBRv3 IETF draft, July 2026](https://datatracker.ietf.org/doc/html/draft-ietf-ccwg-bbr-06)
-
-- [Chiu and Jain: increase/decrease algorithms, original paper](https://pages.cs.wisc.edu/~suman/courses/740/papers/chiu89isdn.pdf)

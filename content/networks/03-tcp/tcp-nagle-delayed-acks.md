@@ -4,24 +4,12 @@ sourceLesson: tcp-flow-control
 title: Small writes, Nagle and delayed ACK rules
 level: intermediate
 minutes: 3
-summary: Small writes, Nagle and delayed ACK rules, with worked examples and explicit assumptions.
+summary: Two sensible small-data optimisations: Nagle's algorithm on the sender and delayed ACKs on the receiver.
 ---
 
 ## Nagle's algorithm
 
-John Nagle's 1984 rule ([RFC 896](https://www.rfc-editor.org/rfc/rfc896)) addresses, among other cases, interactive terminal traffic where a one-byte keystroke could occupy a 41-byte IPv4/TCP packet with minimal headers:
-
-```formula
-P = H_IP + H_TCP + D
-P = 20 B + 20 B + 1 B = 41 B
-where
-P: the size of the whole packet, in bytes (B)
-H_IP: the minimal IPv4 header, 20 bytes
-H_TCP: the minimal TCP header, 20 bytes
-D: the data, one keystroke, 1 byte
-B: bytes
-In words: sending each keystroke on its own wastes 40 bytes of headers to carry 1 byte, so only about 2.4 % of the packet is data.
-```
+John Nagle's 1984 rule ([RFC 896](https://www.rfc-editor.org/rfc/rfc896)) addresses, among other cases, interactive terminal traffic where a one-byte keystroke could occupy a 41-byte IPv4/TCP packet with minimal headers: 40 bytes of headers to carry 1 byte of data. On a slow, shared link, thousands of such packets waste most of the capacity.
 
 The rule:
 
@@ -29,19 +17,16 @@ The rule:
 
 In the simplified classic rule, further short new-data sends wait while data is outstanding unless enough data forms a full segment. Retransmissions, FIN handling and implementation variants require additional rules. On a slow link, keystrokes typed during one RTT are batched into one packet. Full-sized ready segments are not delayed by Nagle’s small-segment condition; partially filled tails or incremental application writes can still be affected.
 
+> [!analogy] Real-world analogy: Posting letters and acknowledging them
+> A clerk posting a stream of short notes decides: while one envelope is still awaiting its "received" reply, collect further notes in a tray and post them together. Meanwhile the recipient, to save stamps, waits a little before sending "received", hoping to put it in the same envelope as an actual answer.
+>
+> **How it maps:** The clerk's tray is Nagle's algorithm on the sender, holding small writes while earlier data is unacknowledged. The recipient's short wait is the delayed ACK on the receiver, which hopes to piggyback the acknowledgement on response data.
+>
+> **Where it stops:** A full sheet goes out straight away, just as Nagle never holds a full-sized segment. And the two habits interact badly when the recipient cannot answer until it has the note in the tray, which the next lesson examines as a real performance bug.
+
 ## Delayed ACK
 
-The receiver has its own optimisation. Instead of ACKing every segment at once, it waits briefly in the hope of **piggybacking** the ACK on response data, or covering two segments with one ACK. RFC 9293 requires delayed ACKs to be delayed by **less than 500 ms** and says an ACK **SHOULD** be generated for at least every second full-sized segment or every 2 × RMSS bytes of new data:
-
-```formula
-N_ack = 2 × RMSS
-N_ack = 2 × 1,460 B = 2,920 B
-where
-N_ack: the most new data that should arrive before the receiver sends an ACK, in bytes (B)
-RMSS: the receiver's maximum segment size, the largest segment it expects; 1,460 bytes is typical on Ethernet
-B: bytes
-In words: on a typical Ethernet path, the receiver should ACK at least every 2,920 bytes of new data, that is every second full segment.
-```
+The receiver has its own optimisation. Instead of ACKing every segment at once, it waits briefly in the hope of **piggybacking** the ACK on response data, or covering two segments with one ACK. RFC 9293 requires delayed ACKs to be delayed by **less than 500 ms** and says an ACK **SHOULD** be generated for at least every second full-sized segment (or every two receiver-MSS worth of new data, about 2,920 bytes on a typical Ethernet path).
 
 Other conditions can call for prompt ACKs.
 
@@ -55,12 +40,6 @@ Actual ACK scheduling depends on stack version, mode, connection state and confi
 
 ## Further reading
 
-- [RFC 7323: TCP Extensions for High Performance](https://www.rfc-editor.org/rfc/rfc7323)
 - [RFC 896: Congestion Control in IP/TCP Internetworks (Nagle)](https://www.rfc-editor.org/rfc/rfc896)
-- [RFC 1122: Requirements for Internet Hosts](https://www.rfc-editor.org/rfc/rfc1122)
 - [Nagle's algorithm — Wikipedia](https://en.wikipedia.org/wiki/Nagle%27s_algorithm)
-- [Linux ip-sysctl documentation (tcp_rmem, tcp_wmem)](https://docs.kernel.org/networking/ip-sysctl.html)
-- [Bandwidth-delay product — Wikipedia](https://en.wikipedia.org/wiki/Bandwidth-delay_product)
-- [Linux TCP socket options](https://man7.org/linux/man-pages/man7/tcp.7.html)
-- [Linux socket buffer accounting](https://man7.org/linux/man-pages/man7/socket.7.html)
-- [Go TCPConn.SetNoDelay](https://pkg.go.dev/net#TCPConn.SetNoDelay)
+- [RFC 1122: Requirements for Internet Hosts](https://www.rfc-editor.org/rfc/rfc1122)

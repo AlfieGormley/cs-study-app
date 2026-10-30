@@ -20,9 +20,9 @@ A semi-join keeps a row of the enclosing query with at least one match; an anti-
 | `NOT IN (subquery)` | Hashed SubPlan |
 | Correlated scalar | SubPlan per row |
 
-The interesting row is `NOT IN`. Because of the NULL semantics above, PostgreSQL 18 generally keeps this nullable form as a SubPlan rather than an ordinary anti-join. When the subquery result is small it builds a hash table of it (a "hashed SubPlan"). The memory a hash table may use is set by two configuration settings:
+The interesting row is `NOT IN`. Because of the NULL semantics above, PostgreSQL 18 generally keeps this nullable form as a SubPlan rather than an ordinary anti-join. When the subquery result is small it builds a hash table of it (a "hashed SubPlan"). The memory a hash table may use is the `work_mem` setting multiplied by `hash_mem_multiplier`; with default settings that is 8 MB:
 
-```formula
+```formula reference
 B = work_mem × hash_mem_multiplier
 B = 4 MB × 2.0 = 8 MB
 where
@@ -30,7 +30,7 @@ B: the hash-memory budget: how much memory one hash-based operation may use; a h
 work_mem: the per-operation memory setting for sorts and hash tables; the default is 4 MB
 hash_mem_multiplier: how many times work_mem a hash-based operation may use; the default is 2.0 since PostgreSQL 15 (it was 1.0 in 13 and 14)
 MB: megabyte; in PostgreSQL settings 1 MB = 1024 × 1024 = 1,048,576 bytes
-In words: a hash table may use work_mem multiplied by hash_mem_multiplier, which with default settings is 8 MB.
+In words: a hash table may use the per-operation memory setting multiplied by the hash multiplier; with PostgreSQL's defaults (4 MB and 2.0) that is 8 MB.
 ```
 
 If the planner estimates that the hashed subquery will exceed this budget, it uses a plain SubPlan that rescans the subquery for each row of the enclosing query, which can be catastrophically slow on large tables. That is a second reason to prefer `NOT EXISTS`.

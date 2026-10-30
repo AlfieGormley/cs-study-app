@@ -4,7 +4,7 @@ sourceLesson: tcp-reliability
 title: Tracing cumulative acknowledgements
 level: intermediate
 minutes: 3
-summary: Tracing cumulative acknowledgements, with worked examples and explicit assumptions.
+summary: What a cumulative ACK says, why a hole produces duplicate ACKs, and a small model receiver that shows it.
 ---
 
 ## Cumulative acknowledgements
@@ -26,6 +26,13 @@ seq=4001 ------------->    ACK 1001
 ```
 
 The receiver has bytes 2001–5000, but a cumulative ACK can only say "I'm still waiting for 1001". Those repeated ACKs are **duplicate ACKs**.
+
+> [!analogy] Real-world analogy: A serial story by post
+> A magazine posts you a serial story one chapter at a time, and asks you to tell them which chapter you need next. Chapter 2 goes missing, but chapters 3, 4 and 5 arrive. All you can honestly reply each time is "I've read up to chapter 1; please send chapter 2."
+>
+> **How it maps:** Your reply is a cumulative ACK: it names the first missing piece, so every chapter after the gap produces the same reply, a duplicate ACK. When chapter 2 finally arrives you can jump straight to "send chapter 6".
+>
+> **Where it stops:** TCP counts bytes, not chapters, and a sender may resend data in different-sized pieces. With SACK, a TCP receiver can also say which later ranges it holds, which this simple reply cannot.
 
 This sequence-space model merges received byte intervals, including overlap, and advances its cumulative point when gaps fill. It tracks coverage only: no payload comparison, sequence-number wrap, window limits, SYN/FIN, socket delivery, ACK timing or memory bounds. Nonnegative ordinary integer byte positions and positive interval lengths are required:
 
@@ -85,10 +92,5 @@ When the retransmitted 1001 arrives, the ACK leaps from 1001 to 5001: the receiv
 
 ## Further reading
 
-- [RFC 6298: Computing TCP's Retransmission Timer](https://www.rfc-editor.org/rfc/rfc6298)
 - [RFC 2018: TCP Selective Acknowledgment Options](https://www.rfc-editor.org/rfc/rfc2018)
-- [RFC 8985: The RACK-TLP Loss Detection Algorithm for TCP](https://www.rfc-editor.org/rfc/rfc8985)
 - [RFC 5681: TCP Congestion Control (fast retransmit)](https://www.rfc-editor.org/rfc/rfc5681)
-- [RFC 7323: TCP Extensions for High Performance](https://www.rfc-editor.org/rfc/rfc7323)
-- [Congestion Avoidance and Control — Van Jacobson (1988)](https://ee.lbl.gov/papers/congavoid.pdf)
-- [Linux retransmission timer controls](https://kernel.org/doc/html/latest/networking/ip-sysctl.html)

@@ -37,6 +37,13 @@ WHERE o.ordered_on = (
 
 Trace it for order 103 (Ana, 11 Feb): the inner query becomes "max date among customer 1's orders", which is 15 March. 11 Feb doesn't equal it, so 103 is dropped. For 107 the dates match, so it stays.
 
+> [!analogy] Real-world analogy: checking each pupil against their own class
+> A teacher goes down a list of pupils from several classes. For each pupil they ask, "Is this the best mark in *this pupil's* class?", and look only at that class's marks to answer.
+>
+> **How it maps:** The pupil list is the outer query and the current pupil is the row of the outer query being checked. The question about "this pupil's class" is the correlated subquery: `o2.customer_id = o.customer_id` plugs the current row's customer into the inner query, just as the teacher plugs in the pupil's class.
+>
+> **Where it stops:** A teacher would naturally work out each class's best mark once and reuse it. SQL defines the answer for each row of the outer query but does not promise any particular method; the optimiser may rewrite the query that way. And unlike the teacher, SQL cannot guess which "class" you meant: an unqualified column name binds to the nearest table, as the next paragraph shows.
+
 The aliases `o` and `o2` are essential. Without them, `customer_id = customer_id` inside the subquery would refer to orders inside the subquery on both sides and be true for every row.
 
 ### Correlated subqueries in SELECT

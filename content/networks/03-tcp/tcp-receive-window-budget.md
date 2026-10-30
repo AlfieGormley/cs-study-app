@@ -4,7 +4,7 @@ sourceLesson: tcp-flow-control
 title: Receive windows and the new-data budget
 level: intermediate
 minutes: 3
-summary: Receive windows and the new-data budget, with worked examples and explicit assumptions.
+summary: How the receive window gives a slow receiver backpressure, and how it combines with the congestion window.
 ---
 
 A server on a 10 Gbit/s link can produce data far faster than a phone can process it. Without receiver flow control, sustained arrivals faster than the application drains them can exhaust finite receive buffering and cause drops. Retransmitting does not remove that bottleneck.
@@ -13,11 +13,8 @@ A server on a 10 Gbit/s link can produce data far faster than a phone can proces
 
 Flow control is about **the receiver**. Congestion control (the congestion-control units) is about **the network**. They are separate mechanisms with separate windows, and the sender obeys whichever is smaller:
 
-```formula
+```formula essential
 A = max(0, min(rwnd, cwnd) − F)
-A = max(0 B, min(65,535 B, 14,600 B)
-               − 10,000 B)
-A = 14,600 B − 10,000 B = 4,600 B
 where
 A: how many more bytes of new data the sender may send right now, in bytes (B)
 rwnd: the receive window: how much the receiver has said it can accept, in bytes
@@ -26,8 +23,10 @@ F: the bytes in flight: sent but not yet acknowledged
 min: whichever of the values in brackets is smaller
 max: whichever is larger; max(0, …) stops the answer going below zero
 B: bytes
-In words: the sender may fill whichever window is smaller, minus what is already in flight. With a 65,535-byte rwnd, a 14,600-byte cwnd and 10,000 bytes in flight, it may send 4,600 more bytes.
+In words: the sender may fill whichever window is smaller, minus what is already in flight; it can never be told to send a negative amount.
 ```
+
+For example, with a 65,535-byte receive window, a 14,600-byte congestion window and 10,000 bytes in flight, the congestion window is the tighter limit and the sender may add 4,600 more bytes. Making the receive window bigger would change nothing until the congestion window grows past it.
 
 This is a simplified new-data budget with both windows expressed in bytes and measured from a consistent ACK point. Actual sending also depends on available data, pacing, recovery state and socket/packetisation rules.
 
@@ -47,6 +46,13 @@ Out-of-order data may occupy the range.
 
 As the application calls `recv()`, the buffer drains and window-update policy can permit a larger advertised window. If the application stops reading while data continues to arrive, finite receive capacity can be exhausted: the receiver advertises zero and the sender must stop ordinary new-data transmission. This is **backpressure**: a slow consumer automatically slows the producer, at the transport boundary. An application that keeps accumulating work in its own queue can still grow memory unless it propagates backpressure further.
 
+> [!analogy] Real-world analogy: A kitchen pass with limited shelf space
+> A kitchen sends plates to a serving hatch. The waiter says how many plates the hatch can hold right now, and the kitchen never sends more than that. If the waiter stops collecting plates, the hatch fills, the waiter says "none", and the cooks stop plating.
+>
+> **How it maps:** The hatch space the waiter reports is the receive window; the waiter collecting plates is the application calling `recv()`; the cooks stopping is backpressure on the sender.
+>
+> **Where it stops:** A TCP window advertisement reaches the sender after a delay and describes sequence space rather than counting items, and the sender learns of a change only when the next advertisement arrives. The hatch also protects only the receiver: a crowded corridor between kitchen and hatch needs a separate rule, the congestion window.
+
 The sender tracks a **sliding window**:
 
 ```
@@ -65,12 +71,5 @@ An ACK acknowledging new data advances the left edge; duplicate or stale ACKs do
 
 ## Further reading
 
-- [RFC 7323: TCP Extensions for High Performance](https://www.rfc-editor.org/rfc/rfc7323)
-- [RFC 896: Congestion Control in IP/TCP Internetworks (Nagle)](https://www.rfc-editor.org/rfc/rfc896)
 - [RFC 1122: Requirements for Internet Hosts](https://www.rfc-editor.org/rfc/rfc1122)
-- [Nagle's algorithm — Wikipedia](https://en.wikipedia.org/wiki/Nagle%27s_algorithm)
-- [Linux ip-sysctl documentation (tcp_rmem, tcp_wmem)](https://docs.kernel.org/networking/ip-sysctl.html)
 - [Bandwidth-delay product — Wikipedia](https://en.wikipedia.org/wiki/Bandwidth-delay_product)
-- [Linux TCP socket options](https://man7.org/linux/man-pages/man7/tcp.7.html)
-- [Linux socket buffer accounting](https://man7.org/linux/man-pages/man7/socket.7.html)
-- [Go TCPConn.SetNoDelay](https://pkg.go.dev/net#TCPConn.SetNoDelay)

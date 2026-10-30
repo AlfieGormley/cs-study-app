@@ -42,16 +42,7 @@ All three give 120 for the non-NULL totals shown. To ignore missing totals on ar
 - **Forgot DISTINCT?** With ties, the 5th highest via `ORDER BY total DESC LIMIT 1 OFFSET 4` without `DISTINCT` lands on the second 60 rather than 45. `ROW_NUMBER` makes the same mistake; `DENSE_RANK` is the ranking that means "Nth distinct value".
 - **Fewer than N values.** A returns one row containing NULL. B and C return **no rows**. If the spec says "return NULL", wrap it as a scalar subquery: `SELECT (SELECT DISTINCT total ... OFFSET 8) AS nth` gives a single NULL.
 
-OFFSET counts the rows to *skip*, which is why B skips one fewer row than the requested position:
-
-```formula
-k = N − 1
-k = 4 − 1 = 3
-where
-k: the OFFSET value: how many sorted rows to skip before returning one
-N: which highest value you want; N = 1 is the maximum, N = 4 the fourth highest
-In words: to land on the Nth row you skip the N − 1 rows above it; the distinct totals are 200, 120, 90, 60, …, so skipping 3 returns 60.
-```
+OFFSET counts the rows to *skip*, which is why B skips one fewer row than the requested position: the fourth highest distinct total needs `OFFSET 3`, skipping 200, 120 and 90 to land on 60.
 
 ## Key takeaways
 - Decide whether Nth means a distinct value or a row position.

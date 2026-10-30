@@ -29,27 +29,18 @@ HAVING COUNT(DISTINCT p.name) = 2;
 -- Ana, Cat
 ```
 
-In set terms the HAVING clause tests that the customer's products cover the whole required set:
+The `WHERE p.name IN (…)` filter keeps only lines for required products, and `COUNT(DISTINCT p.name) = 2` checks that the number of different required products a customer bought equals the number required, which means they bought all of them.
 
-```formula
-|P_c ∩ Q| = |Q|
-|P_Ana ∩ Q| = |{Kettle, Mug}| = 2
-where
-P_c: the set of distinct products customer c bought
-c: one customer, one GROUP BY group
-Q: the required products, here {Kettle, Mug}
-∩: intersection: the items in both sets
-|X|: the number of distinct items in set X; COUNT(DISTINCT …) computes it
-X: any set
-{ }: a set of distinct items
-P_Ana: the products Ana bought, which include both Kettle and Mug
-Kettle, Mug: product names
-In words: a customer qualifies when the number of required products they bought equals the number of required products, which means they bought all of them.
-```
+> [!analogy] Real-world analogy: a stamp card that needs every stamp
+> A coffee-shop offer gives a prize for a card with a stamp from each of two branches. Two stamps from the same branch do not complete it.
+>
+> **How it maps:** The required branches are the required products. Each order line is a stamp. `COUNT(DISTINCT p.name)` counts different branches stamped, so repeat visits to one branch do not count twice; the card is complete when that count equals the number of branches required.
+>
+> **Where it stops:** A stamp card has a fixed list printed on it. In SQL the "2" must match the required list, so if the list changes or is supplied from another table, compare with its count rather than a hard-coded number, and decide what an empty list should mean.
 
-The `WHERE p.name IN (…)` filter builds the intersection and `COUNT(DISTINCT p.name) = 2` compares its size. `DISTINCT` matters: Ana bought Kettle in two different orders, so a plain `COUNT` gives her 3 and wrongly excludes her. Worse, a customer who bought Kettle twice and no Mug would count 2 and wrongly pass.
+`DISTINCT` matters: Ana bought Kettle in two different orders, so a plain `COUNT` gives her 3 and wrongly excludes her. Worse, a customer who bought Kettle twice and no Mug would count 2 and wrongly pass.
 
-The same shape answers "customers who ordered in **every** month that had orders":
+The same shape answers "customers who ordered in **every** month that had orders" (SQLite's `strftime`; PostgreSQL would use `to_char(ordered_on, 'YYYY-MM')`):
 
 ```sql
 -- Count covered required products.

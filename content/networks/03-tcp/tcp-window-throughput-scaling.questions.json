@@ -3,27 +3,27 @@
     "id": "tcp-flow-control-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "A connection has no window scaling, so the receive window is at most 65,535 bytes. The RTT is 50 ms and the link is 1 Gbit/s. Roughly what is the maximum throughput? Use the steady-state window/RTT payload model, with the full receive window available and no tighter congestion or application limit.",
+    "prompt": "A user downloads a large file over a connection without window scaling, so the receive window is at most 65,535 bytes, and nothing else limits the flow. From a server 10 ms away the download runs at about 50 Mbit/s. The same download from a server 100 ms away, over the same 1 Gbit/s access link, is much slower. What does the window/RTT model predict, and why?",
     "options": [
       {
-        "text": "1 Gbit/s, the link speed",
-        "explanation": "The link could carry that, but the sender may only have one window unacknowledged per round trip, which caps it far lower."
+        "text": "About the same speed, because the access link is unchanged",
+        "explanation": "The link is not the limit here. With the window size fixed, the ceiling is one window per round trip, so the RTT matters directly."
       },
       {
-        "text": "About 10.5 Mbit/s",
-        "explanation": "Correct. A full 65,535-byte window every 50 ms gives about 1.31 MB/s, equivalent to about 10.5 Mbit/s."
+        "text": "About a tenth of the speed (roughly 5 Mbit/s), because the same window is delivered once per round trip and the round trip is ten times longer",
+        "explanation": "Correct. The ceiling is the window divided by the RTT. Ten times the RTT gives a tenth of the ceiling, whatever the link speed."
       },
       {
-        "text": "About 1.3 Mbit/s",
-        "explanation": "This forgets to convert bytes to bits. 1.31 is megabytes per second; multiply by 8 for megabits."
+        "text": "About a hundredth of the speed, because throughput falls with the square of the RTT",
+        "explanation": "With the window size fixed, the ceiling falls in proportion to the RTT, not its square."
       },
       {
-        "text": "About 3.3 Gbit/s",
-        "explanation": "3.3 Gbit/s does not follow from the stated window/RTT model and also exceeds the supplied 1 Gbit/s link capacity."
+        "text": "Faster, because a longer path has more room for data in flight",
+        "explanation": "A longer path can hold more data in flight, but without window scaling the sender cannot use that room: the window stays capped at 65,535 bytes."
       }
     ],
     "answer": 1,
-    "workedExample": "1. At most one window can be in flight before the first ACK returns, one RTT later.\n2. So:\n\n```formula\nX ≤ W / RTT\nX ≤ 65,535 B / (0.05 s) = 1,310,700 B/s\nX ≤ 1,310,700 × 8 bit/s ≈ 10.5 Mbit/s\nwhere\nX: throughput, in bytes per second (B/s)\nW: the window, 65,535 bytes (B)\nRTT: round-trip time, 50 ms = 0.05 s\nB: bytes\nbit: binary digit; × 8 turns bytes into bits\nMbit/s: megabits per second\ns: seconds\n≤: is at most\n≈: approximately equal to\nIn words: one 64 KB window per 50 ms round trip is at most about 10.5 Mbit/s.\n```\n\n3. That is about 1% of the link. The fix is window scaling plus large enough buffers.",
+    "workedExample": "1. Without window scaling, at most 65,535 bytes can be unacknowledged at once.\n2. The first ACK takes one round trip to return, so at most one window is delivered per round trip: throughput is at most the window divided by the RTT.\n3. Moving from 10 ms to 100 ms multiplies the RTT by ten, so the ceiling drops to a tenth: from about 52 Mbit/s to about 5.2 Mbit/s.\n4. Upgrading the access link would not help. The fix is a larger usable window: window scaling plus large enough buffers (and a congestion window to match).",
     "link": {
       "title": "Bandwidth-delay product — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Bandwidth-delay_product"
@@ -33,27 +33,27 @@
     "id": "tcp-flow-control-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "You need a single TCP flow to fill a 10 Gbit/s path with an 80 ms RTT. What is the smallest window scale shift count that allows a large enough window? Treat 10 Gbit/s as the target payload rate, ignore protocol overhead, and assume buffer and congestion-window capacity can be provisioned.",
+    "prompt": "A receiver will serve a single TCP flow on a 10 Gbit/s path with an 80 ms RTT, which needs about 100 MB of data in flight. Its socket buffer can grow later through autotuning. Which statement about window scaling is right for this connection?",
     "options": [
       {
-        "text": "7",
-        "explanation": "A shift of seven permits about 8.4 MB, far below the required 100 MB."
+        "text": "The receiver can raise its shift count later, once autotuning has grown the buffer",
+        "explanation": "The Window Scale option is only sent on SYN segments, so the shift in each direction is fixed for the life of the connection."
       },
       {
-        "text": "10",
-        "explanation": "A shift of ten permits about 67 MB, still short of the required 100 MB bandwidth-delay product."
+        "text": "The shift is fixed at the handshake, so the receiver must advertise a shift large enough for the biggest window it may later want; with too small a shift, a bigger buffer cannot be advertised",
+        "explanation": "Correct. A 16-bit field with a fixed shift has a hard maximum. A shift of 10 tops out near 67 MB, short of 100 MB; a shift of 11 allows about 134 MB."
       },
       {
-        "text": "14",
-        "explanation": "14 is the maximum allowed and would work (about 1 GiB), but it isn't the smallest that does."
+        "text": "Window scaling enlarges the sequence-number space so that 100 MB fits",
+        "explanation": "Sequence numbers stay 32 bits. Scaling only changes how the 16-bit window field is interpreted."
       },
       {
-        "text": "11",
-        "explanation": "Correct. A shift of eleven permits about 134 MB, covering the required 100 MB. A shift of ten would not suffice."
+        "text": "No scaling is needed if the congestion window is large enough",
+        "explanation": "The sender respects the smaller of the congestion and receive windows. Without scaling the receive window stays at most 65,535 bytes, far below 100 MB."
       }
     ],
-    "answer": 3,
-    "workedExample": "1. Bandwidth-delay product, then the multiplier the 16-bit field needs, then the smallest power of two that big:\n\n```formula\nBDP = C RTT\nBDP = 10^10 bit/s × 0.08 s\nBDP = 8 × 10^8 bit\nBDP = 8 × 10^8 bit / 8 = 100 MB\nM = BDP / F_max\nM = 100,000,000 B / (65,535 B)\nM ≈ 1,526\n2^10 = 1,024 < 1,526 ≤ 2^11 = 2,048\nW = 65,535 B × 2^11\nW ≈ 134 MB ≥ 100 MB\nwhere\nBDP: bandwidth-delay product, the data in flight needed to fill the path\nC: the target rate, 10 Gbit/s = 10^10 bits per second (bit/s)\nRTT: round-trip time, 80 ms = 0.08 s\nM: the multiplier the window field needs\nF_max: the largest unscaled window, 65,535 bytes (B)\nW: the largest window with shift 11\nbit: binary digit\nMB: megabytes, millions of bytes\nB: bytes\ns: seconds\n<: is less than\n≤: is at most\n≥: is at least\n≈: approximately equal to\nIn words: the path holds 100 MB, so the window must be multiplied by about 1,526; shift 10 gives only 1,024, shift 11 gives 2,048.\n```\n\n\nThis requires roughly 100 MB of usable in-flight payload capacity, with enough implementation-dependent buffer memory and congestion window. There is no universal Linux 6 MB maximum.",
+    "answer": 1,
+    "workedExample": "1. To fill the path, about one bandwidth-delay product must be in flight: 10 Gbit/s × 80 ms is about 100 MB.\n2. The 16-bit window field alone can say at most 65,535 bytes, so the receiver needs a multiplier of well over a thousand.\n3. The Window Scale option appears only on SYN segments, so each direction's shift is chosen once, at the handshake, and cannot change.\n4. Each step of the shift doubles the maximum: shift 10 gives about 67 MB, shift 11 about 134 MB, shift 14 just under 1 GiB.\n5. So the receiver must pick a shift at the start that leaves room for the largest window it may grow into. Enough buffer memory and a large enough congestion window are still needed.",
     "link": {
       "title": "RFC 7323: TCP Extensions for High Performance",
       "url": "https://www.rfc-editor.org/rfc/rfc7323"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Unscaled windows are at most 65,535 bytes.\n2. The unscaled ceiling:\n\n```formula\nX ≤ W × 8 / RTT\nX ≤ 65,535 B × 8 / (0.1 s)\nX ≤ 5,242,800 bit/s ≈ 5.2 Mbit/s\nwhere\nX: throughput, in bits per second (bit/s)\nW: the largest unscaled window, 65,535 bytes (B)\nRTT: round-trip time, 100 ms = 0.1 s\nB: bytes\nbit: binary digit\nMbit/s: megabits per second\ns: seconds\n≤: is at most\n≈: approximately equal to\nIn words: without scaling, a 100 ms path cannot exceed about 5.2 Mbit/s.\n```\n\n3. Endpoint and on-path captures establish that scaling was removed; the numerical match is supporting evidence, not a unique diagnosis.\n4. Inspect both handshake directions because inconsistent option rewriting can also produce disagreement or packet drops, not merely a clean throughput cap.",
+    "workedExample": "1. Unscaled windows are at most 65,535 bytes.\n2. One such window per 100 ms round trip is at most about 5.2 Mbit/s, which matches the plateau.\n3. Endpoint and on-path captures establish that scaling was removed; the numerical match is supporting evidence, not a unique diagnosis.\n4. Inspect both handshake directions, because inconsistent option rewriting can also produce disagreement or packet drops, not merely a clean throughput cap.",
     "link": {
       "title": "RFC 7323: TCP Extensions for High Performance",
       "url": "https://www.rfc-editor.org/rfc/rfc7323"

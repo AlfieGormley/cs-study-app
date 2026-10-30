@@ -4,7 +4,7 @@ sourceLesson: tcp-reliability
 title: RACK, tail probes and recovery diagnosis
 level: intermediate
 minutes: 3
-summary: RACK, tail probes and recovery diagnosis, with worked examples and explicit assumptions.
+summary: How RACK uses timing instead of duplicate-ACK counts, and how tail loss probes rescue lost final segments.
 ---
 
 ## Modern loss detection: RACK-TLP
@@ -12,19 +12,7 @@ summary: RACK, tail probes and recovery diagnosis, with worked examples and expl
 Counting duplicate ACKs is crude. **RACK-TLP** ([RFC 8985](https://www.rfc-editor.org/rfc/rfc8985)), reasons about transmission and acknowledgement **time**. The retrieved Linux documentation describes RACK support; availability and defaults in other systems require version-specific confirmation.
 
 - **RACK** (Recent ACKnowledgement) uses delivery of later-transmitted data, transmission times, an RTT estimate and a reordering window to infer losses of earlier unacknowledged transmissions. ACK/SACK information can provide this evidence; duplicate-ACK count alone is not the trigger. Reordering tolerance can adapt using D-SACK and other state.
-- **TLP** (Tail Loss Probe) schedules a probe timeout (PTO) whose baseline is two smoothed RTTs (see the formula below). Rules account for unavailable RTT estimates, possible delayed ACKs, the RTO deadline and probe eligibility. It prefers new data when available and permitted; otherwise it can retransmit the highest-sequence segment. A probe/ACK exchange may expose earlier tail loss to RACK. It does not guarantee delivery or a fixed total repair time.
-
-The baseline probe timeout, for example on a path with a 40 ms smoothed RTT:
-
-```formula
-PTO = 2 × SRTT
-PTO = 2 × 40 ms = 80 ms
-where
-PTO: probe timeout, how long TLP waits after the last send before probing, in milliseconds (ms)
-SRTT: the smoothed round-trip time, in ms
-ms: milliseconds
-In words: if nothing has been acknowledged within about two round trips, send a probe instead of waiting for the much longer RTO.
-```
+- **TLP** (Tail Loss Probe) schedules a probe timeout (PTO) whose baseline is two smoothed RTTs: on a path with a 40 ms smoothed RTT, about 80 ms after the last send, far sooner than a typical RTO. Rules account for unavailable RTT estimates, possible delayed ACKs, the RTO deadline and probe eligibility. It prefers new data when available and permitted; otherwise it can retransmit the highest-sequence segment. A probe/ACK exchange may expose earlier tail loss to RACK. It does not guarantee delivery or a fixed total repair time.
 
 The full rules adjust this baseline (for a single outstanding segment, a possible delayed ACK, and the RTO deadline).
 
@@ -50,13 +38,5 @@ The full rules adjust this baseline (for a single outstanding segment, a possibl
 
 ## Further reading
 
-- [RFC 6298: Computing TCP's Retransmission Timer](https://www.rfc-editor.org/rfc/rfc6298)
-- [RFC 2018: TCP Selective Acknowledgment Options](https://www.rfc-editor.org/rfc/rfc2018)
 - [RFC 8985: The RACK-TLP Loss Detection Algorithm for TCP](https://www.rfc-editor.org/rfc/rfc8985)
-- [RFC 5681: TCP Congestion Control (fast retransmit)](https://www.rfc-editor.org/rfc/rfc5681)
-- [RFC 7323: TCP Extensions for High Performance](https://www.rfc-editor.org/rfc/rfc7323)
-- [Congestion Avoidance and Control — Van Jacobson (1988)](https://ee.lbl.gov/papers/congavoid.pdf)
 - [Linux retransmission timer controls](https://kernel.org/doc/html/latest/networking/ip-sysctl.html)
-
-> [!note] Content omitted after review
-> Cross-platform adoption claims, fixed RACK/TLP repair times and a universal retransmission-health threshold are omitted because this review did not establish reliable versioned measurements. The receiver is a byte-coverage model, not a complete TCP stack.

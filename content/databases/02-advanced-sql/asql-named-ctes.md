@@ -39,17 +39,7 @@ ORDER BY s.spent DESC;
 | Ana | 240 |
 | Cat | 230 |
 
-Spend per customer is Ana 240, Ben 135, Cat 230 and Dev 45. The scalar subquery averages those four figures:
-
-```formula
-avg = (240 + 135 + 230 + 45) / n
-avg = 650 / 4 = 162.5
-where
-avg: the mean spend per customer, what AVG(spent) returns
-n: the number of rows in spend, one per customer who has ordered, here 4
-240, 135, 230, 45: the spend of Ana, Ben, Cat and Dev
-In words: add up the four customers' spend and divide by four; Ana (240) and Cat (230) are above the result.
-```
+Spend per customer is Ana 240, Ben 135, Cat 230 and Dev 45. The scalar subquery averages those four figures (650 / 4 = 162.5), and only Ana and Cat are above it.
 
 Eve never ordered, so she has no row in `spend` and isn't counted: the average is per ordering customer, not per customer. Notice that `spend` is used twice, once in `FROM` and once in the subquery. With separate derived tables for those two uses, you would repeat the aggregation text. A window aggregate is another possible formulation.
 

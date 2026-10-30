@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Two copies of the same bytes are in flight: the original (sent at the start) and the retransmission (sent 300 ms later).\n2. The ACK arrives 350 ms after the original send. It carries only an ACK number, which is identical for either copy.\n3. Candidate RTTs:\n\n```formula\nR_orig = t_ACK − t_orig\nR_orig = 350 ms − 0 ms = 350 ms\nR_copy = t_ACK − t_copy\nR_copy = 350 ms − 300 ms = 50 ms\nwhere\nR_orig: the RTT if the ACK was for the original\nR_copy: the RTT if the ACK was for the retransmission\nt_ACK: when the ACK arrived, 350 ms\nt_orig: when the original was sent, 0 ms\nt_copy: when the retransmission was sent, 300 ms\nms: milliseconds\nIn words: the same ACK implies either a 350 ms or a 50 ms round trip, and nothing in it says which.\n```\n\n4. Picking 50 ms when the truth is 350 ms makes the RTO too short, causing more timeouts; the reverse makes it too long.\n5. Karn: **discard samples from retransmitted data**, and keep the backed-off RTO until a clean sample arrives. The timestamp option permits RTT sampling when its echo rules disambiguate the measurement; it is not simply a universal echo of the latest arrival.",
+    "workedExample": "1. Two copies of the same bytes are in flight: the original (sent at time zero) and the retransmission (sent 300 ms later, when the timer fired).\n2. The ACK arrives 350 ms after the original was sent. It carries only an acknowledgement number, which is identical for either copy.\n3. So the same ACK implies either a 350 ms round trip (if it answers the original) or a 50 ms round trip (if it answers the copy), and nothing in it says which.\n4. Picking 50 ms when the truth is 350 ms makes the RTO too short, causing more spurious timeouts; the reverse makes it too long.\n5. Karn: **discard samples from retransmitted data**, and keep the backed-off RTO until a clean sample arrives. The timestamp option permits RTT sampling when its echo rules disambiguate the measurement; it is not simply a universal echo of the latest arrival.",
     "link": {
       "title": "RFC 6298: Computing TCP's Retransmission Timer",
       "url": "https://www.rfc-editor.org/rfc/rfc6298"
@@ -33,27 +33,27 @@
     "id": "tcp-reliability-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "A connection has an RTO of 300 ms when the peer's network cable is pulled. The sender keeps retransmitting the same segment with exponential RTO backoff. How long after the **original** transmission is the 4th retransmission sent? Assume the RTO timer starts with that original transmission, no ACK restarts it, no probe or early retry intervenes, and no floor/cap or application timeout changes the stated waits.",
+    "prompt": "A server's network cable is pulled mid-transfer. A capture on the client shows the same unacknowledged segment resent after gaps of 0.3 s, 0.6 s, 1.2 s and 2.4 s. The application blocks in a send/receive call with no deadline of its own. What does the pattern show, and what should the application expect?",
     "options": [
       {
-        "text": "1.2 s",
-        "explanation": "This is 4 × 300 ms, a linear increase, not a doubling. TCP doubles the timeout each time."
+        "text": "TCP has detected the failure and will report an error after the fourth attempt",
+        "explanation": "Four attempts are not a limit. Linux's default `tcp_retries2` of 15 corresponds to a hypothetical timeout of about 924.6 seconds before the connection is abandoned."
       },
       {
-        "text": "2.4 s",
-        "explanation": "2.4 s is the length of the fourth wait on its own, not the total elapsed time."
+        "text": "The gaps are growing because the path is congested, so TCP is waiting for the queue to drain",
+        "explanation": "A timeout gives no queue information. The doubling is TCP's exponential RTO backoff, which it applies whatever the cause of the missing ACKs."
       },
       {
-        "text": "4.8 s",
-        "explanation": "4.8 s is the next doubled timeout interval after the fourth expiry, not the elapsed time to retransmission four. The elapsed time is 0.3 + 0.6 + 1.2 + 2.4."
+        "text": "The RTO is being recomputed from fresh RTT samples, which are getting longer",
+        "explanation": "No ACK has arrived, so there are no new samples; Karn's rule also forbids sampling retransmitted data. Each gap is simply double the previous one."
       },
       {
-        "text": "4.5 s",
-        "explanation": "Correct. The waits are 0.3, 0.6, 1.2 and 2.4 s, which sum to 4.5 s."
+        "text": "Exponential RTO backoff: each expiry doubles the wait, so TCP may keep trying for many minutes; the application needs its own deadline (or a socket limit such as TCP_USER_TIMEOUT) to fail fast",
+        "explanation": "Correct. Doubling stops a sender hammering a dead path, but it also means TCP's own abort can take on the order of 15 minutes with Linux defaults. Fast failure detection is an application decision."
       }
     ],
     "answer": 3,
-    "workedExample": "Each expiry doubles the RTO for the next attempt.\n\n| Event | Wait | Elapsed |\n|---|---|---|\n| Original | – | 0 s |\n| Retx 1 | 0.3 s | 0.3 s |\n| Retx 2 | 0.6 s | 0.9 s |\n| Retx 3 | 1.2 s | 2.1 s |\n| Retx 4 | 2.4 s | 4.5 s |\n\nAs a formula, the waits form a doubling series:\n\n```formula\nT_k = RTO_0 × (2^k − 1)\nT_4 = 0.3 s × (16 − 1) = 4.5 s\nwhere\nT_k: the time from the original send to the k-th retransmission, in seconds (s)\nRTO_0: the starting timeout, 0.3 s\nk: which retransmission, 4 here\nT_4: the time to the fourth retransmission\ns: seconds\nIn words: 0.3 + 0.6 + 1.2 + 2.4 is 0.3 times 15, which is 4.5 seconds.\n```\n\nLinux’s actual abort timing depends on its configured limits and retry policy. An entirely idle connection with no outstanding data has no retransmission waiting to fail; use suitable keepalives, application heartbeats or operation deadlines when detection is required.",
+    "workedExample": "1. Each gap is twice the one before: 0.3, 0.6, 1.2, 2.4 seconds. That is exponential RTO backoff for the same unacknowledged data.\n2. Backoff is deliberate: if the path is down, resending faster would only add load. It gives no information about the cause.\n3. The waits keep doubling (subject to a maximum, 120 seconds by default on Linux), so the total grows fast. By the fourth retransmission 4.5 seconds have passed; Linux's default `tcp_retries2` of 15 corresponds to about 924.6 seconds before TCP gives up, and the documentation calls that a minimum, not a maximum.\n4. A blocked call with no deadline may therefore wait for many minutes. Applications that must notice a dead peer quickly set an operation deadline, use a heartbeat, or set a per-socket limit such as Linux's `TCP_USER_TIMEOUT`.",
     "link": {
       "title": "RFC 6298: Computing TCP's Retransmission Timer",
       "url": "https://www.rfc-editor.org/rfc/rfc6298"

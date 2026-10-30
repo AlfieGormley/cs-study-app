@@ -3,27 +3,27 @@
     "id": "asql-json-upsert-q3",
     "level": "basic",
     "type": "single",
-    "prompt": "Why does Postgres offer both `json` and `jsonb`, and which should a new table normally use?",
+    "prompt": "You are creating two PostgreSQL tables. Table A keeps webhook bodies, and an audit must be able to see exactly the JSON text that was submitted, including key order and any repeated keys. Table B keeps event payloads that dashboards filter with `payload @> '{\"type\":\"cart\"}'` using a GIN index. Which column types fit?",
     "options": [
       {
-        "text": "`json` is newer and faster; use `json`",
-        "explanation": "`json` came first (9.2) and re-parses the text on every operation. `jsonb` (9.4) was added to fix that."
+        "text": "A: `json`, B: `jsonb`",
+        "explanation": "Correct. json preserves the input text, key order and duplicate keys. jsonb is decomposed, supports `@>` and GIN indexing, and avoids reparsing the text for each operation."
       },
       {
-        "text": "They're identical; `jsonb` is just an alias",
-        "explanation": "They differ: `jsonb` removes duplicate keys (last one wins), doesn't keep key order, and supports more operators and GIN indexes."
+        "text": "A: `jsonb`, B: `json`",
+        "explanation": "This is swapped. jsonb discards whitespace, key order and duplicate keys, and json has no `@>` operator or default GIN operator class."
       },
       {
-        "text": "`jsonb` is only for arrays, `json` for objects",
-        "explanation": "Both types hold any JSON value: objects, arrays, strings, numbers, booleans or null."
+        "text": "`jsonb` for both, because jsonb also keeps the original text",
+        "explanation": "jsonb stores a decomposed binary form: `{\"b\":2,\"a\":1,\"a\":3}` comes back as `{\"a\": 3, \"b\": 2}`. The submitted text is not kept."
       },
       {
-        "text": "`jsonb` stores a decomposed binary form that supports GIN indexing and operators like `@>`; use `jsonb` unless you must keep the exact input text",
-        "explanation": "Correct. json preserves input whitespace, key order and duplicate keys. jsonb avoids reparsing that input and supports GIN indexing; performance still depends on the operation and workload."
+        "text": "`json` for both, because json supports GIN containment indexes too",
+        "explanation": "Containment `@>` and the GIN operator classes are for jsonb. In PostgreSQL 18, `json @> json` fails with `operator does not exist`."
       }
     ],
-    "answer": 3,
-    "workedExample": "Compare what each preserves and enables:\n\n| | json | jsonb |\n|---|---|---|\n| Exact text kept | yes | no |\n| Duplicate keys | kept | last wins |\n| Decode on read | every time | no |\n| GIN index, `@>`, `?` | no | yes |\n\nSo `'{\"b\":2,\"a\":1,\"a\":3}'::jsonb` becomes `{\"a\": 3, \"b\": 2}`. Choose `json` when preserving the submitted JSON text matters. For signatures over raw request bytes, retain that raw body too: database text encoding is a separate concern.",
+    "answer": 0,
+    "workedExample": "Compare what each preserves and enables:\n\n| | json | jsonb |\n|---|---|---|\n| Exact text kept | yes | no |\n| Duplicate keys | kept | last wins |\n| Decode on read | every time | no |\n| GIN index, `@>`, `?` | no | yes |\n\n1. Table A needs the submitted text, so `json`. (For signatures over raw request bytes, keep the raw body too: database text encoding is a separate concern.)\n2. Table B needs containment queries and a GIN index, so `jsonb`.\n3. Without a reason to keep exact text, `jsonb` is the normal default for new tables. It costs a little more on insert; overall performance still depends on the operations and workload.",
     "link": {
       "title": "JSON types — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/18/datatype-json.html"

@@ -1,6 +1,6 @@
 # Concept-first library review
 
-Status: **in progress**. 24/60 modules and 602/1845 active lessons have current independent editorial reviews.
+Status: **in progress**. 26/60 modules and 686/1845 active lessons have current independent editorial reviews.
 
 This report counts only active lesson IDs from module.json. Retired subjects (os, architecture, theory, languages; see `content/retired-subjects.json`) are excluded. Pending modules have not been certified by keyword scans or by renderer tests.
 
@@ -15,7 +15,7 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | Module | Status | Lessons | Questions | Lesson formula cards before → after | Essential / reference | Question cards before → after | Glossary terms | Review units | Corrections |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
 | [databases / SQL Fundamentals](../content/databases/01-sql-fundamentals/verification.json) | Reviewed | 40 | 74 | 18 → 4 | 0 / 4 | 13 → 0 | 270 | 118 | 10 |
-| databases / Advanced SQL | Pending review | 41 | — | — | — | — | — | — | — |
+| [databases / Advanced SQL](../content/databases/02-advanced-sql/verification.json) | Reviewed | 41 | 71 | 30 → 3 | 0 / 3 | 22 → 0 | 149 | 135 | 10 |
 | databases / Relational Theory & Normalisation | Pending review | 35 | — | — | — | — | — | — | — |
 | databases / Query Processing & Optimisation | Pending review | 33 | — | — | — | — | — | — | — |
 | databases / PostgreSQL | Pending review | 13 | — | — | — | — | — | — | — |
@@ -38,7 +38,7 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | [embedded / Debugging, Reliability & First Projects](../content/embedded/04-debugging-and-projects/verification.json) | Reviewed | 6 | 18 | 0 → 0 | 0 / 0 | 0 → 0 | 36 | 90 | 2 |
 | [networks / Network Foundations & the Link Layer](../content/networks/01-foundations/verification.json) | Reviewed | 37 | 72 | 47 → 19 | 0 / 19 | 34 → 0 | 433 | 139 | 2 |
 | [networks / IP, Addressing & Routing](../content/networks/02-ip-routing/verification.json) | Reviewed | 38 | 84 | 28 → 7 | 2 / 5 | 26 → 0 | 438 | 158 | 16 |
-| networks / Transport Layer: TCP & UDP in Depth | Pending review | 43 | — | — | — | — | — | — | — |
+| [networks / Transport Layer: TCP & UDP in Depth](../content/networks/03-tcp/verification.json) | Reviewed | 43 | 81 | 50 → 17 | 4 / 13 | 39 → 1 | 323 | 195 | 15 |
 | networks / Application-Layer Protocols | Pending review | 42 | — | — | — | — | — | — | — |
 | networks / Network Security | Pending review | 36 | — | — | — | — | — | — | — |
 | networks / Wireless, Mobile & Modern Networks | Pending review | 37 | — | — | — | — | — | — | — |
@@ -106,6 +106,46 @@ The report certifies editorial provenance only. Build, migration, rendering, off
 **Low-confidence areas, including preserved qualifications:**
 
 None recorded in this editorial review.
+
+
+## databases / Advanced SQL
+
+24 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- C1 asql-window-ranking analogy: "dead heat" yet "finish-line camera still lists one of them first" (self-contradictory: a dead heat is declared because the photo cannot separate them) -> results printout must put one name above the other; limit reworded (printer may choose a rule; ROW_NUMBER none) + convention-varies note.
+- C2 asql-conditional-pivots: per-customer month-count table listed Ana, Dev, Eve only (Ben and Cat silently omitted from a 5-customer result) -> added Ben 1/0/1 and Cat 0/1/1 (executed SQLite 3.51).
+- C3 asql-relational-division: author moved the COUNT vs COUNT(DISTINCT) pitfall (Ana counted 3 and excluded; Kettle-twice-no-Mug wrongly passes) inside the collapsed analogy's 'Where it stops', hiding a fact that question asql-interview-problems-q4 tests -> restored as visible prose after the callout.
+- C4 asql-median-rows: "part of the SQLite source from 3.51.0 ... the macOS 3.51.0 CLI had it" misattributed why the CLI works: the sqlite3 CLI has bundled median()/percentile*() since 3.47.0 (changes.html), whereas the library amalgamation includes it from 3.51.0 only with SQLITE_ENABLE_PERCENTILE (and before that it was in the source tree as a separately compiled loadable extension, so "part of the source from 3.51.0" was wrong). macOS /usr/bin/sqlite3 PRAGMA compile_options has no ENABLE_PERCENTILE yet median() works. Reworded; also noted SQLite's percentile_cont(total, 0.5) spelling (no WITHIN GROUP without SQLITE_ENABLE_ORDERED_SET_AGGREGATES).
+- C5 glossary sqlite-percentile-extension: same "included in the SQLite source from 3.51.0" error -> amalgamation from 3.51.0 behind SQLITE_ENABLE_PERCENTILE; CLI since 3.47.0. Example reworded.
+- C6 asql-json-storage analogy limit: 'jsonb ... discards only presentation details such as whitespace, key order and duplicate keys' overstated fidelity (executed PG 18.6: '1.230e-5' -> 0.00001230, 'é' -> é) and called dropped duplicate keys presentation -> values kept but spelling may be rewritten; original text (whitespace, key order, earlier duplicate keys) not kept.
+- C7 asql-atomic-upserts analogy limit: 'waits ... until the first transaction commits or rolls back' implied the waiter then always succeeds; two-session test on PG 18.6 (race.sh/race.out): same-key waits on transactionid lock (new and existing key, DO UPDATE and DO NOTHING), different key does not wait; after commit READ COMMITTED takes the update path (2 -> 12, 1 -> 17) but REPEATABLE READ fails 'could not serialize access due to concurrent update' -> limit now states both outcomes.
+- C8 asql-upsert-batch-replace: author moved the REPLACE side effects (delete triggers only with recursive_triggers, ON DELETE CASCADE removes child rows) and the 'use DO UPDATE' advice from visible prose into the collapsed analogy limit; question asql-json-upsert-q5's workedExample relies on them -> restored as visible prose after the callout (executed SQLite 3.51/3.53: child row cascaded, trigger logged only with PRAGMA recursive_triggers=ON).
+- C9 glossary wrong-sense links in new author prose: exists-null-trap analogy "rule of three-valued logic" opened software-engineering 'rule-of-three' -> "fixed rules of SQL's three-valued logic"; correlated-subqueries analogy (x2) and quantified-comparisons "outer row" opened databases/04 join outer/inner side -> "row of the outer query". (My own new upsert text: "serialization error" would open system-design entry -> "serialization failure", this module's own entry.)
+- C10 pre-existing wrong-sense cross-subject links reworded in this module: 'request deduplication' (atomic-upserts intro) opened React request-sharing -> 'must recognise and skip a repeated request'; 'error handling' (merge-concurrency) opened JavaScript try...catch -> 'raise errors that the application must handle or retry'. 'result types' in unchanged question asql-ctes-q9 (opens software-engineering Result/error-value) recorded as integration dependency instead of editing an unchanged question.
+
+**Scope gaps and exclusions:**
+
+- Historical minimum versions checked in official version-specific manuals/releases rather than obsolete binaries.
+- Production latency, index-size and plan-selection comparisons remain conditional; native fixtures demonstrate mechanisms rather than workload benchmarks.
+- As the author reported, the module has no transaction-isolation or general indexing lessons (only JSON indexes and upsert concurrency); those topics live in other modules.
+- Several lessons keep one question (e.g. asql-quantified-comparisons, asql-set-precedence, asql-revenue-thresholds); no questions were added in this pass.
+- LATERAL vs ROW_NUMBER performance (asql-top-group-strategies, q10) is argued from plan mechanics, not a large-table timing run.
+- Older-version behaviour (PostgreSQL 11 CTE fence, PG 13/14 hash_mem_multiplier 1.0, PG < 16 subquery alias, SQLite thresholds 3.24-3.47) verified from release notes only; no old binaries executed.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, asql-json-indexes: Relative production performance and physical I/O of the conditional plan/index strategy. Documented mechanism and native small fixtures checked; no production benchmark is claimed. Text states data, selectivity, visibility and planner qualifications.
+- medium confidence, asql-subquery-plans: Relative production performance and physical I/O of the conditional plan/index strategy. Documented mechanism and native small fixtures checked; no production benchmark is claimed. Text states data, selectivity, visibility and planner qualifications.
+- medium confidence, asql-top-group-strategies: Relative production performance and physical I/O of the conditional plan/index strategy. Documented mechanism and native small fixtures checked; no production benchmark is claimed. Text states data, selectivity, visibility and planner qualifications.
+- medium confidence, asql-window-last-value: Relative production performance and physical I/O of the conditional plan/index strategy. Documented mechanism and native small fixtures checked; no production benchmark is claimed. Text states data, selectivity, visibility and planner qualifications.
+- medium confidence, asql-median-rows: Which SQLite builds expose median()/percentile functions. Primary docs (percentile.html, compile.html, 3.51.0 release notes, changes.html 3.47.0) and three builds checked (macOS 3.51.0 CLI and Homebrew 3.53.0 CLI have them; node:sqlite 3.53.0 too), but third-party/embedded builds vary; the lesson now hedges and recommends the portable query.
+- high confidence, asql-atomic-upserts: Analogy limit: a second session waits only on the same unfinished key; READ COMMITTED then inserts/updates; REPEATABLE READ can fail with a serialization failure. Two-session test (5 cases) on PG 18.6 plus transaction-iso and index-unique-checks docs; SERIALIZABLE not separately executed, so the text says 'a stricter level such as REPEATABLE READ'.
+- high confidence, asql-merge-concurrency: PG 18 RETURNING old/new for INSERT, UPDATE, DELETE and MERGE. Release-18 notes and executed for all four statements in PG 18.6.
+- medium confidence, asql-window-ranking: Dead-heat placing convention (shared place, next skipped). Sporting conventions vary; the analogy now says so. Teaching aid only, not a factual claim the questions rely on.
+- medium confidence, module-wide: Version thresholds for PostgreSQL < 18 (11 CTE fence, 12 inlining, 13 WITH TIES/hash_mem_multiplier, 14 SEARCH/CYCLE, 15 MERGE/run conditions/hash_mem 2.0, 16 optional subquery alias, 17 MERGE RETURNING) and SQLite < 3.51 (3.24 upsert, 3.25 windows, 3.28 GROUPS, 3.30 FILTER, 3.35 RETURNING/MATERIALIZED, 3.44 ordered aggregates, 3.45 JSONB, 3.47 CLI percentile). Each confirmed in the official release notes or version-specific manual; behaviour executed only on PG 18.6 and SQLite 3.51.0/3.53.0.
+- medium confidence, asql-subquery-plans: A hashed SubPlan must fit its size estimate within work_mem x hash_mem_multiplier. Defaults verified in docs; the switch to a plain SubPlan reproduced by lowering work_mem in PG 18.6; the exact estimate rule is in planner source rather than user documentation.
 
 
 ## dsa / Complexity Analysis
@@ -479,6 +519,73 @@ None recorded in this editorial review.
 - medium confidence, glossary:nat66: Stateful, port-translating NAT66 brings back the per-connection state of IPv4 NAPT. NPTv6 behaviour is verified in RFC 6296 (experimental); stateful NAT66 is implementation practice without an IETF standard, so the text describes it only in general terms.
 - medium confidence, ip-ospf-interface-costs: Classic Cisco 100 Mbit/s reference and integer truncation in the reference cost card. Inherited from the earlier verified record (Cisco FAQ); not re-fetched in this pass. The lesson presents it as one implementation's model.
 - medium confidence, ip-bgp-rpki-validation: ASPA verification Internet-Draft dated August 2026. Inherited, time-sensitive draft status; not re-fetched.
+
+
+## networks / Transport Layer: TCP & UDP in Depth
+
+36 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- tcp-udp-header (lesson + tcp-udp-ports-q2): 'Linux UDP normally uses PMTU discovery and can return EMSGSIZE' → Linux's default socket mode (IP_PMTUDISC_WANT) fragments an oversized datagram locally; IP_PMTUDISC_DO returns EMSGSIZE. Verified in a Linux 6.12 container (60,000-byte send: 41 fragments by default; EMSGSIZE with DO/PROBE) and in IP_MTU_DISCOVER(2const); udp(7)'s default-EMSGSIZE sentence is outdated.
+- tcp-rto-estimator q5: 'samples fall between 98 and 102 ms / swing between 60 and 140 ms' did not determine the stated ≈110/≈260–270 ms RTOs (evenly spread 60–140 ms samples settle near 140–200 ms) → prompt says the samples alternate; worked example says ≈270 ms and notes the spread-sample case.
+- tcp-syn-flood-cookies analogy: cloakroom still stored a coat per customer, contradicting the stateless cookie → stamped ticket carrying the party size, nothing kept at the door.
+- tcp-nagle-delayed-acks: the fact that Nagle never delays full-sized segments had been moved into the collapsed analogy only, although tcp-flow-control-q6 depends on it → restored to the visible text.
+- tcp-reno-round-trace lesson and tcp-congestion-q5: 'ssthresh is halved' / 'A timeout halves ssthresh' → ssthresh is set to about half the window (FlightSize) at the loss (RFC 5681 eq. 4).
+- tcp-slow-start-flights q1: a loss-free switch at 80 segments on a new connection was attributed to ssthresh without explaining where a low ssthresh came from (RFC 5681 starts it arbitrarily high) → worked example names cached/route ssthresh or Linux CUBIC HyStart (sets ssthresh = cwnd).
+- tcp-reno-large-path-recovery q9: the 12,000-segment sawtooth peak lacked its assumptions → states steady one-loss-per-10-minutes, fast recovery only, peak where P/2 + 6,000 = P, ≈9,000-segment (≈1 Gbit/s) average.
+- tcp-bufferbloat-aqm q6: 'roughly doubles' assumed one tail-drop FIFO → prompt states it.
+- tcp-port-numbers q5: reuse of the source-port pool against a second destination is OS-dependent → hedged in the explanation (Linux behaviour tested).
+- tcp-graceful-close-time-wait analogy: 'the side that hung up first' contradicted lingering on the line → 'said goodbye first'.
+- tcp-slow-start-flights analogy: leftovers mapped to ssthresh itself → leftovers are the signal that ends doubling (reaching ssthresh or detecting loss).
+- tcp-ecn-congestion-feedback analogy: title said 'running late' while the body said 'kitchen busy'; limit omitted on-path ECN bleaching → aligned and extended.
+- tcp-bbr-versioned-model: duplicated 'ideal operating point' sentence removed; analogy title matched its café-manager text.
+- Dictionary links: 'posted' (opened HTTP POST) in the postcard analogy, 'Chiu–Jain convergence' (opened routing convergence) in the AIMD analogy and 'next expected number' (opened DSA expected value) in tcp-connections-q11 → reworded.
+- Glossary: application-heartbeat source changed from Wikipedia to RFC 6455 §5.5.2 (WebSocket Ping as keepalive/liveness check); added ip-mtu-discover (IP_MTU_DISCOVER/IP_PMTUDISC_DO/WANT) and tcp-hystart for terms introduced by the corrections.
+
+**Scope gaps and exclusions:**
+
+- No WAN packet-capture experiment, SYN flood, AQM benchmark or QUIC migration experiment. Source-supported algorithms and explicit bounded models do not imply measured deployment performance.
+- The selector loop deliberately retains partial-write/would-block defects for its own debugging question; it is not a production server. Services need total deadlines and resource/connection policies.
+- Advanced UDP options and implementation-specific recovery/state handling are described selectively rather than implementing a full transport stack.
+- The Chiu/Jain scanned first page/abstract was inspected visually, not a complete independent proof of the paper; the fairness attribution remains limited to its simplified model.
+- No browser render at 390 px; node renderer checks only (left to release QA).
+- Linux behaviour was tested on one kernel (6.12, linuxkit) and loopback only; no WAN, AQM, BBR or migration measurements.
+- QUIC lesson's tuning checklist remains TCP-centric (inherited).
+- BBRv2/v3 only summarised and hedged; the BBRv3 draft date is time-sensitive (inherited).
+- Several cross-subject multi-word fallbacks in inherited text still open other subjects' entries ('length field' → security payload-length, 'data byte(s)' → MIDI, 'unsigned integer' → DSA, 'side channels' → crypto, 'error handling' → React try/catch); recorded, not changed.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, tcp-port-numbers: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-syn-flood-cookies: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-graceful-close-time-wait: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-close-states-production: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-rto-backoff-ambiguity: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-rack-tail-probes: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-buffer-autotuning: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-nagle-delayed-acks: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-split-write-latency: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-aimd-reno-recovery: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-reno-large-path-recovery: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-cubic-time-target: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-bbr-versioned-model: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-ecn-congestion-feedback: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-short-transfer-timing: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-mathis-loss-model: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-bufferbloat-aqm: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-stream-blocking-ossification: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-quic-transport-tradeoffs: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-socket-calls-backlogs: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-length-prefixed-service: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-readiness-asyncio: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- medium confidence, tcp-udp-header: Linux default fragments an oversized UDP datagram locally; IP_PMTUDISC_DO returns EMSGSIZE. Tested on Linux 6.12 and documented in IP_MTU_DISCOVER(2const), but udp(7) still says EMSGSIZE by default and the behaviour depends on ip_no_pmtu_disc, per-route settings and kernel version; the lesson names the tested kernel.
+- medium confidence, tcp-port-numbers: q5: a second backend or source address lets the proxy reuse the same source-port pool. Tested for Linux connect() and bind-to-source; other operating systems may allocate ephemeral ports globally, which the explanation now notes.
+- high confidence, tcp-rto-estimator: q5: RTOs settle near 110 ms and 270 ms. Re-derived by simulation for the alternating samples now stated in the prompt (108.4–108.7 ms; 268–273 ms).
+- medium confidence, tcp-reno-large-path-recovery: q9: sawtooth peaking near 12,000 segments, ≈1 Gbit/s average. Idealised steady-state model; assumptions now stated in the worked example; real flows add slow start, timeouts and RTT variation.
+- medium confidence, tcp-bufferbloat-aqm: q6: doubling a tail-drop modem buffer roughly doubles queueing delay. Holds for one FIFO kept near full by a loss-based sender at a constant uplink rate (now stated); real cable modems may shape or use several queues.
+- medium confidence, tcp-slow-start-flights: q1: a loss-free switch to linear growth at 80 segments reflects ssthresh (cached/route value or HyStart). HyStart's exit and ssthresh assignment verified in tcp_cubic.c v6.12; a real CUBIC trace would grow cubically, not by exactly one segment, after the switch.
+- high confidence, multiple: 25 analogies (mapping and limit). Each reviewed against the lesson's primary sources; five corrected. They remain teaching aids, not evidence.
 
 
 ## react / Components and JSX

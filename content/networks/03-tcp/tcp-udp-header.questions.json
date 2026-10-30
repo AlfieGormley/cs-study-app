@@ -3,27 +3,27 @@
     "id": "tcp-udp-ports-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "How big is the UDP header?",
+    "prompt": "A capture shows a UDP header of 8 bytes, while the TCP segments on the same host have headers of at least 20 bytes. What best explains the difference?",
     "options": [
       {
-        "text": "20 bytes",
-        "explanation": "20 bytes is the minimum size of the IPv4 header and of the TCP header, not UDP. UDP is deliberately tiny."
+        "text": "UDP compresses its header fields, while TCP sends them uncompressed",
+        "explanation": "Neither protocol compresses its header. UDP's header is small because it has fewer fields, not because the same fields are encoded more tightly."
       },
       {
-        "text": "8 bytes",
-        "explanation": "Correct. Four 16-bit fields: source port, destination port, length and checksum."
+        "text": "Base UDP promises no ordering, retransmission or flow control, so it needs no sequence, acknowledgement or window fields",
+        "explanation": "Correct. UDP carries only source port, destination port, length and checksum: four 16-bit fields. TCP's extra fields exist to support the services it promises."
       },
       {
-        "text": "4 bytes",
-        "explanation": "That would only fit the two port numbers. UDP also carries a length and a checksum."
+        "text": "UDP leaves out port numbers and relies on the IP header to choose the application",
+        "explanation": "UDP does carry source and destination ports; IP has no field that selects an application. Ports are half of UDP's header."
       },
       {
-        "text": "It varies with options",
-        "explanation": "The base UDP header remains eight bytes. RFC 9868 defines UDP options in a surplus area after user data, rather than making that base header variable length."
+        "text": "UDP has no checksum, which saves the bytes TCP spends on one",
+        "explanation": "UDP has a 16-bit checksum. It is optional over IPv4 but normally required over IPv6."
       }
     ],
     "answer": 1,
-    "workedExample": "UDP's header is four fields of 16 bits each: source port, destination port, length and checksum.\n\n```formula\nH = 4 × 16 bit = 64 bit\nH = 64 bit × (1 B / (8 bit)) = 8 B\nwhere\nH: the size of the UDP header\nbit: binary digit, a single 0 or 1\nB: bytes; one byte is 8 bits\nIn words: four 16-bit fields make 64 bits, which is 8 bytes.\n```\n\nCompare TCP's minimum of 20 bytes, which has to carry sequence numbers, acknowledgement numbers, flags and a window. UDP needs none of those because it promises none of those services.",
+    "workedExample": "1. List what each header must support. UDP delivers a datagram to a port and lets the receiver check for some corruption: that needs two ports, a length and a checksum.\n2. Four 16-bit fields are 64 bits, which is 8 bytes.\n3. TCP additionally promises an ordered, reliable, flow-controlled byte stream, so its header carries a sequence number, an acknowledgement number, flags and a window, which bring it to 20 bytes before options.\n4. The header size follows directly from the services each protocol promises.",
     "link": {
       "title": "RFC 768: UDP",
       "url": "https://www.rfc-editor.org/rfc/rfc768"
@@ -33,27 +33,27 @@
     "id": "tcp-udp-ports-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "Over IPv4 with a 20-byte IP header (no options), what is the largest payload a single UDP datagram can carry?",
+    "prompt": "An application sends one 60,000-byte UDP datagram over IPv4 across Ethernet links with a 1,500-byte MTU. Which outcome should it expect?",
     "options": [
       {
-        "text": "65,535 bytes",
-        "explanation": "65,535 is the maximum of the length field (16 bits), but that value counts the 8-byte UDP header, and the IPv4 total-length field also has to fit the IP header."
+        "text": "The send is always rejected, because 60,000 bytes exceeds UDP's maximum payload",
+        "explanation": "The IPv4 limit for one UDP payload is 65,507 bytes with a 20-byte IP header, so 60,000 bytes is within the protocol maximum. Practical path limits are a separate problem."
       },
       {
-        "text": "1,472 bytes",
-        "explanation": "That is the largest payload that avoids fragmentation on a 1,500-byte Ethernet MTU (1,500 − 20 − 8). It is a practical limit, not the protocol maximum."
+        "text": "UDP splits the data into about 41 separate datagrams, which the receiving application reads one by one",
+        "explanation": "UDP never splits a datagram into several datagrams. Any splitting happens at the IP layer as fragments, and the receiving application sees either the whole datagram or nothing."
       },
       {
-        "text": "65,527 bytes",
-        "explanation": "This subtracts the UDP header from 65,535 but forgets that the IPv4 total-length field (also 16 bits) must include the 20-byte IP header."
+        "text": "The network automatically switches the transfer to TCP to make it reliable",
+        "explanation": "Nothing in UDP or IP switches transports. Applications such as DNS may retry over TCP themselves, but that is application logic."
       },
       {
-        "text": "65,507 bytes",
-        "explanation": "Correct. The IPv4 total length is at most 65,535 bytes; subtract 20 for the IP header and 8 for the UDP header."
+        "text": "Depending on the socket's path-MTU settings it is either refused locally or sent as IP fragments; if fragmented, losing any one fragment loses the whole datagram",
+        "explanation": "Correct. The datagram cannot fit in one 1,500-byte packet. By default Linux fragments it locally; a socket that sets the Don't Fragment (DF) flag on every packet with IP_PMTUDISC_DO gets EMSGSIZE instead. Where fragmentation is allowed, every fragment must arrive for reassembly, and UDP does not retransmit."
       }
     ],
     "answer": 3,
-    "workedExample": "1. IPv4 total length is at most 65,535 bytes (the largest 16-bit number), and that includes the IP header.\n2. Subtract the specified 20-byte IPv4 header and eight-byte UDP header:\n\n```formula\nP_max = L_IP − H_IP − H_UDP\nP_max = 65,535 B − 20 B − 8 B\nP_max = 65,507 B\nwhere\nP_max: the largest UDP payload, in bytes (B)\nL_IP: the largest IPv4 total length, 65,535 bytes\nH_IP: the IPv4 header with no options, 20 bytes\nH_UDP: the UDP header, 8 bytes\nB: bytes\nIn words: the two headers use 28 of the 65,535 bytes, leaving 65,507 bytes of data.\n```\n\n3. With fragmentation permitted, equal 20-byte fragment headers and MTU 1,500, each fragment carries 1,480 bytes of the 65,515-byte IP payload (UDP header plus data):\n\n```formula\nN = ⌈65,515 B / 1,480 B⌉ = ⌈44.27⌉ = 45\nP_1 = 1,500 B − 20 B − 8 B = 1,472 B\nwhere\nN: the number of fragments needed\nP_1: the largest UDP payload that fits in one unfragmented 1,500-byte packet\n⌈ ⌉: ceiling: round up to the next whole number\nB: bytes\nIn words: the maximum datagram needs 45 fragments (44 full ones of 1,480 bytes plus one of 395), while 1,472 bytes is the most that avoids fragmentation on a 1,500-byte MTU.\n```\n\nAll fragments are needed for reassembly.\n4. Otherwise sending may fail locally or on the path. With those same headers and MTU, 1,472 UDP payload bytes fit without fragmentation; other paths and encapsulation have different limits.",
+    "workedExample": "1. Compare the datagram with the protocol limit: 60,000 bytes is below the 65,507-byte IPv4 maximum, so UDP itself can describe it.\n2. Compare it with the path: one Ethernet packet carries at most 1,500 bytes, so the datagram cannot travel as a single packet.\n3. Two things can then happen. The sending host may refuse it (Linux returns `EMSGSIZE` when the socket sets the Don't Fragment (DF) flag with `IP_PMTUDISC_DO`), or IP may split it (Linux's default socket mode does this) into fragments of up to 1,480 bytes of IP payload each.\n4. If fragmented, the receiver can only reassemble it when **every** fragment arrives. One lost fragment loses the whole datagram, and UDP will not resend it.\n5. That is why UDP applications keep datagrams small, for example DNS's 1,232-byte guidance.",
     "link": {
       "title": "RFC 768: UDP",
       "url": "https://www.rfc-editor.org/rfc/rfc768"

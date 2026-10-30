@@ -59,20 +59,7 @@ ORDER BY path;
 | 2 | Mia > Raj > Uma |
 | 1 | Mia > Sam |
 
-The `depth` column follows a simple rule:
-
-```formula
-depth(s) = depth(p(s)) + 1
-depth(s_0) = 0
-depth(Vic) = depth(Tom) + 1 = 2 + 1 = 3
-where
-depth(s): the depth column: how many levels below the top a staff member s sits
-s: one staff member, a row of staff
-p(s): the manager of s (its parent in the tree), found through manager_id
-s_0: the anchor row, the staff member with no manager (Mia)
-Vic, Tom: two of the staff; Tom manages Vic
-In words: the anchor starts at depth 0, and each recursive pass adds 1 to the depth it inherits from the manager's row, so depth counts the joins from the root.
-```
+The `depth` column starts at 0 in the anchor row, and each recursive pass adds 1 to the depth inherited from the manager's row, so depth counts the joins from the root: Vic, three levels below Mia, gets 3.
 
 The anchor is Mia. Pass 1 joins staff to {Mia} and finds Raj and Sam. Pass 2 finds Tom and Uma (Sam has no reports). Pass 3 finds Vic. Pass 4 finds nothing, so the loop ends.
 

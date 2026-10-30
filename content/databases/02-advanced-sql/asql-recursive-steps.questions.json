@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Each pass doubles the value it reads, but only if that value is below 20:\n\n```formula\ni_0 = 1\ni_{k+1} = 2 × i_k   if i_k < 20\ni_5 = 2 × 16 = 32\nwhere\ni_0: the anchor's value\ni_k: the value in the working table after pass k\ni_{k+1}: the value the next pass makes from it\ni_5: the value made by pass 5\nk: the pass number, 0 for the anchor\n<: strictly less than\nIn words: the test looks at the value being read, not the value being made, so 16 passes the test and produces 32.\n```\n\nTrace the working table pass by pass:\n\n| pass | reads | i < 20? | makes |\n|---|---|---|---|\n| anchor | - | - | 1 |\n| 1 | 1 | yes | 2 |\n| 2 | 2 | yes | 4 |\n| 3 | 4 | yes | 8 |\n| 4 | 8 | yes | 16 |\n| 5 | 16 | yes | 32 |\n| 6 | 32 | no | nothing |\n\nThe `WHERE` filters the row being read, so one value past the limit gets through. To cap the output instead, filter on the new value: `WHERE i * 2 < 20`.",
+    "workedExample": "Each pass doubles the value it reads, but only if that value is below 20. The test looks at the value being *read*, not the value being made, so 16 passes the test and produces 32.\n\nTrace the working table pass by pass:\n\n| pass | reads | i < 20? | makes |\n|---|---|---|---|\n| anchor | - | - | 1 |\n| 1 | 1 | yes | 2 |\n| 2 | 2 | yes | 4 |\n| 3 | 4 | yes | 8 |\n| 4 | 8 | yes | 16 |\n| 5 | 16 | yes | 32 |\n| 6 | 32 | no | nothing |\n\nThe `WHERE` filters the row being read, so one value past the limit gets through. To cap the output instead, filter on the new value: `WHERE i * 2 < 20`.",
     "link": {
       "title": "WITH queries (CTEs) — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/18/queries-with.html"
@@ -33,27 +33,27 @@
     "id": "asql-ctes-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "What ends the loop that evaluates a recursive CTE?",
+    "prompt": "A recursive CTE walks a `parts` table from one assembly down to its smallest components. The anchor selects one assembly, and the recursive term joins `parts` whose `parent_id` matches a row from the previous pass. After pass 4, every newly added row is a part with no sub-parts. What happens next?",
     "options": [
       {
-        "text": "A pass of the recursive term that produces no new rows",
-        "explanation": "Correct. Each pass reads only the previous pass's output; when a pass adds nothing, the working table is empty and evaluation stops."
+        "text": "Pass 5 finds no rows whose parent is one of those parts, so evaluation stops and the CTE returns the anchor row plus every row added in passes 1 to 4",
+        "explanation": "Correct. Each pass reads only the previous pass's rows. A pass that produces nothing leaves an empty working table, which ends the loop; the result is everything appended along the way."
       },
       {
-        "text": "Reaching a row limit set by the database, typically 1,000 passes",
-        "explanation": "Postgres has no such default limit; a runaway recursive CTE keeps going until it runs out of resources or hits `statement_timeout`."
+        "text": "It keeps running until the database's default limit of 1,000 passes",
+        "explanation": "PostgreSQL has no such default limit; a runaway recursive CTE keeps going until it runs out of resources or hits `statement_timeout`. Here it simply stops because a pass is empty."
       },
       {
-        "text": "The recursive term reading every row of the base table once",
+        "text": "It stops only after every row of `parts` has been read once",
         "explanation": "Nothing tracks which base rows have been read. The same base row can be joined again in later passes, which is how cycles cause infinite loops."
       },
       {
-        "text": "The anchor query returning NULL",
-        "explanation": "A row containing NULL is still a row. An empty anchor does stop evaluation immediately; the distinction is no rows versus a NULL value."
+        "text": "It returns only the rows added in pass 4, the last working table",
+        "explanation": "The working table is what the next pass reads. The CTE's result is the anchor plus every pass's rows, not just the last batch."
       }
     ],
     "answer": 0,
-    "workedExample": "The engine keeps a working table:\n\n1. Start with the anchor rows.\n2. Run the recursive term with the CTE name meaning \"the previous pass's rows\".\n3. Append the new rows to the result; they become the next working table.\n4. If the pass produced no rows, stop.\n\nSo termination is entirely your responsibility: a `WHERE` that eventually filters everything out, a join that runs out of children, or a cycle guard.",
+    "workedExample": "The engine keeps a working table:\n\n1. Start with the anchor rows.\n2. Run the recursive term with the CTE name meaning \"the previous pass's rows\".\n3. Append the new rows to the result; they become the next working table.\n4. If the pass produced no rows, stop.\n\nPass 5 joins the `parts` table to pass 4's parts, which have no sub-parts, so it produces nothing and evaluation ends. A row containing NULL would still count as a row: what stops the loop is an empty pass, not a particular value. So termination is your responsibility: a `WHERE` that eventually filters everything out, a join that runs out of children, or a cycle guard.",
     "link": {
       "title": "WITH queries (CTEs) — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/18/queries-with.html"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Each pass reads one row and makes the next:\n\n```formula\n(a_{k+1}, b_{k+1}) = (b_k, a_k + b_k)\n(a_0, b_0) = (0, 1)\n(a_6, b_6) = (8, 13)\nwhere\na_k, b_k: the two columns of the row made by pass k\na_{k+1}, b_{k+1}: the row the next pass makes, only if b_k < 10\na_0, b_0: the anchor row\na_6, b_6: the last row made (by pass 6); its b of 13 fails b < 10, so nothing follows it\nk: the pass number, 0 for the anchor\n<: strictly less than\nIn words: the new a is the old b, and the new b is the sum of the old pair, which generates the Fibonacci numbers.\n```\n\nTracing it:\n\n| pass | reads | makes |\n|---|---|---|\n| anchor | - | (0, 1) |\n| 1 | (0, 1) | (1, 1) |\n| 2 | (1, 1) | (1, 2) |\n| 3 | (1, 2) | (2, 3) |\n| 4 | (2, 3) | (3, 5) |\n| 5 | (3, 5) | (5, 8) |\n| 6 | (5, 8) | (8, 13) |\n| 7 | (8, 13) | nothing |\n\n`a` takes the values 0, 1, 1, 2, 3, 5, 8: **7 rows**, ending at 8. The CTE carries two columns because each pass only sees the previous row, so any state you need must travel in the row.",
+    "workedExample": "Each pass reads one row and makes the next. The new `a` is the old `b`, and the new `b` is the sum of the old pair, which generates the Fibonacci numbers. A row is made only if the row being read has `b < 10`.\n\nTracing it:\n\n| pass | reads | makes |\n|---|---|---|\n| anchor | - | (0, 1) |\n| 1 | (0, 1) | (1, 1) |\n| 2 | (1, 1) | (1, 2) |\n| 3 | (1, 2) | (2, 3) |\n| 4 | (2, 3) | (3, 5) |\n| 5 | (3, 5) | (5, 8) |\n| 6 | (5, 8) | (8, 13) |\n| 7 | (8, 13) | nothing |\n\n`a` takes the values 0, 1, 1, 2, 3, 5, 8: **7 rows**, ending at 8. The CTE carries two columns because each pass only sees the previous row, so any state you need must travel in the row.",
     "link": {
       "title": "PostgreSQL 18 primary reference",
       "url": "https://www.postgresql.org/docs/18/queries-with.html"

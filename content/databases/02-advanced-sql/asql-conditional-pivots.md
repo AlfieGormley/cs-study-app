@@ -38,28 +38,16 @@ GROUP BY month;
 | 2026-02 | 125 | 180 |
 | 2026-03 | 50 | 130 |
 
-This is **conditional aggregation**: each output column is an aggregate over only the rows matching its condition. It works on every SQL database, which is why it is the portable way to pivot.
+This is **conditional aggregation**: each output column is an aggregate over only the rows matching its condition. It works on every SQL database, which is why it is the portable way to pivot. The month expression is SQLite's `strftime`; in PostgreSQL write `to_char(o.ordered_on, 'YYYY-MM')`.
 
-Each cell of the pivot is a sum over just the order lines that match its month and its column's category:
+> [!analogy] Real-world analogy: a tally sheet with one column per department
+> A shop assistant works through a pile of receipt lines for one month. The tally sheet has a Kitchen column and a Home column, and each line's amount is added to the column for its department.
+>
+> **How it maps:** The pile for one month is a GROUP BY group. Each column is one conditional aggregate: `CASE WHEN category = 'Kitchen' THEN ... ELSE 0 END` adds a Kitchen line's amount to that column and adds nothing to the others.
+>
+> **Where it stops:** On paper an untouched column simply reads zero. In SQL, `ELSE 0` really adds zeros, but FILTER (or CASE with no ELSE) gives SUM no values at all, so the column is NULL rather than 0.
 
-```formula
-R(m, g) = Σ q_l × p_l for all l in L(m, g)
-R(Jan, Kitchen) = 1 × 30 + 1 × 25 + 2 × 10
-R(Jan, Kitchen) = 75
-where
-R(m, g): the revenue shown in month m's row, under category g's column
-m: a month, the GROUP BY value
-g: a category, the value tested in the column's CASE
-L(m, g): the order lines in month m whose product is in category g
-l: one order line
-q_l: the quantity on line l (qty)
-p_l: the unit price of line l's product (price)
-Σ: sigma, "add up" the term after it for every line l listed
-Jan, Kitchen: January and the Kitchen category
-In words: a pivot cell adds up quantity times price for only the lines in that month and that category; every other line contributes 0 through ELSE 0.
-```
-
-Check that cell against the data: January's Kitchen revenue is order 101's Kettle (30) plus order 102's Toaster (25) and two Mugs (20), giving 75.
+Each cell of the pivot adds quantity times price over just the order lines that match its month and its column's category; every other line contributes 0 through `ELSE 0`. Check one cell against the data: January's Kitchen revenue is order 101's Kettle (30) plus order 102's Toaster (25) and two Mugs (20), giving 75.
 
 ### FILTER: the cleaner spelling
 
@@ -81,6 +69,8 @@ Counting orders per customer per month with a `LEFT JOIN` from customers:
 | name | jan | feb | mar |
 |---|---|---|---|
 | Ana | 1 | 1 | 1 |
+| Ben | 1 | 0 | 1 |
+| Cat | 0 | 1 | 1 |
 | Dev | 0 | 1 | 0 |
 | Eve | 0 | NULL | NULL |
 

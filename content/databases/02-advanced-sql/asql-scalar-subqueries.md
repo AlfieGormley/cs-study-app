@@ -11,7 +11,6 @@ A **subquery** is a complete `SELECT` placed inside another statement. It lets y
 
 Every lesson in this module uses the same small shop. Result tables show values for the stated data; only an explicit final ORDER BY guarantees row order.
 
-
 ## The shop schema
 
 Schema notation (column names, not executable SQL):
@@ -44,7 +43,20 @@ order_items(order_id, product_id, qty)
 
 Treat customers.id, products.id and orders.id as primary keys. orders.customer_id is NOT NULL and references customers.id. The displayed totals, prices and quantities are non-NULL integers; ordered_on is ISO date text in SQLite and a date in PostgreSQL. These declarations matter for the grouped queries and integer arithmetic that follow.
 
-All dates are in 2026. Products are Kettle (30), Toaster (25), Mug (10) in *Kitchen*, and Lamp (40), Rug (90), Vase (35) in *Home*. Eve has never ordered, and nobody has bought a Vase. Those two gaps will matter.
+All dates are in 2026. Products are Kettle (30), Toaster (25), Mug (10) in *Kitchen*, and Lamp (40), Rug (90), Vase (35) in *Home*. Their ids are Kettle 1, Toaster 2, Lamp 3, Rug 4, Mug 5 and Vase 6. Eve has never ordered, and nobody has bought a Vase. Those two gaps will matter.
+
+The 13 order lines (`order_items`) give each order's contents; each order's lines add up to its total:
+
+| order | lines (product × qty) |
+|---|---|
+| 101 | Kettle × 1, Rug × 1 |
+| 102 | Toaster × 1, Mug × 2 |
+| 103 | Kettle × 2 |
+| 104 | Rug × 2, Mug × 2 |
+| 105 | Toaster × 1, Mug × 2 |
+| 106 | Rug × 1 |
+| 107 | Lamp × 1, Mug × 2 |
+| 108 | Kettle × 1 |
 
 ## Where a subquery can go
 
@@ -73,21 +85,11 @@ WHERE total > (SELECT AVG(total)
 | 104 | 200 |
 | 106 | 90 |
 
-This uncorrelated aggregate can be evaluated once and reused. It yields the mean order total:
+The eight totals add up to 650, so `AVG(total)` is 81.25. The outer query compares each row with 81.25 and keeps 120, 200 and 90. AVG skips NULL values, so a row with a missing total would count in neither the sum nor the divisor.
 
-```formula
-avg = (t_1 + t_2 + … + t_n) / n
-avg = 650 / 8 = 81.25
-where
-avg: the mean (average) order total, what AVG(total) returns
-t_1, t_2, t_n: the totals of the first, second and last order
-…: and so on, for every order in between
-n: the number of rows being averaged, here 8 orders
-650: the sum of the 8 totals (120 + 45 + 60 + 200 + 45 + 90 + 60 + 30)
-In words: add up every order total and divide by how many orders there are.
-```
+This is an **uncorrelated** subquery: it doesn't mention the outer query at all, so its value is the same for every row and the database can evaluate it once and reuse it.
 
-The outer query then compares each row with 81.25 and keeps 120, 200 and 90. AVG skips NULL totals, so the denominator counts only non-NULL values. This is an **uncorrelated** subquery: it doesn't mention the outer query at all, so the database can evaluate it once and reuse the value.
+A scalar subquery that returns **no rows** is not an error: its value is NULL. A comparison such as `total > NULL` is UNKNOWN, so a WHERE clause would then keep no rows.
 
 > [!warning] A "scalar" subquery that returns two rows
 > If a scalar subquery returns more than one row, **PostgreSQL raises an error**: `more than one row returned by a subquery used as an expression`. **SQLite silently uses the first row** it happens to find. A query that "works" in SQLite can fail in production on Postgres, and the SQLite answer was arbitrary anyway.

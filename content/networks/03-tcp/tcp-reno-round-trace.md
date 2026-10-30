@@ -4,7 +4,7 @@ sourceLesson: tcp-congestion
 title: Tracing a simplified Reno sawtooth
 level: advanced
 minutes: 3
-summary: Tracing a simplified Reno sawtooth, with worked examples and explicit assumptions.
+summary: Reading a Reno congestion-window trace: slow start, the sawtooth, and the difference a timeout makes.
 ---
 
 ## A cwnd trace
@@ -75,18 +75,14 @@ RTT
  15 #### 4
 ```
 
-A simplified stable sawtooth with linear growth from half the peak to the peak has a time-average window of three quarters of the peak:
+How to read the trace:
 
-```formula
-W_avg = ((W / 2) + W) / 2 = 0.75 × W
-W_avg = 0.75 × 40 = 30
-where
-W_avg: the average congestion window over one sawtooth cycle, in segments
-W: the peak window just before each loss; here 40 segments
-In words: a window that climbs steadily from 20 to 40 averages 30, three quarters of its peak.
-```
+- **Doubling** (rounds 0–5) is slow start. It stops at ssthresh, not at a loss.
+- **Steady +1 per round** (rounds 6–8 and 9–12) is congestion avoidance.
+- **A drop to about half** (round 9) is the duplicate-ACK response: ssthresh and cwnd both become half the window at the loss.
+- **A drop to one segment followed by doubling** (round 13 onward) is the timeout response: ssthresh becomes half the window at the loss, cwnd restarts at one, and slow start runs again until the new threshold.
 
-Timeouts, unequal cycles, variable RTTs and application limits change that model.
+In a long run with only duplicate-ACK losses, the window climbs steadily from half its peak to its peak and is then halved again: the sawtooth. Under that simplified model the window averages about three quarters of its peak. Timeouts, unequal cycles, variable RTTs and application limits change that model.
 
 ## Key takeaways
 
@@ -96,13 +92,4 @@ Timeouts, unequal cycles, variable RTTs and application limits change that model
 
 ## Further reading
 
-- [Congestion Avoidance and Control — Van Jacobson (1988)](https://ee.lbl.gov/papers/congavoid.pdf)
 - [RFC 5681: TCP Congestion Control](https://www.rfc-editor.org/rfc/rfc5681)
-- [RFC 9438: CUBIC for Fast and Long-Distance Networks](https://www.rfc-editor.org/rfc/rfc9438)
-- [BBR: Congestion-Based Congestion Control — Google Research](https://research.google/pubs/bbr-congestion-based-congestion-control-2/)
-- [RFC 3168: Explicit Congestion Notification](https://www.rfc-editor.org/rfc/rfc3168)
-- [TCP congestion control — Wikipedia](https://en.wikipedia.org/wiki/TCP_congestion_control)
-- [Linux v6.12 BBRv1 implementation](https://github.com/torvalds/linux/blob/v6.12/net/ipv4/tcp_bbr.c)
-- [BBRv3 IETF draft, July 2026](https://datatracker.ietf.org/doc/html/draft-ietf-ccwg-bbr-06)
-
-- [Chiu and Jain: increase/decrease algorithms, original paper](https://pages.cs.wisc.edu/~suman/courses/740/papers/chiu89isdn.pdf)

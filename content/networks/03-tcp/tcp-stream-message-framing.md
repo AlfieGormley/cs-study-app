@@ -4,7 +4,7 @@ sourceLesson: tcp-sockets
 title: Byte streams and message framing
 level: intermediate
 minutes: 3
-summary: Byte streams and message framing, with worked examples and explicit assumptions.
+summary: Why TCP does not keep your send() boundaries, and the framing rules applications use instead.
 ---
 
 ## A stream has no message boundaries
@@ -23,6 +23,13 @@ server recv(1024) may return:
 
 All three are correct TCP behaviour. Nagle, segmentation, retransmission and the timing of `recv()` calls all affect where the cuts fall. A one-read-per-message assumption can fail even on localhost; a passing local test does not establish framing correctness.
 
+> [!analogy] Real-world analogy: Dictating over a crackly phone without punctuation
+> You read two sentences down the phone to someone writing them down. They hear every word in order, but if you never say "full stop", they cannot tell where one sentence ends and the next begins, and they may have written half a sentence when you pause.
+>
+> **How it maps:** The words arriving in order are TCP's ordered byte stream; your pauses are `send()` calls, which the listener cannot see; each `recv()` is them writing down whatever they have heard so far. Saying "full stop" is a delimiter, and announcing "the next sentence has twelve words" is a length prefix.
+>
+> **Where it stops:** A person can guess sentence breaks from meaning, but a program cannot: without an explicit rule it will read exactly what arrived, which might be one and a half messages.
+
 Protocols that distinguish messages need **framing**. A single stream-to-EOF transfer can use EOF as its boundary:
 
 - **Length prefix**: send a fixed-size length, then that many bytes. For example, gRPC has its own message-length prefix inside HTTP/2 DATA frames; the HTTP/2 frame header is a separate framing layer.
@@ -37,9 +44,5 @@ Protocols that distinguish messages need **framing**. A single stream-to-EOF tra
 
 ## Further reading
 
-- [Python socket module documentation](https://docs.python.org/3/library/socket.html)
 - [Socket Programming HOWTO — Python docs](https://docs.python.org/3/howto/sockets.html)
-- [Python selectors module documentation](https://docs.python.org/3/library/selectors.html)
-- [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/)
-- [The C10K problem — Dan Kegel](http://www.kegel.com/c10k.html)
-- [SYN packet handling in the wild — Cloudflare blog](https://blog.cloudflare.com/syn-packet-handling-in-the-wild/)
+- [Python socket module documentation](https://docs.python.org/3/library/socket.html)

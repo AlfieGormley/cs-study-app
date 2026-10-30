@@ -3,8 +3,8 @@ id: tcp-quic-transport-tradeoffs
 sourceLesson: tcp-performance
 title: QUIC streams, migration and deployment
 level: advanced
-minutes: 3
-summary: QUIC streams, migration and deployment, with worked examples and explicit assumptions.
+minutes: 4
+summary: What QUIC changes compared with TCP plus TLS, what it costs, and a practical tuning checklist.
 ---
 
 ## QUIC: the transport in user space
@@ -26,6 +26,13 @@ A few details worth knowing:
 - **Migration.** After handshake confirmation, connection IDs can support client migration, subject to negotiated restrictions, address validation and a working new path. A zero-length connection ID constrains migration. Success and seamless latency are not guaranteed.
 - **Shared effects.** Loss can reduce a connection's congestion window, and flow control or application dependencies can delay several streams. QUIC removes the requirement to wait for an unrelated stream's missing bytes; it does not promise complete independence.
 - **Congestion control.** RFC 9002 gives a NewReno-like example; compatible alternatives can be implemented. A library deployment can update the algorithm without an OS upgrade.
+
+> [!analogy] Real-world analogy: A case reference number on a support call
+> When a support call drops, you ring back from a different phone and quote your case reference; the agent picks up where you left off. If the company filed cases under the caller's phone number instead, a new phone would mean starting again.
+>
+> **How it maps:** TCP files a connection under its addresses and ports, so a phone moving from Wi-Fi to 5G gets a new address and the connection cannot follow. QUIC's connection ID is the case reference: the server finds the existing connection even though the packets come from a new address.
+>
+> **Where it stops:** QUIC does not simply trust the reference: it validates the new path before sending much data there, and endpoints use fresh connection IDs on a new path so observers cannot easily link the old and new addresses. Migration also needs the server to allow it and the new path to work.
 
 ## The costs of QUIC
 
@@ -49,15 +56,7 @@ A few details worth knowing:
 
 ## Further reading
 
-- [The Macroscopic Behavior of the TCP Congestion Avoidance Algorithm — Mathis et al.](https://www.cs.utexas.edu/~lam/395t/papers/Mathis1998.pdf)
-- [Introduction to bufferbloat — bufferbloat.net](https://www.bufferbloat.net/projects/bloat/wiki/Introduction/)
-- [RFC 8289: Controlled Delay Active Queue Management](https://www.rfc-editor.org/rfc/rfc8289)
 - [RFC 9000: QUIC](https://www.rfc-editor.org/rfc/rfc9000)
-- [The QUIC Transport Protocol: Design and Internet-Scale Deployment — Google (SIGCOMM 2017)](https://research.google/pubs/the-quic-transport-protocol-design-and-internet-scale-deployment/)
-- [RFC 7413: TCP Fast Open](https://www.rfc-editor.org/rfc/rfc7413)
 - [RFC 9001: Using TLS to Secure QUIC](https://www.rfc-editor.org/rfc/rfc9001)
 - [RFC 9002: QUIC Loss Detection and Congestion Control](https://www.rfc-editor.org/rfc/rfc9002)
-- [Mathis and Mahdavi: Deprecating the TCP Macroscopic Model (2019 editorial)](https://ccronline.sigcomm.org/wp-content/uploads/2019/10/acmdl19-323.pdf)
-
-> [!note] Evidence limits
-> Universal browser connection counts, current TFO adoption, fixed protocol speedups and CPU costs are omitted because they require versioned deployment data or measurements not established here. The numerical timing and throughput examples are explicitly simplified models. This review did not run a WAN, QUIC migration or AQM performance experiment.
+- [The QUIC Transport Protocol: Design and Internet-Scale Deployment — Google (SIGCOMM 2017)](https://research.google/pubs/the-quic-transport-protocol-design-and-internet-scale-deployment/)

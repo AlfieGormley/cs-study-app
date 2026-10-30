@@ -7,7 +7,7 @@ summary: ON CONFLICT combines insert-or-update through a unique key.
 sourceLesson: asql-json-upsert
 ---
 
-stock(product_id PRIMARY KEY, qty) initially holds product 1 with 10 and product 4 with 3. Each example starts afresh from its stated initial rows. An additive stock adjustment needs request deduplication if replaying a message must have no extra effect.
+stock(product_id PRIMARY KEY, qty) initially holds product 1 with 10 and product 4 with 3. Each example starts afresh from its stated initial rows. An additive stock adjustment must recognise and skip a repeated request if replaying a message must have no extra effect.
 
 ## Upserts
 
@@ -21,7 +21,16 @@ T2: INSERT product 2      duplicate
                           key error
 ```
 
-`INSERT ... ON CONFLICT` makes the check and the write one atomic operation. The syntax is the same in Postgres (9.5+) and SQLite (3.24+):
+`INSERT ... ON CONFLICT` makes the check and the write one atomic operation, using the unique index.
+
+> [!analogy] Real-world analogy: a sign-up sheet with one line per name
+> A club sign-up sheet allows each member one line. Two helpers glance at the sheet at the same moment, both see no line for the same new member, and both start writing one. Better: a single clerk holds the sheet and, for each request, either adds the line or updates the existing one, in one motion.
+>
+> **How it maps:** The "one line per name" rule is the unique index on `product_id`. Glancing then writing is the separate SELECT and INSERT, which can race. The clerk is `ON CONFLICT`: the unique index decides, inside one statement, whether the row is inserted or the existing row is updated.
+>
+> **Where it stops:** The clerk serves people strictly one at a time. PostgreSQL lets most work run concurrently and makes a second session wait only when it touches the same key as a transaction that has not finished, until that transaction commits or rolls back. At the default READ COMMITTED level the waiting upsert then inserts or updates; at a stricter level such as REPEATABLE READ it can instead end in a serialization failure, so the transaction must be retried.
+
+The syntax is the same in Postgres (9.5+) and SQLite (3.24+):
 
 ```sql
 -- Resolve a unique-key race atomically.
@@ -32,19 +41,7 @@ DO UPDATE SET
   qty = stock.qty + excluded.qty;
 ```
 
-Inside `DO UPDATE`, **`excluded`** (the *excluded row*) is the row you tried to insert, and the table name refers to the existing row. So the `SET` line computes:
-
-```formula
-q_new = q_stock + q_excluded
-q_new = 10 + 5 = 15
-where
-q_new: the quantity stored after the upsert
-q_stock: the existing row's quantity, stock.qty, here 10 for product 1
-q_excluded: the quantity in the row you tried to insert, excluded.qty, here 5
-In words: when the product already exists, add the incoming quantity to the stored one instead of overwriting it.
-```
-
-Starting from `(1, 10)` and `(4, 3)`, product 1 already exists, so it becomes 15. Product 2 is new and is inserted with 7, and product 4 is untouched.
+Inside `DO UPDATE`, **`excluded`** (the *excluded row*) is the row you tried to insert, and the table name refers to the existing row. So `qty = stock.qty + excluded.qty` adds the incoming quantity to the stored one instead of overwriting it. Starting from `(1, 10)` and `(4, 3)`, product 1 already exists, so it becomes 15. Product 2 is new and is inserted with 7, and product 4 is untouched.
 
 Useful variations:
 

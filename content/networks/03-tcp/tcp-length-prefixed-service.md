@@ -4,7 +4,7 @@ sourceLesson: tcp-sockets
 title: A bounded length-prefixed TCP service
 level: intermediate
 minutes: 3
-summary: A bounded length-prefixed TCP service, with worked examples and explicit assumptions.
+summary: A small threaded server that frames messages with a four-byte length prefix and bounds their size.
 ---
 
 ## A length-prefixed server with threads
@@ -49,20 +49,19 @@ def send_msg(sock, data):
 
 `"!I"` is a 4-byte unsigned integer in network byte order (big-endian). Big-endian means the first byte on the wire is the most significant, so the receiver rebuilds the length like this:
 
-```formula
+```formula reference
 n = b_0 × 2^24 + b_1 × 2^16
   + b_2 × 2^8 + b_3
-n = 0 + 0 + 1 × 256 + 0 = 256
-n_max = 2^32 − 1 = 4,294,967,295
 where
 n: the message length the prefix encodes, in bytes
 b_0: the first byte received (most significant), 0 to 255
 b_1: the second byte
 b_2: the third byte
 b_3: the fourth byte (least significant)
-n_max: the largest length 4 bytes can express
-In words: each byte is worth 256 times the byte after it, so the prefix 00 00 01 00 means 256; MAX_MSG then rejects anything above 1 MiB, far below the 4 GiB the field could claim.
+In words: each prefix byte is worth 256 times the byte after it, so the bytes 00 00 01 00 mean 256.
 ```
+
+Four bytes can claim a length of up to about 4 GiB (4,294,967,295 bytes). That is why `recv_msg` checks the decoded length against `MAX_MSG` (1 MiB here) **before** reading the body: otherwise a single malformed or hostile header could make the server try to read and buffer gigabytes.
 
 Combining header and body avoids an application-created pause between two small writes, but one `sendall()` is not one packet and cannot guarantee freedom from Nagle, queueing or other delays.
 
@@ -122,7 +121,3 @@ Details that make this correct:
 
 - [Python socket module documentation](https://docs.python.org/3/library/socket.html)
 - [Socket Programming HOWTO — Python docs](https://docs.python.org/3/howto/sockets.html)
-- [Python selectors module documentation](https://docs.python.org/3/library/selectors.html)
-- [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/)
-- [The C10K problem — Dan Kegel](http://www.kegel.com/c10k.html)
-- [SYN packet handling in the wild — Cloudflare blog](https://blog.cloudflare.com/syn-packet-handling-in-the-wild/)

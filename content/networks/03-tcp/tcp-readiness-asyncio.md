@@ -4,7 +4,7 @@ sourceLesson: tcp-sockets
 title: Readiness pitfalls and asyncio backpressure
 level: intermediate
 minutes: 3
-summary: Readiness pitfalls and asyncio backpressure, with worked examples and explicit assumptions.
+summary: Serving many connections from one thread with readiness APIs or asyncio, and why backpressure still matters.
 ---
 
 ## Scaling: threads versus an event loop
@@ -94,12 +94,6 @@ asyncio.run(main())
 
 ## Further reading
 
-- [Python socket module documentation](https://docs.python.org/3/library/socket.html)
-- [Socket Programming HOWTO — Python docs](https://docs.python.org/3/howto/sockets.html)
 - [Python selectors module documentation](https://docs.python.org/3/library/selectors.html)
-- [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/)
 - [The C10K problem — Dan Kegel](http://www.kegel.com/c10k.html)
-- [SYN packet handling in the wild — Cloudflare blog](https://blog.cloudflare.com/syn-packet-handling-in-the-wild/)
-
-> [!note] Evidence limits
-> Fixed thread-capacity and memory figures, universal restart behaviour and guaranteed load balancing are omitted: they require platform-specific measurements. The selector loop is retained only as an explicitly faulty exercise. Loopback example checks do not establish production scale, WAN behaviour or resistance to resource exhaustion.
+- [Python socket module documentation](https://docs.python.org/3/library/socket.html)

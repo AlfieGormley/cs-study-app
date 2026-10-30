@@ -24,7 +24,7 @@ WHERE id IN (
   WHERE i.product_id = 4);
 ```
 
-The result is Ana, Ben and Cat. Each has one Rug order line in the Advanced SQL fixture, so a plain join happens to return the same three customers. IN is a **semi-join**: it keeps each outer customer row at most once even if there are several matching lines. For example, switching the product to Kettle (id 1) finds Ana in orders 101 and 103; IN still returns her once, while the corresponding join returns her twice.
+The result is Ana, Ben and Cat. Each has one Rug order line in the Advanced SQL fixture, so a plain join happens to return the same three customers. IN is a **semi-join**: it keeps each outer customer row at most once even if there are several matching lines. For example, switching the product to Kettle (id 1) finds Ana in orders 101 and 103 and Cat in order 108; IN returns Ana and Cat once each, while the corresponding join returns Ana twice.
 
 ### Derived tables in FROM
 
@@ -50,23 +50,9 @@ GROUP BY city;
 | London | 235.0 |
 | York | 45.0 |
 
-London's figure, for example, averages Ana's and Cat's spend. Eve has no orders, so the inner join drops her and Leeds averages Ben alone:
+The values shown are SQLite's; PostgreSQL returns the same averages as numeric values with more decimal places (135.0000000000000000).
 
-```formula
-spend_c = Σ t_k for k = 1 to m
-avg_London = (240 + 230) / 2 = 235
-avg_Leeds = 135 / 1 = 135
-where
-spend_c: the total spend of customer c, the inner query's SUM(o.total)
-c: one customer
-t_k: the total of that customer's k-th order
-k: a counter over the customer's orders, 1, 2, …, m
-m: how many orders customer c has
-Σ: sigma, "add up" the term after it for every value of k listed
-avg_London, avg_Leeds: the outer query's AVG(spend) for that city's customers
-240, 230: Ana's spend (120 + 60 + 60) and Cat's spend (200 + 30)
-In words: first total each customer's orders, then average those per-customer totals within each city.
-```
+The inner query first totals each customer's orders: Ana 240, Ben 135, Cat 230 and Dev 45. The outer query then averages those per-customer totals within each city, so London is the average of 240 and 230, which is 235. Eve has no orders, so the inner join drops her and Leeds averages Ben alone.
 
 You need two levels of aggregation (sum per customer, then average per city), and SQL does not let you nest aggregates like `AVG(SUM(...))` directly. A derived table is the classic fix. The later CTE units show a named version of the same two-stage calculation.
 

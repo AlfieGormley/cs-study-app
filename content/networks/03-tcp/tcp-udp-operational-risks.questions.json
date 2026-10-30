@@ -3,11 +3,11 @@
     "id": "tcp-udp-ports-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "An attacker controls machines that can send 100 Mbit/s of spoofed UDP queries, with the source address set to a victim's IP, to open servers whose replies are 50 times bigger than the queries. Why does this work, and how much traffic hits the victim? Assume the factor includes the same overhead basis as the 100 Mbit/s figure, and all queries/replies are delivered without rate limiting or capacity constraints.",
+    "prompt": "An attacker controls machines that send 100 Mbit/s of UDP queries to open servers, with each query's source address forged to be a victim's IP. Each reply is 50 times bigger than the query that caused it. Assume no source-address filtering, rate limiting or capacity limits. Why does this work, and roughly how much traffic reaches the victim?",
     "options": [
       {
         "text": "It works because UDP has no checksum; about 100 Mbit/s",
-        "explanation": "UDP does have a checksum, and it is irrelevant here. The trick is the spoofed source, and the traffic is multiplied."
+        "explanation": "UDP does have a checksum, and it is irrelevant here. The trick is the forged source, and the replies are bigger than the queries."
       },
       {
         "text": "It works because TCP SYN cookies are disabled; about 5 Gbit/s",
@@ -15,15 +15,15 @@
       },
       {
         "text": "It can't work: the replies go back to the attacker's machines",
-        "explanation": "With a spoofed source address, the replies go to whatever address is in the source field: the victim."
+        "explanation": "Replies go to whatever address is in the source field. With a forged source, that is the victim."
       },
       {
-        "text": "It works because UDP has no handshake, so servers reply to a forged address; about 5 Gbit/s",
-        "explanation": "Correct under the assumptions. UDP itself performs no return-routability handshake, and these servers respond without additional validation: 100 Mbit/s × 50 = 5 Gbit/s."
+        "text": "UDP has no handshake, so the servers reply to the forged address; each reply is 50 times larger, so about 5 Gbit/s",
+        "explanation": "Correct under the assumptions. Nothing in UDP checks that the sender owns its source address, and the servers multiply every query byte by 50 on its way to the victim."
       }
     ],
     "answer": 3,
-    "workedExample": "1. The scenario explicitly allows spoofed requests through source-address filters.\n2. These servers send responses to the claimed source without further validation.\n3. With consistent size accounting and no limiting bottleneck:\n\n```formula\nR_v = A R_q\nR_v = 50 × 100 Mbit/s = 5,000 Mbit/s\nR_v = 5 Gbit/s\nwhere\nR_v: the traffic rate arriving at the victim\nA: the amplification factor: reply size divided by query size, 50 here\nR_q: the rate of spoofed queries the attacker sends, 100 Mbit/s\nMbit/s: megabits per second, millions of bits per second\nGbit/s: gigabits per second; 1 Gbit/s = 1,000 Mbit/s\nIn words: every query byte becomes 50 reply bytes aimed at the victim, so 100 Mbit/s of queries becomes 5 Gbit/s of replies.\n```\n\n4. Source validation, response limits and protocol-level address validation can reduce this risk. TCP’s handshake changes the attack surface but does not make all TCP reflection or denial-of-service attacks impossible.",
+    "workedExample": "1. The servers cannot tell that the source address is forged: UDP has no handshake that would prove the requester can receive replies at that address.\n2. So every reply is sent to the victim, not to the attacker.\n3. Each reply is 50 times the size of its query, so 100 Mbit/s of queries becomes about 50 × 100 Mbit/s = 5 Gbit/s arriving at the victim, while the attacker never sees any of it.\n4. Defences include source-address filtering by networks, response rate limiting, and protocols that validate the requester's address before sending large replies. TCP's handshake changes the attack surface but does not make every reflection or denial-of-service attack impossible.",
     "link": {
       "title": "Memcrashed — Cloudflare blog",
       "url": "https://blog.cloudflare.com/memcrashed-major-amplification-attacks-from-port-11211/"

@@ -13,20 +13,7 @@ logins(user_id, day) stores ISO calendar dates. A login streak is a run of conse
 
 "Find each user's streaks of consecutive login days." User 1 logged in on 1, 2, 3, 5, 6 and 9 March.
 
-The trick: subtract a row number from the date. Within a run of consecutive days, both go up by one each row, so the difference is constant. A gap changes it.
-
-```formula
-g_i = d_i − rn_i
-g_1 = 60 − 1 = 59
-g_4 = 64 − 4 = 60
-where
-g_i: the island key of row i; rows with the same key form one island (run)
-d_i: the date of row i, written here as its day number in 2026: 1 March is day 60 (January has 31 days, February 28), and 5 March is day 64
-rn_i: row i's ROW_NUMBER() in date order, used as a number of days
-i: the row's position, starting at 1
-g_1, g_4: the keys for rows 1 and 4: day 59 is 28 February and day 60 is 1 March, matching the table below
-In words: subtracting the row number cancels the steady one-day-per-row climb inside a run, so every day in a run gets the same key, and each gap moves the key forward.
-```
+The trick: subtract a row number from the date. Within a run of consecutive days, both go up by one each row, so the difference is constant. A gap changes it. The result is an island key: a date that means nothing by itself but is shared by every day in one run. In the table, 1 March minus one day is 28 February, and so are 2 March minus two days and 3 March minus three; after the gap, 5 March minus four days is 1 March.
 
 | day | row position | island key |
 |---|---|---|
@@ -36,6 +23,13 @@ In words: subtracting the row number cancels the steady one-day-per-row climb in
 | 03-05 | 4 | 03-01 |
 | 03-06 | 5 | 03-01 |
 | 03-09 | 6 | 03-03 |
+
+> [!analogy] Real-world analogy: friends in a cinema row
+> A group of friends numbers themselves 1, 2, 3, … in seat order, and each notes their seat number. For friends sitting side by side, seat number minus their own number comes out the same; anyone sitting after an empty seat gets a bigger difference.
+>
+> **How it maps:** Seat numbers are login dates, the friends' own numbers are ROW_NUMBER values, and "seat minus number" is the island key. Everyone in one unbroken block of seats shares a key, just as consecutive days do.
+>
+> **Where it stops:** Two friends cannot share a seat, but a user can log in twice on one day. A repeated date breaks the trick, which is why you de-duplicate days first.
 
 Group by that difference:
 

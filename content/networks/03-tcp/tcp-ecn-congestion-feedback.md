@@ -4,7 +4,7 @@ sourceLesson: tcp-congestion
 title: ECN marks, DCTCP and sender selection
 level: advanced
 minutes: 3
-summary: ECN marks, DCTCP and sender selection, with worked examples and explicit assumptions.
+summary: How ECN signals congestion by marking packets instead of dropping them, and how DCTCP scales its response.
 ---
 
 ## ECN: congestion without loss
@@ -18,7 +18,7 @@ Loss-oriented algorithms can also react to explicit congestion indications. **Ex
 
 A delivered CE-marked packet does not need retransmission merely because it was marked. ECN does not prevent unrelated loss or guarantee a one-RTT improvement. Data-centre algorithms such as **DCTCP** ([RFC 8257](https://www.rfc-editor.org/rfc/rfc8257)) go further, scaling the reduction by the **fraction** of marked packets to keep queues tiny:
 
-```formula
+```formula reference
 α_new = (1 − g)α + gM
 cwnd_new = cwnd(1 − α_new / 2)
 where
@@ -28,9 +28,17 @@ g: the weight given to the newest measurement, between 0 and 1; RFC 8257 notes t
 M: the fraction of bytes acknowledged in the last window of data that carried a CE mark
 cwnd: the congestion window before the reduction
 cwnd_new: the window after the reduction
-In words: if almost nothing is marked, cut the window only a little; if every packet is marked (α = 1), halve it like Reno.
+In words: DCTCP keeps a running average of the fraction of its data that was marked; if almost nothing is marked it cuts the window only a little, and if everything is marked it halves the window like Reno.
 ```
 
+So DCTCP's response is graded: a queue that exceeds the switch's marking threshold only briefly produces few marks and a small trim rather than a halving, which lets data-centre switches keep their queues short.
+
+> [!analogy] Real-world analogy: A "kitchen busy" sticker instead of a thrown-away order
+> A busy kitchen could cope with overload by throwing some orders away, and the waiter would learn of the problem only when a customer complained. Instead, the kitchen puts a "kitchen busy" sticker on plates it still serves, and the waiter, seeing the stickers, takes orders more slowly.
+>
+> **How it maps:** Throwing orders away is a router dropping packets; the sticker is the CE mark on a packet that is still delivered; the waiter noticing it is the receiver echoing ECE to the sender, which reduces its congestion window. DCTCP is a waiter who slows down in proportion to how many plates carry stickers.
+>
+> **Where it stops:** The waiter sees the sticker straight away, whereas the mark reaches the sender only through the receiver's ACKs, about a round trip later. And marking works only when both endpoints negotiate ECN, the congested router supports it and devices along the path leave the ECN bits intact; otherwise the router copes by dropping.
 
 ## Choosing and checking
 
@@ -52,16 +60,5 @@ An application can choose per socket with the `TCP_CONGESTION` option. Congestio
 
 ## Further reading
 
-- [Congestion Avoidance and Control — Van Jacobson (1988)](https://ee.lbl.gov/papers/congavoid.pdf)
-- [RFC 5681: TCP Congestion Control](https://www.rfc-editor.org/rfc/rfc5681)
-- [RFC 9438: CUBIC for Fast and Long-Distance Networks](https://www.rfc-editor.org/rfc/rfc9438)
-- [BBR: Congestion-Based Congestion Control — Google Research](https://research.google/pubs/bbr-congestion-based-congestion-control-2/)
 - [RFC 3168: Explicit Congestion Notification](https://www.rfc-editor.org/rfc/rfc3168)
 - [TCP congestion control — Wikipedia](https://en.wikipedia.org/wiki/TCP_congestion_control)
-- [Linux v6.12 BBRv1 implementation](https://github.com/torvalds/linux/blob/v6.12/net/ipv4/tcp_bbr.c)
-- [BBRv3 IETF draft, July 2026](https://datatracker.ietf.org/doc/html/draft-ietf-ccwg-bbr-06)
-
-> [!note] Content omitted after review
-> Universal operating-system defaults, guaranteed equal-share fairness and fixed BBR speedups are omitted because this review did not establish suitable versioned measurements. Congestion-control traces here are explicit models, not packet-level benchmarks.
-
-- [Chiu and Jain: increase/decrease algorithms, original paper](https://pages.cs.wisc.edu/~suman/courses/740/papers/chiu89isdn.pdf)

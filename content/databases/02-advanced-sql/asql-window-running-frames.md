@@ -30,24 +30,9 @@ FROM orders;
 | 1 | 2026-03-15 | 60 | 240 |
 | 2 | 2026-01-09 | 45 | 45 |
 | 2 | 2026-03-02 | 90 | 135 |
+| ... | ... | ... | ... |
 
-The running total restarts for each partition. Written as a sum:
-
-```formula
-S_i = Σ t_j   for j = 1 to i
-S_2 = t_1 + t_2 = 120 + 60 = 180
-S_3 = 120 + 60 + 60 = 240
-where
-S_i: the running total on row i of a partition
-i: the row's position within its partition, in ORDER BY order, starting at 1
-j: a counter that steps through the positions 1, 2, …, i
-t_j: the order total on row j
-S_2, S_3, t_1, t_2: the running total on rows 2 and 3, and the totals on rows 1 and 2
-Σ: sigma, "add up": add the term after it for every value of j listed
-In words: the running total on a row is the sum of every total from the first row of its partition up to and including that row.
-```
-
-These are customer 1's rows: 180 on the second row, 240 on the third.
+The running total restarts for each partition. Each row's value is the sum of every total from the first row of its partition up to and including that row: Ana's rows show 120, then 180, then 240.
 
 ### The default frame and the ties trap
 
@@ -80,25 +65,20 @@ FROM orders;
 | 103 | 60 | 240 | 180 |
 | 107 | 60 | 240 | 240 |
 | 106 | 90 | 330 | 330 |
+| 101 | 120 | 450 | 450 |
+| 104 | 200 | 650 | 650 |
 
 The table shows one possible ordering of ties; without a tie-breaker the ROWS totals assigned to ids 102/105 or 103/107 can swap. Under `RANGE`, both 45s include each other, so both show 120. Under `ROWS`, each row adds exactly one row. The two frames sum different sets of rows:
 
-```formula
-S_RANGE(i) = Σ t_j for all j with v_j ≤ v_i
-S_ROWS(i) = Σ t_j for all j ≤ i
-S_RANGE = 30 + 45 + 45 = 120
-S_ROWS = 30 + 45 = 75
-where
-S_RANGE(i): the default RANGE frame's sum on row i
-S_ROWS(i): the ROWS UNBOUNDED PRECEDING sum on row i
-i: the current row's position in sort order, starting at 1; the worked lines are for order 102, the first 45, at position 2
-j: the position of another row in the same partition
-t_j: the total on row j
-v_i, v_j: the ORDER BY values of rows i and j, here the totals themselves
-Σ: sigma, "add up" the term after it for every j that meets the condition
-≤: less than or equal to; with ascending order, v_j ≤ v_i means "sorts at or before row i, peers included"
-In words: RANGE adds every row whose sort value is no bigger than the current row's, ties included; ROWS adds only the rows physically up to the current one.
-```
+- **RANGE** adds every row whose sort value is no bigger than the current row's, ties included. For the first 45 that is 30, 45 and 45: 120.
+- **ROWS** adds only the rows physically up to and including the current one. For the first 45 that is 30 and 45: 75.
+
+> [!analogy] Real-world analogy: a bank statement's daily balance
+> Some bank statements show one balance for each day: every payment on 3 March shows the balance at the end of 3 March. Others show the balance after each individual payment.
+>
+> **How it maps:** Ordering by date with the default RANGE frame gives the end-of-day style: rows with the same date are peers, so they all show the total including the whole day. `ROWS UNBOUNDED PRECEDING` gives the after-each-payment style, one row at a time.
+>
+> **Where it stops:** A bank records the time of each payment, so its per-payment order is fixed. SQL has no such order among peers unless you add a tie-breaker such as `id` to the window ORDER BY; without one, which tied row comes first is not defined.
 
 A peer-group running total is useful for totals per price band or per day. A per-order total needs ROWS plus a deterministic ordering, such as `ORDER BY total, id`; ROWS alone does not decide which tied row goes first. The window ORDER BY controls the calculation, while a final query ORDER BY controls the displayed result order. A later LIMIT does not redefine which rows contributed.
 

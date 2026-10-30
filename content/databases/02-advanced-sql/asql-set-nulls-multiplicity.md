@@ -35,21 +35,19 @@ SELECT 1;
 -- 1, 2  (one of the 1s survives)
 ```
 
-The PostgreSQL documentation states the rule as counts of copies:
+The left side has two copies of 1 and the right side one, so one copy of 1 survives. In general, EXCEPT ALL cancels copies one for one, and INTERSECT ALL keeps as many copies as both sides share:
 
-```formula
+```formula reference
 c_EXCEPT = max(m − n, 0)
 c_INTERSECT = min(m, n)
-c_EXCEPT = max(2 − 1, 0) = 1   for x = 1
 where
 c_EXCEPT: how many copies of a row EXCEPT ALL returns
 c_INTERSECT: how many copies of a row INTERSECT ALL returns
-m: how many copies of the row the left query has, here 2 copies of 1
-n: how many copies the right query has, here 1
-max(a, b): the larger of a and b; max(…, 0) stops the count going below zero
+m: how many copies of the row the left query has
+n: how many copies of the same row the right query has
+max(a, b): the larger of a and b, so the count never goes below zero
 min(a, b): the smaller of a and b
-a, b: the two values being compared
-x: the column of the example rows
+a, b: the two values compared by max or min
 In words: EXCEPT ALL cancels copies one for one, so a row survives as many times as the left side has spare copies; INTERSECT ALL keeps as many copies as both sides share.
 ```
 

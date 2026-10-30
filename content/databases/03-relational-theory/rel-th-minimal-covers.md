@@ -4,7 +4,7 @@ title: Minimal FD covers and FD equivalence
 level: intermediate
 minutes: 3
 sourceLesson: rel-th-functional-deps
-summary: Minimal FD covers and FD equivalence, with explicit examples and the conditions that make the reasoning valid.
+summary: Removing redundancy from a set of dependencies without changing what it means.
 ---
 
 ## Minimal FD cover
@@ -15,32 +15,32 @@ Two FD sets can say the same thing with different amounts of redundancy. A **min
 2. No left side has an **extraneous determinant attribute** (one you could drop and still derive the FD).
 3. No FD is **redundant** (derivable from the others).
 
-The card below starts with a dependency fixing two right-side attributes, a duplicate implied dependency, and an unnecessarily large determinant. Work through it in three stages:
+Why bother? Every dependency in a design is a rule someone must enforce or check. A redundant rule is enforced twice, and an oversized left side makes a rule look weaker than it is. A minimal cover states the business rules with nothing redundant, and the 3NF synthesis algorithm starts from one.
 
-1. Split the two-attribute right side into two dependencies; merge the duplicate dependency fixing B from A.
-2. Test B in the two-attribute determinant. A alone already reaches C through B, so B adds nothing to that determinant. Reducing it produces another duplicate.
-3. The remaining one-step functional dependency from A to C is implied by the two-step chain through B, so remove it.
+### A worked reduction
 
-```formula
+Start with four stated rules: A fixes B and C together; B fixes C; A fixes B (again); and A with B fixes C.
+
+1. **Split right sides.** "A fixes B and C" becomes "A fixes B" and "A fixes C". The repeated "A fixes B" merges with its copy.
+2. **Remove extraneous left-side attributes.** In "A with B fixes C", is B needed? A alone already reaches B, and through B reaches C, so B adds nothing. The rule shrinks to "A fixes C", a duplicate of one we already have.
+3. **Remove redundant rules.** "A fixes C" follows from "A fixes B" and "B fixes C" by transitivity, so drop it.
+
+What remains is two rules, A fixes B and B fixes C, with exactly the same meaning as the original four.
+
+```formula reference
 F = {A → BC, B → C, A → B, AB → C}
-F_1 = {A → B, A → C, B → C, AB → C}
-A⁺ = {A, B, C}
-F_2 = {A → B, A → C, B → C}
-F_3 = {A → B, B → C}
+F_min = {A → B, B → C}
 where
 A, B, C: attributes
 F: the original set of FDs
 BC, AB: the sets {B, C} and {A, B}
 →: functionally determines
-F_1: F after splitting every right side into single attributes
-A⁺: the attribute closure of A; it contains C, so B is extraneous in AB → C
-F_2: F_1 with AB → C reduced to A → C (now a duplicate, so merged)
-F_3: F_2 without A → C, which follows from A → B and B → C by transitivity
+F_min: a minimal FD cover of F: an equivalent set with single-attribute right sides, no extraneous left-side attributes and no redundant rules
 { }: a set
-In words: four FDs reduce to two with exactly the same meaning: F_3 is a minimal FD cover of F.
+In words: the four original rules and the two remaining ones imply exactly the same dependencies, so the shorter set says everything the longer one did.
 ```
 
-The two dependencies in the final card line form a minimal FD cover. Four FDs became two, with exactly the same meaning. The 3NF synthesis algorithm in the next lesson starts from a minimal FD cover, which is why this step matters. Minimal FD covers are not always unique; different removal orders can give different, equally valid answers.
+Always re-check equivalence after a reduction: each removed rule must still follow from what remains. Minimal FD covers are not always unique; different removal orders can give different, equally valid answers.
 
 ## Key takeaways
 
@@ -50,4 +50,4 @@ The two dependencies in the final card line form a minimal FD cover. Four FDs be
 ## Further reading
 
 - [Silberschatz, Korth and Sudarshan: relational database design](https://www.db-book.com/slides-dir/PDF-dir/ch7.pdf)
-- [PostgreSQL 18: constraints](https://www.postgresql.org/docs/18/ddl-constraints.html)
+- [Canonical cover (Wikipedia)](https://en.wikipedia.org/wiki/Canonical_cover)

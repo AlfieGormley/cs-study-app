@@ -29,20 +29,7 @@ A two-party call is naturally peer-to-peer. With more people:
 | SFU | 1 (or a few) | Forward packets |
 | MCU | 1 | Decode, mix, encode |
 
-In a mesh, each client sends its own copy of its stream to every other participant, so upload grows with the size of the call:
-
-```formula
-U = (n − 1)r
-U = (5 − 1) × 1.5 Mbit/s = 6 Mbit/s
-where
-U: the upload rate each client needs, in megabits per second (Mbit/s)
-n: the number of participants in the call; here 5
-r: the bit rate of one video stream; here 1.5 Mbit/s
-Mbit/s: megabits per second, millions of bits per second
-In words: with five people, each client uploads four copies of its 1.5 Mbit/s video, 6 Mbit/s in total.
-```
-
-So with five people at 1.5 Mbit/s video, a **full mesh** needs each client to upload 6 Mbit/s, before protocol overhead; whether an uplink supports this is deployment-specific. An **SFU** (selective forwarding unit) takes one upload per client and forwards copies, and with **simulcast** each client sends, say, three resolutions so the SFU can give each receiver the one that suits its bandwidth. An SFU reduces client upload replication at the cost of server forwarding. With ordinary per-hop DTLS-SRTP, the SFU holds media keys; an additional mechanism such as SFrame is needed to hide media content from it.
+In a mesh, each client sends its own copy of its stream to every other participant, so each extra person adds another full stream to everyone's upload. With five people at 1.5 Mbit/s video, a **full mesh** needs each client to upload four copies, 6 Mbit/s, before protocol overhead; whether an uplink supports this is deployment-specific. An **SFU** (selective forwarding unit) takes one upload per client and forwards copies, and with **simulcast** each client sends, say, three resolutions so the SFU can give each receiver the one that suits its bandwidth. An SFU reduces client upload replication at the cost of server forwarding. With ordinary per-hop DTLS-SRTP, the SFU holds media keys; an additional mechanism such as SFrame is needed to hide media content from it.
 
 ## Key takeaways
 - WebRTC protects media and data using DTLS-derived keys, SRTP and SCTP channels.

@@ -3,27 +3,27 @@
     "id": "crypto-macs-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "A link uses a 32-bit truncated HMAC tag. Assume a fixed valid context with no expiry, independent random tag guesses with replacement, and 1,000 verification attempts per second. What is the expected waiting time for success?",
+    "prompt": "A password-reset link carries a 32-bit truncated HMAC-SHA256 tag. Links never expire, the endpoint has no rate limit, and an attacker can submit about 1,000 guesses per second for a target account. A reviewer flags it. What is the best fix?",
     "options": [
       {
-        "text": "Never: HMAC-SHA256 is unforgeable",
-        "explanation": "HMAC's security is bounded by the tag length you keep. With 32 bits, a random guess succeeds with probability 2^-32."
+        "text": "Switch to HMAC-SHA512 but keep the 32-bit truncation",
+        "explanation": "The underlying hash does not matter here. A blind guess succeeds with probability one in 2^32 whatever hash sits underneath; only the tag length and the number of allowed attempts change the odds."
       },
       {
-        "text": "About 50 days",
-        "explanation": "Correct. Independent guessing has geometric waiting time: the mean is 4,294,967,296 attempts. At one thousand attempts per second this is about fifty days. A median, worst case or search without replacement would be different."
+        "text": "Use a full-length tag (at least 128 bits), give links a short expiry, and rate-limit verification attempts",
+        "explanation": "Correct. Forgery odds depend on the tag length and the number of guesses the verifier allows. A long tag makes each guess hopeless; expiry and rate limits cap the guesses."
       },
       {
-        "text": "About 4 seconds",
-        "explanation": "This answer divides by a billion attempts per second rather than the stipulated one thousand."
+        "text": "Encrypt the link so the attacker cannot see the tag",
+        "explanation": "The attacker is not reading a tag; they are guessing one. Encryption does nothing to limit blind guessing."
       },
       {
-        "text": "About 5,000 years",
-        "explanation": "That would apply to roughly a 47-bit tag at this rate. 32 bits is much weaker."
+        "text": "Use a longer HMAC key; 32-bit tags are fine with a 256-bit key",
+        "explanation": "The key is not the weak point: the attacker never needs it. A 32-bit tag has about 4.3 billion possible values; at 1,000 guesses per second, trying them all takes about seven weeks, and a hit comes after about half that on average."
       }
     ],
     "answer": 1,
-    "workedExample": "Independent guessing with replacement has a geometric waiting time. Its mean is the tag-space size in attempts:\n\n```formula\nt_mean = 2^32 / r\nt_mean ≈ 4.29 × 10^9 / 1000\nt_mean ≈ 4.29 × 10^6 s\nt_mean ≈ 49.7 days\nt_50 ≈ ln(2)t_mean ≈ 34.5 days\nwhere\nt_mean: the expected (average) time until the first successful forgery\nt_50: the time by which success has a 50% chance\n2^32: the number of possible 32-bit tags, about 4.29 × 10^9; also the expected number of guesses\nr: the guess rate, 1,000 verification attempts per second\nln: the natural logarithm; ln(2) ≈ 0.693\ns: seconds; one day is 86,400 s\ndays: the unit of the results\n≈: approximately equal to\nIn words: a 32-bit tag falls to blind guessing in about seven weeks on average, and has a 50% chance of falling within about five weeks, at a thousand guesses a second.\n```\n\nThis assumes the same accepted context and no expiry or rate limit. Choose tag length and lifetime from the forgery budget; a random server-side token also requires sufficient entropy and request limits.",
+    "workedExample": "1. Without the key, an attacker can only guess tags. Each guess succeeds with probability one in the number of possible tags: one in 2^32, about 4.3 billion, for a 32-bit tag.\n2. With unlimited attempts at 1,000 per second, trying every possible tag takes about 4.3 million seconds, roughly seven weeks, and on average the right tag turns up about halfway through. No expiry means the link stays guessable for all that time.\n3. The fix attacks both sides of the odds: a full tag (128 bits or more) makes each guess astronomically unlikely, and expiry plus rate limiting cap how many guesses are possible.\n4. Changing the hash or the key length leaves the guessing odds unchanged. Choose tag length from the total forgery budget, not from a fixed habit.",
     "link": {
       "title": "HMAC — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/HMAC"

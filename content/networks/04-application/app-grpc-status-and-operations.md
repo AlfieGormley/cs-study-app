@@ -38,7 +38,14 @@ Retry decisions need method semantics, duplicate-effect protection, retry policy
 
 ### Deadlines and cancellation
 
-Pass the remaining deadline budget to downstream calls, reserving any time needed to finish the current response. Starting with 300 ms and spending 50 ms leaves about 250 ms; giving every downstream hop a fresh 300 ms timeout can keep work running after the caller has stopped waiting. Propagation support differs between language libraries and configuration.
+Pass the remaining deadline budget to downstream calls, reserving any time needed to finish the current response. Starting with 300 ms and spending 50 ms leaves about 250 ms; giving every downstream hop a fresh 300 ms timeout can keep work running after the caller has stopped waiting. Deadline propagation support differs between language libraries and configuration.
+
+> [!analogy] Real-world analogy: A delivery promise passed to subcontractors
+> A restaurant promises a customer dinner within 30 minutes. The kitchen takes 10, so it tells the driver "you have 20 minutes", not "you have 30". If the customer cancels, a sensible restaurant tells the driver to turn back instead of delivering to an empty house.
+>
+> **How it maps:** The customer's promise is the caller's deadline, the kitchen is service A, and the driver is downstream service B. Passing on "20 minutes" is propagating the remaining budget in `grpc-timeout`. Telling the driver to turn back is cancellation.
+>
+> **Where it stops:** A driver hears "turn back" at once; a cancelled RPC reaches downstream servers after network delay, and only stops work if the handler checks for it. Nothing un-cooks a meal: a change the server has already committed stays committed.
 
 When a client deadline expires, it can report DEADLINE_EXCEEDED and signal cancellation. Server handlers must cooperate by checking cancellation and stopping unnecessary work; cancellation is not an instantaneous distributed stop and cannot roll back an already committed side effect.
 
@@ -47,7 +54,7 @@ When a client deadline expires, it can report DEADLINE_EXCEEDED and signal cance
 - **Browsers** can't read HTTP/2 trailers or control framing through `fetch`, so browsers use **gRPC-Web**, which moves trailers into the body and needs a proxy (or server support) to translate.
 - **Load balancing.** A client using one long-lived HTTP/2 connection sends its streams to the backend chosen for that connection by a connection-oriented layer-4 balancer. A channel can also use multiple connections; the backend assignment lasts for that connection. Use a layer-7 (HTTP/2-aware) proxy such as Envoy, or client-side balancing across several connections.
 - **gRPC keepalives** are HTTP/2 PING frames. Pinging more often than the server allows gets a GOAWAY with `ENHANCE_YOUR_CALM` and the debug data `too_many_pings`.
-- **Message size.** Receive limits are configurable and implementation-specific; exceeding an enforced limit can produce RESOURCE_EXHAUSTED. A cross-language table of current defaults is absent because this review did not verify every supported implementation.
+- **Message size.** Receive limits are configurable and implementation-specific; exceeding an enforced limit can produce RESOURCE_EXHAUSTED. Defaults differ between language implementations, so check your library's documentation.
 
 ## Key takeaways
 - HTTP success and RPC success are separate; grpc-status in trailers gives the RPC outcome.

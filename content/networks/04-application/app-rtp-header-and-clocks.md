@@ -29,24 +29,11 @@ X = extension, CC = CSRC count
 
 - **Payload type** (PT, 7 bits) says which codec, mapped in SDP (`a=rtpmap:111 opus/48000/2`).
 - **RTP sequence number** (16 bits) increases by 1 per packet: detects loss and reordering.
-- **Timestamp** (32 bits) is in **media clock** units, not wall time: **48,000 Hz for Opus** audio and **90,000 Hz for common video payload formats such as H.264**. The advance per packet is the clock rate times the time the packet covers (see the formula after this list). Packet timestamp and marker rules are defined by the payload format.
+- **Timestamp** (32 bits) is in **media clock** units, not wall time: **48,000 Hz for Opus** audio and **90,000 Hz for common video payload formats such as H.264**. It advances by the clock rate times the media time a packet covers, so a 20 ms Opus packet moves it on by 960 (Opus uses the 48 kHz RTP clock whatever sampling rate the audio itself uses) and each picture of 30-frames-per-second video by 3,000. Packet timestamp and marker rules are defined by the payload format.
 - **Marker bit** (M) typically flags the last packet of a video frame.
 - **SSRC** identifies the stream source; **CSRC** lists contributing sources when a mixer combined streams.
 
-```formula
-Δ = ft
-Δ_audio = 48,000 Hz × 0.020 s = 960
-Δ_video = 90,000 Hz × (1 / 30) s = 3,000
-where
-Δ: delta, how much the RTP timestamp advances, in clock ticks
-f: the RTP clock rate, in hertz (Hz), ticks per second
-t: the media time covered, in seconds (s): 20 ms = 0.020 s for one Opus packet, 1/30 s between pictures for 30 frames per second (fps) video
-Δ_audio: the advance per 20 ms Opus packet
-Δ_video: the advance between successive pictures of 30 fps video
-Hz: hertz, one tick per second
-s: seconds
-In words: a 20 ms Opus packet moves the 48 kHz timestamp on by 960 ticks, and each 30 fps video picture moves the 90 kHz timestamp on by 3,000 ticks.
-```
+The two counters answer different questions. The sequence number says how many packets were sent, so a gap in it means loss or reordering. The timestamp says how much media time has passed, so it can jump without any loss: an Opus sender using discontinuous transmission (DTX) sends nothing during silence, and the next packet's timestamp leaps ahead while its sequence number is the next one in line. Several packets of one video frame share the same timestamp.
 
 ```python
 import struct
@@ -61,23 +48,7 @@ print(b0 >> 6, b1 & 0x7F, seq, ts)
 # 2 111 6699 960
 ```
 
-This header fixture decodes as version 2, PT 111, sequence 6699 and timestamp 960. By hand, the top two bits of the first byte are the version, and the low 7 bits of the second byte are the payload type:
-
-```formula
-V = ⌊b_0 / 64⌋ = ⌊128 / 64⌋ = 2
-PT = b_1 − 128M
-PT = 111 − 128 × 0 = 111
-where
-V: the RTP version field
-b_0: the first byte, 0x80 = 128 in decimal
-⌊ ⌋: floor, round down to a whole number; dividing by 64 and rounding down keeps only the top two of the eight bits
-b_1: the second byte, 0x6f = 6 × 16 + 15 = 111
-M: the marker bit, the top bit of b_1, worth 128 when set; here 0
-PT: the payload type, the remaining 7 bits
-In words: 0x80 means version 2 with no padding, extension or contributing sources, and 0x6f means marker off and payload type 111.
-```
-
-The sequence bytes `1a 2b` give 26 × 256 + 43 = 6,699, and the timestamp bytes `00 00 03 c0` give 3 × 256 + 192 = 960. PT 111 means Opus only if negotiated that way. With an illustrative initial timestamp of zero and one 20 ms Opus frame per packet, 960 is the second frame; real initial timestamps and sequence numbers are randomised. This snippet parses only the fixed header, not a complete validated RTP packet.
+This header fixture decodes as version 2, PT 111, sequence 6699 and timestamp 960. The top two bits of the first byte are the version, and the second byte holds the marker bit on top of a 7-bit payload type, so a parser must mask the marker off. PT 111 means Opus only if SDP negotiated that mapping. With an illustrative initial timestamp of zero and one 20 ms Opus frame per packet, 960 is the second frame; real initial timestamps and sequence numbers are randomised. This snippet parses only the fixed header, not a complete validated RTP packet.
 
 ## Key takeaways
 - RTP sequence numbers count packets while timestamps follow payload-specific media clocks.

@@ -4,7 +4,7 @@ title: Mapping subtypes to tables
 level: advanced
 minutes: 3
 sourceLesson: rel-th-er-modelling
-summary: Mapping subtypes to tables, with explicit examples and the conditions that make the reasoning valid.
+summary: Single, class and concrete table mappings for subtypes, and what each can and cannot enforce.
 ---
 
 ## Inheritance: specialisation and generalisation

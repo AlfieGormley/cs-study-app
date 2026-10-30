@@ -25,24 +25,9 @@ Developer Network\r\n
 \r\n
 ```
 
-`11` is hex, so that chunk is 17 bytes ("Developer Network"). In hexadecimal each digit is worth 16 times the digit to its right, so converting a chunk-size line to an ordinary decimal byte count works like this:
+`11` is hexadecimal: one sixteen plus one, so that chunk is 17 bytes ("Developer Network"). The decoded body is `MozillaDeveloper Network`, 7 + 17 = 24 bytes. The CRLF after each chunk's data is framing, not content, so it is not counted. Reading `11` as decimal eleven would cut the chunk short and desynchronise the parser.
 
-```formula
-S = d_1 × 16 + d_0
-S = 1 × 16 + 1 = 17 B
-L = S_1 + S_2 = 7 B + 17 B = 24 B
-where
-S: the chunk size in bytes, as an ordinary decimal number
-d_1: the left (sixteens) digit of a two-digit hexadecimal size line; here 1
-d_0: the right (units) digit; here 1. The hex digits A to F stand for 10 to 15
-S_1: the size of the first chunk, hex 7 = 7 bytes ("Mozilla")
-S_2: the size of the second chunk, hex 11 = 17 bytes ("Developer Network")
-L: the length of the decoded body in bytes
-B: bytes
-In words: the size line "11" means one sixteen plus one, so 17 bytes; the two chunks together give a 24-byte body.
-```
-
-The decoded body is `MozillaDeveloper Network`, 24 bytes. The CRLF after each chunk's data is framing, not content, so it is not counted. Reading `11` as decimal eleven would cut the chunk short and desynchronise the parser.
+The key idea is that the receiver reads **exactly the number of bytes the size line announced**, then expects one CRLF. It never searches the data for line breaks, so a chunk may itself contain `\r\n` bytes without ending early.
 
 A deliberately restricted decoder for an already-buffered, bounded message with **no extensions or trailers**. It rejects those unsupported forms and returns any following bytes separately. Production receivers must handle the full grammar and incremental input.
 

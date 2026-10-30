@@ -28,6 +28,13 @@ Client (5G 198.51.100.4)
 2. **Path validation.** The server sends PATH_CHALLENGE with 8 random bytes to the new address and needs them echoed in PATH_RESPONSE. A matching protected response validates reachability on that path. It does not establish a user’s physical location or defeat an attacker that can relay traffic. Until validation, the anti-amplification limit applies.
 3. **Congestion state is reset.** The new path may have completely different bandwidth and RTT, so validation normally triggers resetting congestion and RTT state. RFC 9000 permits retaining state for a port-only address change, with caution about potentially different path characteristics.
 
+> [!analogy] Real-world analogy: Moving house without closing your bank account
+> When you move, your bank keeps your account because it is identified by an account number, not your address. Before posting statements to the new address, a careful bank sends a random code there and waits for you to read it back.
+>
+> **How it maps:** The account number is the connection ID, which keeps the QUIC connection alive when the client's address changes. The random code is PATH_CHALLENGE, and reading it back is PATH_RESPONSE. Until the code comes back, the bank sends little to the new address, as the anti-amplification limit requires. Using a fresh connection ID on the new path is like quoting a new reference so observers cannot easily link the two addresses.
+>
+> **Where it stops:** In QUIC, the connection's encryption keys show that packets come from the same peer; path validation itself only proves that someone at the new address can receive and return packets, which a relay could also do. A bank also does not reset anything when you move, whereas QUIC normally restarts congestion control because the new network may be much slower or faster.
+
 Only the **client** may migrate actively. A server can advertise preferred_address during the handshake. disable_active_migration restricts deliberate migration to the specified server address; it does not prohibit NAT rebinding or a permitted move to the server’s preferred address.
 
 > [!warning] Migration and load balancers

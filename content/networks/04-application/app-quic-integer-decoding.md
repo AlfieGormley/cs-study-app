@@ -20,37 +20,11 @@ QUIC encodes most numbers as **varints**. The top two bits of the first byte giv
 | 10 | 4 | ~1.07 billion |
 | 11 | 8 | ~4.6 quintillion |
 
-Each maximum comes from the bits left once the two length bits are removed:
-
-```formula
-V_max = 2^{8n − 2} − 1
-V_1 = 2^6 − 1 = 63
-V_2 = 2^14 − 1 = 16,383
-V_4 = 2^30 − 1 = 1,073,741,823
-V_8 = 2^62 − 1 ≈ 4.6 × 10^18
-where
-V_max: the largest value a varint of n bytes can hold
-n: the total length of the varint in bytes: 1, 2, 4 or 8
-V_1, V_2, V_4, V_8: V_max for 1, 2, 4 and 8 bytes
-^: "to the power of": 2^6 means 6 copies of 2 multiplied together; 10^18 is 1 followed by 18 zeros (a quintillion)
-≈: approximately equal to
-In words: a varint of n bytes has 8n bits, two of which give the length, so it holds up to 2 to the power (8n − 2), minus one.
-```
+Each maximum is simply the largest number that fits in the bits left after the two length bits: 6, 14, 30 or 62 bits. Values up to 63, common for small counts and lengths, cost one byte, while the format can still carry very large byte offsets.
 
 Except where a field imposes its own shortest-encoding rule, QUIC varints need not use the shortest representation. For example, 37 can be the one byte `25` or the two bytes `40 25`. QUIC frame-type fields require the shortest form.
 
-To decode, take the first byte, clear its top two bits (AND with `0x3F`), then append each following byte as the next 8 bits. For `7b bd`, the top bits `01` say 2 bytes:
-
-```formula
-v = 256(b_0 − 0x40) + b_1
-v = (0x7b − 0x40) × 256 + 0xbd
-v = 59 × 256 + 189 = 15,293
-where
-v: the decoded value
-b_0: the first byte, 0x7b in hexadecimal (base 16, prefix 0x), which is 7 × 16 + 11 = 123; subtracting 0x40 (64) removes the length bits 01
-b_1: the second byte, 0xbd = 11 × 16 + 13 = 189
-In words: strip the two length bits from the first byte, then treat the two bytes as one big-endian number.
-```
+To decode, read the top two bits of the first byte to learn the length, clear those two bits (AND with `0x3F`), then append each following byte as the next 8 bits, most significant first. For `7b bd`, the top bits `01` say 2 bytes; clearing them turns `7b` into `3b` (59), and `3b bd` read as one big-endian number is 15,293.
 
 ```python
 def varint(data):

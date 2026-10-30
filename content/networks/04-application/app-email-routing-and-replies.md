@@ -30,6 +30,13 @@ SMTP began as a mail-transfer protocol without built-in encryption or sender-dom
 - **Relay** between providers uses port **25**. Some access networks restrict outbound port 25 to reduce abuse; availability depends on the provider.
 - The receiving server stores the message, and Bob's client fetches it with **IMAP** or **POP3**. SMTP is push-only; retrieval is a separate protocol.
 
+> [!analogy] Real-world analogy: Posting a parcel through two depots
+> You hand a parcel to your local depot after showing ID. Your depot looks up which depot serves the recipient's town and drives it there. The recipient later collects it from their own locker.
+>
+> **How it maps:** Handing it over with ID is authenticated submission on port 587 or 465. The depot-to-depot drive is relay over port 25, and looking up the destination depot is the MX lookup. Collecting from the locker is IMAP or POP3, a separate protocol from the one that delivered it.
+>
+> **Where it stops:** A real depot can usually confirm who sent a parcel. Plain SMTP relay cannot; that is the job of the email SPF, DKIM and DMARC checks covered later. Mail can also wait in queues and be retried for days, which parcel services rarely do.
+
 ### Finding the destination: MX records
 
 To deliver to `bob@bob.example`, the sending MTA looks up `MX` records for `bob.example`:

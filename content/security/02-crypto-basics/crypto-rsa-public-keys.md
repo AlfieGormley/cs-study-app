@@ -19,7 +19,14 @@ Anyone:   Enc(public, msg) -> ciphertext
 Only you: Dec(private, ct) -> msg
 ```
 
-Anyone can lock a box with your public key; only your private key opens it. It is like a padlock you hand out freely, with the one key on your keyring.
+Anyone can encrypt to you with your public key; only your private key decrypts.
+
+> [!analogy] Real-world analogy: Handing out open padlocks
+> You hand out open padlocks to anyone who asks and keep the only key on your keyring. Anyone can put a message in a box and snap one of your padlocks shut; only you can open it.
+>
+> **How it maps:** The open padlock is the public key, snapping it shut is encryption, and your key is the private key. No secret ever had to travel to the sender.
+>
+> **Where it stops:** Anyone can also hand out padlocks *claiming* to be yours. Unless the sender checks that the padlock really came from you (certificates, pinned keys), an attacker can substitute their own. Real public-key encryption is also slow and size-limited, so in practice it protects a small symmetric key rather than the whole message.
 
 RSA illustrates a **trapdoor function**: reversing it is intended to be hard without secret information. Other public-key constructions use different mathematical structures. Public-key encryption also needs an authenticated public key: if an attacker substitutes their own, secrecy from that attacker is lost.
 
@@ -30,20 +37,7 @@ RSA (1977) is built on one asymmetry in arithmetic:
 - Multiplication is efficient compared with known classical factoring methods for appropriately generated RSA-sized semiprimes.
 - **Factoring** the product back into its primes is hard. The best known classical algorithm, the general number field sieve, has a heuristic expected cost that grows faster than any polynomial in the input length. In 2020, researchers factored RSA-250 (829 bits). Their report lists about 2,450 core-years for sieving and 250 for linear algebra, plus 114 for polynomial selection. These are reported historical costs, not a current universal benchmark or claim about the latest record.
 
-RSA works in **modular arithmetic**, "clock arithmetic" where numbers wrap around at a fixed number called the modulus. A 12-hour clock is arithmetic modulo 12: 5 hours after 9 o'clock is 2 o'clock.
-
-```formula
-r = a mod n
-17 mod 5 = 2
-17 ≡ 2 (mod 5)
-where
-a: any whole number
-n: the modulus: the positive whole number the arithmetic wraps around at
-r: the remainder, always from 0 to n − 1
-mod: "modulo": a mod n is the remainder left after dividing a by n
-≡: "is congruent to": both sides leave the same remainder after dividing by the number named in (mod …)
-In words: 17 divided by 5 is 3 remainder 2, so 17 mod 5 is 2, and 17 and 2 count as the same number when you only care about remainders after dividing by 5.
-```
+RSA works in **modular arithmetic**, "clock arithmetic" where numbers wrap around at a fixed number called the modulus. A 12-hour clock is arithmetic modulo 12: 5 hours after 9 o'clock is 2 o'clock. Likewise 17 divided by 5 leaves remainder 2, so 17 and 2 count as the same number "modulo 5". RSA's public modulus is a huge number of this kind, the product of two secret primes.
 
 ## Key takeaways
 - Authenticate the recipient’s public key before encrypting to it.

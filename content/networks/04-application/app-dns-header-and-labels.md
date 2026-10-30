@@ -2,7 +2,7 @@
 id: app-dns-header-and-labels
 title: "DNS headers and length-prefixed names"
 level: intermediate
-minutes: 3
+minutes: 4
 sourceLesson: app-dns-wire
 summary: "DNS has a twelve-byte header and four sections; names use length-prefixed labels."
 ---
@@ -44,6 +44,24 @@ NSCOUNT, ARCOUNT
 - The Z bits now include **AD** (authenticated data) and **CD** (checking disabled) for DNSSEC.
 - **RCODE**: 0 NOERROR, 1 FORMERR, 2 SERVFAIL, 3 NXDOMAIN, 5 REFUSED.
 
+### What a resolver does with "no such name"
+
+Two different negative answers are easy to confuse:
+
+- **NXDOMAIN** (RCODE 3): the name does not exist at all, for any record type.
+- **NODATA**: RCODE 0 (NOERROR) with an empty answer section. The name exists, but has no records of the type asked for, for example an AAAA query for a name that has only an A record.
+
+Resolvers cache negative answers too (**negative caching**, RFC 2308), so a typo'd or missing name does not send a fresh query to the authoritative servers every time. The authoritative server puts the zone's **SOA record** in the authority section, and the negative answer may be cached for the smaller of the SOA record's own TTL and its MINIMUM field. An NXDOMAIN is cached for the name (any type); a NODATA answer only for that name and type. A negative answer without an SOA should not be cached.
+
+The practical consequence: if someone looks up `new.example.com` just before you create it, their resolver can keep answering NXDOMAIN until that negative TTL runs out, even though the record now exists.
+
+> [!analogy] Real-world analogy: A receptionist's "no such person" note
+> You ask a receptionist to put you through to a new colleague. The staff list says nobody of that name works there, so the receptionist jots "no such person, recheck after lunch" and gives every later caller the same answer until lunchtime, even if the new colleague starts at 11.
+>
+> **How it maps:** The receptionist is the recursive resolver, the staff list is the authoritative zone, and "recheck after lunch" is the negative-caching time taken from the zone's SOA record. NXDOMAIN is "nobody of that name"; NODATA is "that person exists but has no desk phone".
+>
+> **Where it stops:** The resolver does not choose the time freely: it follows the SOA values in the answer (and may cap them further), and the note covers exactly the name, or name and type, that was asked.
+
 ### Names as labels
 
 Names are not dotted strings on the wire. Each label is a length byte followed by that many bytes, ending with a zero-length root label:
@@ -54,21 +72,14 @@ www.example.com  becomes
 03 63 6f 6d 00
 ```
 
-A label is at most 63 bytes (the top two bits of the length must be `00`), and a whole name at most 255 bytes. The 63 comes from the six bits left for the length:
-
-```formula
-L_max = (2^6 − 1) B = 63 B
-where
-L_max: the longest label, in bytes (B)
-^: "to the power of": 2^6 means 6 copies of 2 multiplied together, which is 64
-B: bytes
-In words: with two of the length byte's eight bits reserved, six bits remain, and six bits count from 0 to 63.
-```
+A label is at most 63 bytes, and a whole name at most 255 bytes. The 63 comes from the length byte: its top two bits must be `00` (the pattern `11` marks a compression pointer, covered in the next unit), leaving six bits, which count up to 63.
 
 ## Key takeaways
 - DNS has a twelve-byte header and four sections; names use length-prefixed labels.
 - Flag fields describe query or response handling, while a label and whole name have separate length bounds.
+- NXDOMAIN (no such name) and NODATA (no records of that type) are both cached for a time set by the zone's SOA record.
 
 ## Further reading
 - [RFC 1035](https://www.rfc-editor.org/rfc/rfc1035)
+- [RFC 2308](https://www.rfc-editor.org/rfc/rfc2308)
 - [RFC 4035](https://www.rfc-editor.org/rfc/rfc4035)

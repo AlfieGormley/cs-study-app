@@ -4,7 +4,7 @@ title: Measuring redundancy and copied values
 level: advanced
 minutes: 3
 sourceLesson: rel-th-denormalisation
-summary: Measuring redundancy and copied values, with explicit examples and the conditions that make the reasoning valid.
+summary: Denormalisation as controlled redundancy: measure first, and tell historical snapshots from cached copies.
 ---
 
 Normalisation stores every fact once, which makes writes simple and keeps the data consistent. The price is paid on reads: answering a question may require joining several tables.
@@ -38,6 +38,13 @@ Every change to `customer.name` must now also update that customer's orders. If 
 
 > [!warning] Snapshot or cache?
 > Ask whether the copy should follow the original. The shipping address *on an invoice* should **not** change when the customer moves: it is a historical fact about the order, and storing it is correct normalised design. A copy of the customer's *current* display name **should** follow the original: that is a cache, and true denormalisation. Confusing the two either changes history or leaves stale data.
+
+> [!analogy] Real-world analogy: a till receipt and a phone contact
+> A till receipt records the price you paid and the shop's address on the day. If the shop later raises prices or moves, your receipt must not change. The contact entry for a friend on your phone is different: when they change number, you want your copy updated, and a stale copy is simply wrong.
+>
+> **How it maps:** The receipt is a historical snapshot stored with the event (the invoice's shipping address, the price paid on an order line); it is its own fact, not redundancy. The phone contact is a cached copy of a current value (a customer's display name copied onto orders), which must follow its source.
+>
+> **Where it stops:** You fix one contact by hand when you hear about a change. A database copy may sit on millions of rows, so every change to the source becomes a large write, and nothing updates the copies unless you build and test the mechanism that does.
 
 ## Key takeaways
 

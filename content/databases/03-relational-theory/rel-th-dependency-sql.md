@@ -4,13 +4,13 @@ title: Dependencies in PostgreSQL queries
 level: intermediate
 minutes: 3
 sourceLesson: rel-th-functional-deps
-summary: Dependencies in PostgreSQL queries, with explicit examples and the conditions that make the reasoning valid.
+summary: Where dependencies appear in practice: PostgreSQL GROUP BY, data-quality checks and common reasoning mistakes.
 ---
 
 ## Where FDs show up in real systems
 
 - **Keys and UNIQUE constraints** directly enforce key-based dependencies. SQL has no general FUNCTIONAL DEPENDENCY declaration for an arbitrary dependency between two sets of columns; some special dependencies can be enforced with CHECK or exclusion constraints, and others need triggers or schema decomposition. Normalisation avoids storing the same dependent fact in many rows.
-- **Postgres uses FDs in GROUP BY.** If you group by a table's primary key, PostgreSQL 16–18 lets you select that table's other columns without listing them, because it knows the key determines them:
+- **Postgres uses FDs in GROUP BY.** If you group by a table's primary key, PostgreSQL (since version 9.1) lets you select that table's other columns without listing them, because it knows the key determines them. It recognises only primary keys for this: grouping by a `UNIQUE NOT NULL` column, or by a column that a join makes equal to the key, is still rejected.
 
 ```sql
 SELECT c.id, c.name, COUNT(*)
@@ -20,7 +20,7 @@ JOIN orders o ON o.customer_id = c.id
 GROUP BY c.id;
 ```
 
-- **Optimisers use FDs** to drop redundant grouping or sorting columns and to prove that a join cannot multiply rows.
+- **Optimisers use keys and FDs.** PostgreSQL's planner drops `GROUP BY` columns that are already determined by the table's primary key (since 9.6) or, from version 18, by a unique index on NOT NULL columns, and it uses unique keys to prove that a join cannot multiply rows.
 - **Data-quality checks** test candidate FDs against stored rows. With both `cid` and `ctitle` constrained `NOT NULL`, grouping by course code and requiring more than one distinct title finds violations. `COUNT(DISTINCT ...)` ignores NULLs; do not silently treat its result as an FD proof when missing titles are allowed.
 
 ```sql
@@ -37,19 +37,7 @@ HAVING COUNT(DISTINCT ctitle) > 1;
 - **Forgetting transitivity.** When asked for keys, compute the attribute closure; do not eyeball it. Chains through two FDs are easy to miss.
 - **Stopping at one key.** A relation can have several candidate keys, and normal-form tests depend on all of them.
 
-```formula
-XY → Z ⇏ X → Z
-D → A and AB → C gives BD → C
-where
-X, Y, Z: sets of attributes
-XY: X ∪ Y, the two sets combined
-∪: union
-→: functionally determines
-⇏: does not imply
-A, B, C, D: single attributes
-AB, BD: the sets {A, B} and {B, D}
-In words: the first line is the left-side mistake; the second is an easily missed chain: D gives A, and then A with B gives C.
-```
+A typical missed chain: D fixes A, and A together with B fixes C, so B together with D also fixes C, even though no stated rule has B and D on its left. Computing the attribute closure of B and D finds it; eyeballing the list of rules does not.
 
 ## Key takeaways
 
@@ -59,4 +47,4 @@ In words: the first line is the left-side mistake; the second is an easily misse
 ## Further reading
 
 - [Silberschatz, Korth and Sudarshan: relational database design](https://www.db-book.com/slides-dir/PDF-dir/ch7.pdf)
-- [PostgreSQL 18: constraints](https://www.postgresql.org/docs/18/ddl-constraints.html)
+- [PostgreSQL 18: SELECT, GROUP BY and functional dependency](https://www.postgresql.org/docs/18/sql-select.html)

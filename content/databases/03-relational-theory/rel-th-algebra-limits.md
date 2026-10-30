@@ -4,7 +4,7 @@ title: Where pure algebra stops
 level: basic
 minutes: 3
 sourceLesson: rel-th-algebra
-summary: Where pure algebra stops, with explicit examples and the conditions that make the reasoning valid.
+summary: Where set-based algebra and SQL part ways: bags, NULL, aggregation and recursion.
 ---
 
 ## Local relations
@@ -13,11 +13,11 @@ summary: Where pure algebra stops, with explicit examples and the conditions tha
 Student            Enrolled     Course
 sid name year      sid cid      cid dept
  1  Ada   2         1  DB       DB  CS
- 2  Ben   1         1  OS       OS  CS
+ 2  Ben   1         1  AI       AI  CS
  3  Cat   2         1  LA       LA  MA
  4  Dev   3         2  DB
                     3  DB
-                    3  OS
+                    3  AI
 ```
 
 Four students, three courses, six enrolments. Dev is not enrolled on anything. (Course also has a `title` column, left out here for width.) `sid` is the student id, `cid` the course code, and `dept` the department that runs the course.
@@ -29,7 +29,7 @@ Four students, three courses, six enrolments. Dev is not enrolled on anything. (
 - **Aggregation is an extension.** Grouping (written with the Greek letter γ, gamma) is not part of Codd's original algebra; textbooks add it as an extended operator.
 - **No recursion.** A fixed finite expression in ordinary relational algebra cannot compute reachability for arbitrary graph size or unbounded depth. A known fixed depth can be expanded into a fixed number of joins; `WITH RECURSIVE` handles the unbounded case.
 
-```formula
+```formula reference
 R ∪ R ≡ R
 σ p (R) ∪ σ ¬p (R) ≡ R
 γ year, COUNT(sid) (Student)
@@ -45,7 +45,7 @@ year: the grouping attribute
 COUNT: the aggregate that counts the values in each group
 sid: the student-id attribute being counted
 Student: the relation of students
-In words: in pure algebra, a union with itself changes nothing and "p or not p" covers every relational tuple; the last line counts students per year, giving (1, 1), (2, 2) and (3, 1) for the running example.
+In words: in pure algebra, a union with itself changes nothing and a condition together with its negation covers every relational tuple, but SQL's duplicates and NULLs break both identities. The extended grouping operator counts students per year: one in year 1, two in year 2 and one in year 3 for the running example.
 ```
 
 ## Key takeaways
@@ -56,4 +56,4 @@ In words: in pure algebra, a union with itself changes nothing and "p or not p" 
 ## Further reading
 
 - [Silberschatz, Korth and Sudarshan: relational model and algebra](https://www.db-book.com/slides-dir/PDF-dir/ch2.pdf)
-- [PostgreSQL 18: constraints](https://www.postgresql.org/docs/18/ddl-constraints.html)
+- [PostgreSQL 18: WITH queries, including WITH RECURSIVE](https://www.postgresql.org/docs/18/queries-with.html)

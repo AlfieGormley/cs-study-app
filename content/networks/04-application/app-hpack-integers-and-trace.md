@@ -9,25 +9,11 @@ summary: "HPACK fills a bit prefix, then sends any remainder in little-endian se
 
 HPACK compresses HTTP/2 fields using shared tables. The static table has 61 entries; newly indexed dynamic fields start at 62. An indexed representation sets its top bit, while a literal representation carries a name or name index and a value. This unit follows the integer encoding and one complete field block.
 
-Integers use an **N-bit prefix**: the first byte has a few bits left over for the number (5 bits in the example below; the RFC calls this count N). If the value is smaller than the all-ones pattern of those bits, it is stored directly in them. Otherwise the prefix is set to all ones and the remainder follows in 7-bit groups, least significant first, with the top bit meaning "more follows". For 1337 with a 5-bit prefix:
+Integers use an **N-bit prefix**: the first byte has a few bits left over for the number (5 bits in the example below; the RFC calls this count N). If the value is smaller than the all-ones pattern of those bits, it is stored directly in them. Otherwise the prefix is set to all ones and the remainder follows in 7-bit groups, least significant first, with the top bit of each byte meaning "more follows".
 
-```formula
-P = 2^N − 1 = 2^5 − 1 = 31
-r = 1337 − 31 = 1306
-1306 = 10 × 128 + 26
-b_1 = 26 + 128 = 154
-b_2 = 10
-where
-P: the largest value the N-bit prefix can hold, used as the "more bytes follow" marker
-N: the number of prefix bits available in the first byte; here 5
-^: "to the power of": 2^5 means 5 copies of 2 multiplied together, which is 32
-r: the remainder still to encode after the prefix is filled
-b_1: the first continuation byte: the low 7 bits of r (26), plus 128 because more bytes follow
-b_2: the last continuation byte: the remaining high part of r (10), with no 128 added because nothing follows
-In words: 1337 does not fit in 5 bits, so the prefix is set to 31 and the leftover 1306 is sent as 26-with-a-continue-flag (154) then 10.
-```
+For 1337 with a 5-bit prefix: five bits hold at most 31, so the prefix is set to 31 (the "more follows" marker) and 1306 remains. Its low seven bits are 26, sent as 154 (26 with the continue bit, worth 128, set); the rest is 10, sent as a final byte without the continue bit. The decoder reverses this: 31, plus 26, plus 10 lots of 128, gives 1337.
 
-The decoder reverses this: 31 + 26 + 10 × 128 = 1337. The same integer-prefix algorithm in Python:
+The same integer-prefix algorithm in Python:
 
 ```python
 def enc_int(value, n):
@@ -54,6 +40,8 @@ print(enc_int(10, 5))    # [10]
 print(enc_int(1337, 5))  # [31, 154, 10]
 ```
 
+The design keeps small numbers to a single byte, which matters because most indexes and string lengths in a header block are small.
+
 ### Decoding a real header block
 
 The first request in RFC 7541's examples is:
@@ -69,24 +57,7 @@ The first request in RFC 7541's examples is:
 4. `41` = `01 000001`: literal with indexing, name from index 1 (`:authority`).
 5. `0f`: a 15-byte string, not Huffman-coded (top bit 0): `www.example.com`.
 
-The decoder adds `:authority: www.example.com` to the dynamic table at index 62. Its size and the cost of reusing it work out as:
-
-```formula
-E = n + v + 32 B
-E = 10 B + 15 B + 32 B = 57 B
-x = 128 + 62 = 190 = 0xbe
-F = 1 B + 1 B + 15 B = 17 B
-where
-E: the entry's size against the table limit, in bytes (B)
-n: the name length; ":authority" is 10 bytes
-v: the value length; "www.example.com" is 15 bytes
-x: the one-byte indexed representation that later refers to index 62. In hexadecimal (base 16, prefix 0x) it is written 0xbe: b is 11 and e is 14, so 11 × 16 + 14 = 190
-F: the bytes the original literal field occupied on the wire: the 0x41 representation byte, the 0x0f length byte and the 15-byte value
-B: bytes
-In words: the entry costs 57 bytes of table space, and once stored, a 17-byte literal can be replaced by the single byte 0xbe.
-```
-
-That saving only applies if the entry is still at index 62 and the encoder chooses to reference it.
+The decoder adds `:authority: www.example.com` to the dynamic table at index 62. That entry costs 57 bytes of table space (10 name bytes, 15 value bytes and HPACK's 32-byte overhead). The literal took 17 bytes on the wire (the `41` byte, the `0f` length byte and 15 bytes of text); once stored, a later request can send the single byte `be` (index 62 with the top bit set) instead. That saving applies only while the entry is still at index 62 and the encoder chooses to reference it.
 
 ### Why "never index" exists
 

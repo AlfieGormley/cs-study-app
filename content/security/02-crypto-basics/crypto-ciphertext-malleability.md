@@ -16,22 +16,11 @@ Properly used encryption can provide **confidentiality** against its intended at
 > [!example] Malleability in practice
 > A server encrypts `pay Bob 10` with AES-CTR. The attacker doesn't know the key but guesses the format. They XOR byte 8 of the ciphertext with `'1' XOR '9'` (that's `0x08`). The server decrypts `pay Bob 90` without complaint.
 
-Why it works: the attacker XORs a difference D into the ciphertext, and decryption carries it straight into the plaintext.
+Why it works: decryption just XORs the keystream back off, so any difference the attacker XORs into a ciphertext byte passes straight through into the decrypted byte. The keystream cancels as usual and the attacker's change survives, so a guessed plaintext byte can be turned into any byte they like.
 
-```formula
-P′ = (C ⊕ D) ⊕ K
-P′ = (C ⊕ K) ⊕ D = P ⊕ D
-D = '1' ⊕ '9' = 0x31 ⊕ 0x39 = 0x08
-where
-C: the ciphertext byte the attacker changes (byte 8, counting from 0)
-K: the keystream byte at that position, which the attacker never learns
-P: the original plaintext byte, the character '1'
-D: the difference the attacker chooses: the XOR of the old and wanted characters
-P′: the byte the server gets after decrypting the altered ciphertext: here the character '9'
-0x31, 0x39, 0x08: byte values in hexadecimal (base 16, marked by 0x); 0x31 is the character '1' and 0x39 is '9' in ASCII
-⊕: XOR (exclusive or): each output bit is 1 where the two inputs differ and 0 where they match
-In words: XORing D into the ciphertext XORs exactly D into the plaintext, so an attacker who can guess one plaintext byte can turn it into any byte they like.
-```
+In the example, the difference is the XOR of the characters `1` and `9` (`0x31` and `0x39`), which is `0x08`. The attacker needs only two things: a guess at the plaintext in that position (message formats are rarely secret) and the ability to change data in transit or in storage. They never need the key.
+
+The same weakness affects CBC in a block-shaped form: flipping bits in one ciphertext block flips the same bits in the next plaintext block. Adding more encryption does not help. What is missing is a check that the ciphertext is exactly what the sender produced.
 
 The lesson: **unauthenticated encryption is almost never what you want**. You need a way to detect any change before you act on decrypted data.
 

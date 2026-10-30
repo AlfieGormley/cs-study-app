@@ -3,27 +3,27 @@
     "id": "crypto-hashes-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Assume independently uniform 64-bit hash outputs for distinct documents. A system identifies documents by a 64-bit hash. Roughly how many documents can it store before there's about a 50% chance that two share an ID?",
+    "prompt": "A design document proposes identifying about 10 billion stored documents by the first 64 bits of their SHA-256 digest, with no collision handling, \"because 2^64 is about 18 quintillion, so clashes will never happen\". Assume the truncated digests behave like independent uniform random values. How should a reviewer respond?",
     "options": [
       {
-        "text": "About 2^63, half the output space",
-        "explanation": "This is the intuition the birthday paradox overturns. You are comparing all pairs, not matching one target."
+        "text": "Agree: with 2^64 possible IDs, 10 billion documents fill only a tiny fraction of the space",
+        "explanation": "This compares the item count with the whole space, but collisions depend on the number of *pairs*. The birthday effect makes a clash likely once the count nears the square root of the space."
       },
       {
-        "text": "About 64",
-        "explanation": "That would be absurdly low; it confuses the number of bits with the number of items."
+        "text": "Agree, but only if documents are added slowly",
+        "explanation": "The rate of insertion is irrelevant. What matters is how many IDs coexist, compared with the square root of the ID space."
       },
       {
-        "text": "About 2^64, the full output space",
-        "explanation": "One more distinct input than the entire output-space size guarantees a collision by the pigeonhole principle. A roughly 50% chance under uniform-output assumptions occurs much earlier."
+        "text": "Object: a clash becomes likely after roughly the square root of 2^64, about 4 to 5 billion IDs, so at 10 billion a collision is to be expected; use longer IDs or detect and handle collisions",
+        "explanation": "Correct. The square root of 2^64 is 2^32, about 4.3 billion; the 50 percent point is about 5 billion. At 10 billion documents a collision is very likely."
       },
       {
-        "text": "About 5 billion",
-        "explanation": "Correct. By the birthday bound, a 50% collision chance arrives after about 1.18 times the square root of the number of possible IDs:\n\n```formula\nq_50 ≈ 1.18 × 2^(n/2)\nq_50 ≈ 1.18 × 2^32 ≈ 5.1 × 10^9\nwhere\nq_50: the number of documents at which a shared ID becomes a 50% chance\nn: the ID length in bits, 64\n≈: approximately equal to\nIn words: a 64-bit ID space hits a coin-flip chance of a clash after about 5 billion documents.\n```"
+        "text": "Object: 64-bit IDs collide after about 64 documents",
+        "explanation": "This confuses the number of bits with the number of items. Collisions become likely near 2^32 items, not 64."
       }
     ],
-    "answer": 3,
-    "workedExample": "Birthday bound: collisions become likely after about the square root of the number of possible outputs, and the 50% point is about 1.18 times that square root.\n\n```formula\nN = 2^64\n√(N) = 2^32 ≈ 4.29 × 10^9\nq_50 ≈ 1.18 × √(N)\nq_50 ≈ 1.18 × 4.29 × 10^9 ≈ 5.06 × 10^9\nwhere\nN: the number of possible IDs: 2^64 for a 64-bit hash\n√: square root: √(N) multiplied by itself gives N\nq_50: the number of stored documents at which a collision becomes a 50% chance\n1.18: √(2 × ln(2)) ≈ 1.1774, the rounded large-space uniform-model coefficient for the approximate 50% collision point\n≈: approximately equal to\nIn words: square-root the ID space and multiply by about 1.18: roughly five billion documents give even odds of a shared ID.\n```\n\nFor a global-scale system that is reachable, so 64-bit hash IDs need collision handling. A 256-bit hash pushes this to about 2^128.",
+    "answer": 2,
+    "workedExample": "1. A collision needs *any* two of the documents to share an ID, not one particular document to hit one particular ID.\n2. The number of pairs grows with the square of the document count, so clashes become likely near the square root of the ID space.\n3. The square root of 2^64 is 2^32, about 4.3 billion; the 50 percent point is around 5 billion. Ten billion is beyond that, so a collision is expected, and a silent one would make two documents share an identity.\n4. Options: keep more of the digest (a full 256-bit SHA-256 digest pushes the likely-collision point to about 2^128 items), or detect a clash on insert and handle it.",
     "link": {
       "title": "Birthday attack — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Birthday_attack"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Generic collision search on an n-bit digest takes about 2^(n/2) hash evaluations:\n\n```formula\nW_coll ≈ 2^(n/2)\nW_coll ≈ 2^(80/2) = 2^40\nW_coll ≈ 1.1 × 10^12\nwhere\nW_coll: the generic birthday-search work to find two inputs with the same truncated digest, in hash evaluations\nn: the number of digest bits kept: 80\n≈: approximately equal to\nIn words: keeping 80 bits leaves only 40 bits of collision security, about a trillion hash evaluations.\n```\n\nThis is an operation count, not a measured runtime; storage and search strategy matter. Select digest size for the required collision resistance and handle collisions where appropriate. A 256-bit digest targets roughly 128-bit generic collision resistance.",
+    "workedExample": "1. The attacker chooses both files, so this is a collision search, not a search for one given key.\n2. Generic collision search needs about the square root of the number of possible digests, because every pair of candidates is a chance to match. Halve the bit length: 80 bits gives a 40-bit collision cost.\n3. Keeping 80 bits leaves about 2^40 evaluations, roughly a trillion: a large but entirely practical computation.\n4. A preimage (matching one existing file's key) would still cost about 2^80, which is why the 2^80 option is the wrong attack model here.\n\nThis is an operation count, not a measured runtime; storage and the search method matter. Choose digest length for the collision resistance you need: a full 256-bit digest targets roughly 128-bit generic collision resistance.",
     "link": {
       "title": "Birthday attack — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Birthday_attack"

@@ -63,27 +63,27 @@
     "id": "crypto-macs-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "In an idealised timing oracle, each additional matching hex character is distinguishable and the secret 32-character tag remains fixed. Ignoring repetitions and noise, roughly how many candidate choices does a position-by-position search use, versus the full tag space?",
+    "prompt": "A webhook receiver checks HMAC-SHA256 tags with `if computed == received:`. A colleague says this is harmless because \"guessing a 256-bit tag is impossible anyway\". In an idealised setting where the comparison takes measurably longer for each additional matching leading character, why is the colleague wrong?",
     "options": [
       {
-        "text": "About 340 undecillion, the same as brute force",
-        "explanation": "That's the brute-force figure. The early exit lets the attacker solve each character separately."
+        "text": "Because `==` reveals the HMAC key when the comparison fails",
+        "explanation": "The comparison never touches the key. What it can leak is how many leading characters of the attacker's guess are right."
       },
       {
-        "text": "About 32, one per character",
-        "explanation": "Each position has 16 possible hex values, so the attacker must test up to 16 per position, not one."
+        "text": "Because early-exit timing lets the attacker confirm the tag one character at a time, turning one impossible search into many small ones of at most 16 tries each",
+        "explanation": "Correct. Each position has only 16 hex values, so a position-by-position search needs about a thousand candidate characters for a 64-character tag, plus repeated measurements to beat noise."
       },
       {
-        "text": "At most 512 candidate characters, before repeated measurements",
-        "explanation": "Correct. Timing turns one huge search into 32 small ones of 16 values each."
+        "text": "Because `==` compares strings more slowly, making the endpoint easy to overload",
+        "explanation": "Speed is not the issue; the variation in speed is. A constant-time comparison is not faster."
       },
       {
-        "text": "About 256",
-        "explanation": "The attacker searches all 32 positions, testing up to 16 candidates at each; it is not just one pair of characters."
+        "text": "It isn't wrong: timing differences never matter over a network",
+        "explanation": "Network noise makes the attack harder and may make it impractical, but repeated measurements can average noise away. The fix is cheap, so use `hmac.compare_digest`."
       }
     ],
-    "answer": 2,
-    "workedExample": "Compare a position-by-position search with a blind search of the whole tag space:\n\n```formula\nG_timing ≤ 32 × 16 = 512\nG_brute = 16^32 = 2^128\nwhere\nG_timing: candidate choices when the oracle confirms each character separately\nG_brute: the number of possible 32-character hex tags, searched blind\n16: the number of possible hex characters (0–9, a–f) at each position; each encodes 4 bits\n32: the number of characters in the tag\n≤: is at most\nIn words: confirming one character at a time turns a 2^128 search into at most 512 choices.\n```\n\nReal measurements can require many repetitions or may not expose this signal at all. This arithmetic is not a network timing-attack benchmark.",
+    "answer": 1,
+    "workedExample": "1. Blind guessing a 64-character hex tag means 2^256 possibilities: hopeless.\n2. An early-exit comparison stops at the first wrong character, so its time depends on how many leading characters match.\n3. If that difference can be measured, the attacker fixes the first character (at most 16 tries), then the second, and so on: about a thousand candidate characters in total instead of 2^256.\n4. Real measurements need many repetitions, and over a network the signal may be too small to use. This is a reasoning model, not a benchmark.\n5. Use `hmac.compare_digest` on validated, same-type tags; it avoids content-dependent early exit in the comparison itself.",
     "link": {
       "title": "hmac — Python documentation",
       "url": "https://docs.python.org/3/library/hmac.html"

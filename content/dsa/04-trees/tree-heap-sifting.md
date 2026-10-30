@@ -29,26 +29,9 @@ def push(a, x):
     sift_up(a, len(a) - 1)
 ```
 
-Pushing 0 into the binary heap above: it lands at index 8 (child of 4), swaps with 4, then 3, then 1, and becomes the new root. There is at most one swap per level, and a complete tree is short:
-
-```formula
-S ≤ ⌊log_2(n)⌋
-S ≤ ⌊log_2(9)⌋ = ⌊3.17⌋ = 3
-where
-S: the number of swaps one sift-up makes
-n: the number of items in the heap after the push; 9 in the example
-log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n
-⌊ ⌋: floor: round down to a whole number
-⌊log_2(n)⌋: the height of a complete binary tree with n nodes, in edges
-In words: a sift-up can climb at most the height of the heap, which is the base-2 logarithm of its size rounded down.
-```
-
-Pushing 0 made exactly 3 swaps, the most possible. A million-item binary heap needs at most 19, so push is **O(log n)**.
+Pushing 0 into the binary heap `[1, 3, 2, 4, 8, 7, 6, 9]` from the previous unit: it lands at index 8 (child of 4), swaps with 4, then 3, then 1, and becomes the new root. There is at most one swap per level, and because a heap is always a complete tree, it is short: a 9-item heap has height 3, so those 3 swaps are the most possible. A million-item binary heap has height 19, so push is **O(log n)**. Many pushes stop after one comparison, because a new item is often no smaller than its parent.
 
 ## Sift down: pop
-
-Here n counts entries before the pop; use the sift-up unit's complete-tree height bound.
-
 
 To pop the minimum, you cannot just remove the root: that would leave a hole at the top. Instead, move the **last** item into the root (keeping the shape), shrink the array, and **sift down**: swap it with its **smaller** child until it is no larger than both children.
 

@@ -39,25 +39,15 @@ Every frame starts with exactly **9 bytes**:
 +-----------------------------+
 ```
 
-- **Length** is the payload size, excluding the 9-byte header. The default maximum is **16,384 bytes**; a peer can raise it with `SETTINGS_MAX_FRAME_SIZE` up to the largest number a 24-bit field can hold.
-- **Stream ID 0** is the connection itself, used for connection-control HTTP/2 frames. **Client-initiated streams are odd** (1, 3, 5...), server-initiated ones even. IDs only increase and are never reused; a long-lived connection that runs out must be replaced.
+- **Length** is the payload size, excluding the 9-byte header. The default maximum is **16,384 bytes** (16 KiB); a peer can raise it with `SETTINGS_MAX_FRAME_SIZE` up to the largest number a 24-bit field can hold, 16,777,215 bytes (just under 16 MiB).
+- **Stream ID 0** is the connection itself, used for connection-control HTTP/2 frames. **Client-initiated streams are odd** (1, 3, 5...), server-initiated ones even. IDs only increase and are never reused. The 31-bit field tops out at about 2.1 billion, so one connection can open about 1.07 billion client streams; a long-lived connection that runs out must be replaced.
 
-Both limits are powers of two, because a field with a given number of bits holds every whole number from 0 up to two to the power of that number, minus one:
-
-```formula
-L_default = 2^14 B = 16,384 B
-L_max = (2^24 − 1) B = 16,777,215 B
-N_streams = 2^31 − 1 = 2,147,483,647
-where
-L_default: the default maximum frame payload, in bytes (B), before any SETTINGS change
-L_max: the largest payload length the 24-bit Length field can express, which is also the highest value SETTINGS_MAX_FRAME_SIZE may set
-N_streams: the largest stream identifier the 31-bit field can hold
-^: "to the power of": 2^14 means 14 copies of 2 multiplied together
-B: bytes
-In words: the default frame payload limit is 16 KiB, a peer may raise it to just under 16 MiB, and stream IDs run out after about 2.1 billion.
-```
-
-Because client streams use only the odd numbers, one connection can open at most about 1.07 billion client streams before it must be replaced.
+> [!analogy] Real-world analogy: Labelled parcels sharing one van
+> A courier packs parcels for many customers into one van. Every parcel carries the same small label: how big it is, what kind of item it is, and which customer it belongs to. Notes for the depot itself are addressed to customer 0.
+>
+> **How it maps:** The van is the single TCP connection, each parcel is a frame, and the label is the fixed 9-byte header: length, type, flags and stream ID. A customer's parcels are one stream, and customer 0 is the connection-control traffic on stream 0. Because every label has the same layout, the receiver can always find where one frame ends and the next begins.
+>
+> **Where it stops:** A real courier who loses one parcel can still hand over the others. TCP cannot: it delivers bytes strictly in order, so one lost segment holds back every later HTTP/2 frame, whatever its stream, until it is resent. The QUIC units return to this limit.
 
 The frame types:
 

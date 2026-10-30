@@ -25,16 +25,24 @@ Equivalently (in graph terms) a tree is a connected undirected graph with no cyc
 
 Because every node except the root has exactly one edge up to its parent, you can count the edges of any tree without looking at its shape:
 
-```formula
+```formula essential
 E = n − 1
-E = 8 − 1 = 7
 where
-n: the number of nodes in the tree, a whole number of at least 1; here the 8 nodes A to H drawn below
+n: the number of nodes in the tree, a whole number of at least 1
 E: the number of edges (parent–child links) in the tree
 In words: a nonempty tree always has exactly one edge fewer than it has nodes, because the root is the only node with no edge to a parent.
 ```
 
 So the tree below, with 8 nodes, has **7 edges**, and a tree of a million nodes has 999,999, whatever its shape. The rule needs a single connected tree; a collection of separate trees (a forest) has fewer edges.
+
+The count is also a quick diagnostic. If a structure that should be a tree has as many links as nodes, something has a second parent or the links loop back on themselves. If it has fewer, part of it is disconnected from the root. The right count alone does not prove a tree, though: a loop in one part and a disconnected piece elsewhere can also add up to n − 1 links.
+
+> [!analogy] Real-world analogy: a company org chart
+> In a strict org chart, the chief executive reports to nobody and every other employee reports to exactly one manager. Ask any employee who their manager is, then that manager, and you always end at the chief executive.
+>
+> **How it maps:** the chief executive is the root, each manager is a parent node, each reporting line is an edge, and staff with no reports are leaves. Because everyone except the chief executive has exactly one line upwards, a company of 250 people has 249 reporting lines however the departments are arranged.
+>
+> **Where it stops:** real organisations often have dotted-line reporting, where someone answers to two managers. That gives a node two parents, so the chart is no longer a tree. A data-structure tree also has no job titles: the only thing that matters is who links to whom.
 
 ```
             A          <- root (depth 0)

@@ -62,18 +62,16 @@ def deserialise(data):
 
 This teaching format supports integer node values. Truncated input raises StopIteration, invalid integer text raises ValueError, and extra tokens are rejected; untrusted input also requires size and depth limits. Runtime and storage depend on encoded character length, not just node count.
 
-Deserialising consumes the tokens in the same pre-order they were written, so each recursive call knows exactly where its subtree begins and ends. A tree of n nodes produces one value per node plus **one more null marker than nodes** (the tree-structure units):
+Deserialising consumes the tokens in the same pre-order they were written, so each recursive call knows exactly where its subtree begins and ends. A tree of n nodes produces one value per node plus **one more null marker than nodes**, because a binary tree always has one more empty child slot than nodes (the binary-counting unit). The example string `3,9,#,#,20,15,#,#,7,#,#` has 5 values and 6 markers. A count that does not match is a quick sign of a truncated or corrupted string.
 
-```formula
-T = n + (n + 1) = 2n + 1
-T = 5 + 6 = 11
-where
-T: the number of tokens in the serialised string
-n: the number of nodes, each written as one value; 5 in the example above
-In words: every node writes its value, and a binary tree of n nodes has n + 1 empty child slots, each written as one #.
-```
+Level-order with nulls (the format LeetCode displays) works too. A JSON or Protocol Buffers schema can encode nested child relationships explicitly; the format alone does not choose a tree representation.
 
-The example string `3,9,#,#,20,15,#,#,7,#,#` has 5 values and 6 markers: 11 tokens. Level-order with nulls (the format LeetCode displays) works too. A JSON or Protocol Buffers schema can encode nested child relationships explicitly; the format alone does not choose a tree representation.
+> [!analogy] Real-world analogy: dictating a seating plan
+> You read a theatre seating plan down the phone, seat by seat in a fixed order. If you only read out names, the listener cannot tell where the gaps are and seats everyone too far forward. Saying "empty" for each empty seat lets them rebuild the plan exactly.
+>
+> **How it maps:** names are node values, "empty" is the `#` marker, and the fixed reading order is the pre-order walk. The listener fills seats in the same order the plan was read, as `deserialise` consumes tokens in pre-order.
+>
+> **Where it stops:** a theatre has a fixed grid, so the listener knows how many seats there are. A tree's shape is not known in advance; the markers are the only record of where each branch ends.
 
 ## Key takeaways
 - Values alone omit shape; empty-child markers make shape explicit.

@@ -3,27 +3,27 @@
     "id": "app-http2-quic-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "An HTTP/2 client receiving a download advertises a 65,535-byte stream window. In an ideal model it returns credit promptly, with 80 ms round-trip feedback delay, negligible serialization, ample connection/TCP credit and no other bottleneck. Approximately what sustained rate does this stream window allow?",
+    "prompt": "A client downloads one large file over HTTP/2 from a server 150 ms away and gets a steady 3.5 Mbit/s on an otherwise idle 1 Gbit/s path. CPU, TCP's windows and congestion control are not limiting. The client never changed HTTP/2 flow-control settings, so its stream and connection windows are both 65,535 bytes and it returns credit only as it consumes data. Which change most directly raises this ceiling?",
     "options": [
       {
-        "text": "About 800 kbit/s",
-        "explanation": "This divides by 80 without converting bytes to bits and ms to seconds correctly. 65,535 B per 0.08 s is about 819 kilobytes per second, i.e. about 6.5 Mbit/s."
+        "text": "Split the download into several byte-range requests on more streams of the same connection",
+        "explanation": "Each new stream gets its own 65,535-byte stream window, but all DATA also draws on the single 65,535-byte connection window. That shared window still caps the total at about one window per round trip."
       },
       {
-        "text": "Unlimited, because TCP's window controls throughput, not HTTP/2's",
-        "explanation": "HTTP/2 stream and connection credit, TCP receive credit and congestion control all constrain sending; here the other constraints are stipulated not to be limiting."
+        "text": "Ask the server to send larger DATA frames by raising SETTINGS_MAX_FRAME_SIZE",
+        "explanation": "Frame size changes how DATA is chopped up, not how much credit the sender has. The window, not the frame size, limits bytes in flight."
       },
       {
-        "text": "About 52 Mbit/s",
-        "explanation": "That multiplies by 8 twice. 819 kilobytes per second × 8 bits ≈ 6.5 Mbit/s."
+        "text": "Send HTTP/2 PING frames more often to keep the connection warm",
+        "explanation": "PING measures liveness and round-trip time. It grants no flow-control credit, so the ceiling is unchanged."
       },
       {
-        "text": "About 6.5 Mbit/s",
-        "explanation": "Correct. At most one window of data can be in flight per round trip: 65,535 B ÷ 0.08 s ≈ 819 kilobytes per second ≈ 6.5 Mbit/s."
+        "text": "Have the client advertise a much larger stream window and send WINDOW_UPDATE on stream 0 to enlarge the connection window",
+        "explanation": "Correct. At most one window can be delivered per round trip: 65,535 bytes every 0.15 s is about 3.5 Mbit/s. A bigger stream window (SETTINGS_INITIAL_WINDOW_SIZE or WINDOW_UPDATE) plus enough connection credit raises that ceiling."
       }
     ],
     "answer": 3,
-    "workedExample": "The receiver for a download is the client. At most one window can be in flight per round trip, so under the stated ideal model:\n\n```formula\nT ≈ W / RTT\nT ≈ 65,535 B / 0.080 s\nT ≈ 819,187.5 B/s\nT ≈ 6,553,500 bit/s ≈ 6.55 Mbit/s\nwhere\nT: the highest sustained rate the stream window allows\nW: the stream flow-control window, 65,535 bytes (B)\nRTT: the round-trip feedback delay, 80 ms = 0.080 seconds (s)\nB: bytes; 1 byte is 8 bits\nbit: one binary digit\nMbit: megabit, one million bits\ns: seconds\n≈: approximately equal to\nIn words: one 64 KiB window every 80 ms is about 819 kilobytes, or 6.5 megabits, per second.\n```\n\nAdditional stream credit uses SETTINGS_INITIAL_WINDOW_SIZE or WINDOW_UPDATE; connection credit uses WINDOW_UPDATE. Slow credit return can reduce throughput further.",
+    "workedExample": "1. Spot the symptom: a steady rate far below link capacity, with nothing else limiting, points to a credit ceiling.\n2. The lesson relationship: at most one window of DATA per round trip. A 65,535-byte window every 150 ms is about 437 kilobytes per second, roughly 3.5 Mbit/s, which matches the observation.\n3. Two windows apply to every DATA frame: the stream's and the connection's. Both start at 65,535 bytes.\n4. More streams add stream credit but not connection credit, so the total stays capped. Frame size and PING do not grant credit.\n5. Fix: the client (the receiver here) raises its stream window and sends WINDOW_UPDATE on stream 0 so the connection window is large too. A client that never changes the defaults stays at this ceiling however fast the link is.",
     "link": {
       "title": "RFC 9113: HTTP/2 — IETF",
       "url": "https://www.rfc-editor.org/rfc/rfc9113"

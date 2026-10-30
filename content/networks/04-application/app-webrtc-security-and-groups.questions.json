@@ -3,27 +3,27 @@
     "id": "app-p2p-webrtc-q7",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Six people join a video call, each sending 1.2 Mbit/s of video. Using a full **mesh**, ignoring protocol overhead and retransmissions, how much does each participant upload? And with an SFU (no simulcast)?",
+    "prompt": "A small team's video calls use a full **mesh**: every participant sends its 1.2 Mbit/s stream directly to each other participant. Calls of three people work well. When a sixth person joins, several people on home connections with about 5 Mbit/s of upload report that their own video freezes for everyone, while incoming video still looks fine. What best explains this, and what fixes it?",
     "options": [
       {
-        "text": "Mesh 7.2 Mbit/s; SFU 1.2 Mbit/s",
-        "explanation": "Mesh sends to the *other* participants, which is 5, not 6."
+        "text": "Download is the bottleneck, because mesh receivers must decode five streams; switching to an SFU would cut each person's download",
+        "explanation": "Incoming video is fine, so download is not the problem. Without selective forwarding, an SFU still delivers the same five incoming streams."
       },
       {
-        "text": "Mesh 6.0 Mbit/s; SFU 1.2 Mbit/s",
-        "explanation": "Correct. Mesh: 5 × 1.2 = 6.0. SFU: one upstream copy, which the server forwards to each receiver."
+        "text": "Each person now uploads five copies, about 6 Mbit/s, exceeding a 5 Mbit/s uplink; an SFU lets each client upload one copy (or a few simulcast layers) that the server forwards",
+        "explanation": "Correct. Mesh upload grows with the number of other participants. An SFU moves the copying to the server, so each client's upload stays about one stream regardless of call size."
       },
       {
-        "text": "Mesh 1.2 Mbit/s; SFU 6.0 Mbit/s",
-        "explanation": "That's backwards; the SFU exists to cut each client's upload to one stream."
+        "text": "Route every peer through a TURN relay, which removes the need to upload separate copies",
+        "explanation": "TURN relays each peer connection's packets, but each mesh peer connection still carries its own copy of the stream. Relaying does not combine them."
       },
       {
-        "text": "Both 6.0 Mbit/s",
-        "explanation": "An SFU forwards copies server-side, so the client uploads only once."
+        "text": "DTLS-SRTP encryption doubles the bit rate in a mesh; disable encryption for large calls",
+        "explanation": "Encryption adds only small per-packet overhead, and WebRTC does not allow unencrypted media anyway."
       }
     ],
     "answer": 1,
-    "workedExample": "```formula\nU_mesh = (n − 1)r\nU_mesh = (6 − 1) × 1.2 Mbit/s\nU_mesh = 6.0 Mbit/s\nU_SFU = r = 1.2 Mbit/s\nwhere\nU_mesh: each participant's upload in a full mesh\nU_SFU: each participant's upload to an SFU without simulcast\nn: the number of participants, 6\nr: one video stream's bit rate, 1.2 Mbit/s\nMbit/s: megabits per second\nIn words: in a mesh each person uploads a copy for each of the 5 others; with an SFU they upload a single copy.\n```\n\nIf all five other streams are forwarded at full rate, download is 6.0 Mbit/s in either topology. Selective forwarding or different encodings change the download; overhead and retransmissions add traffic.",
+    "workedExample": "1. The symptom is outgoing video failing while incoming video is fine, so look at upload.\n2. In a mesh each participant sends one copy of its stream to every other participant: with six people, five copies.\n3. Five copies of 1.2 Mbit/s is about 6 Mbit/s before overhead, more than a 5 Mbit/s uplink. With three people it was two copies, about 2.4 Mbit/s, which fitted.\n4. An SFU receives one upload from each client and forwards copies to the others, so each client's upload stays about one stream (or a few simulcast resolutions) as the call grows.\n5. Download is roughly five incoming streams in either design unless the SFU forwards lower resolutions; that is not what is failing here.\n\nThe cost of the fix is server forwarding capacity, and with ordinary per-hop DTLS-SRTP the SFU can see the media unless something like SFrame is added.",
     "link": {
       "title": "WebRTC for the Curious",
       "url": "https://webrtcforthecurious.com/"

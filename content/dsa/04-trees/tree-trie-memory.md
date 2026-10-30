@@ -13,20 +13,7 @@ A character trie starts at an always-present root representing the empty prefix.
 
 Tries are fast but notoriously **memory-hungry**, because every character of every unshared suffix gets its own node, and each node carries overhead.
 
-Common child representations differ in how much they reserve per node. An array of child pointers reserves one slot for every possible character, used or not:
-
-```formula
-M = σ p
-M = 26 × 8 B = 208 B
-M = 256 × 8 B = 2048 B = 2 KiB
-where
-M: the memory for one node's child-pointer array, in bytes (B), excluding object headers
-σ: sigma, the alphabet size: the number of possible characters (26 lowercase English letters, or 256 possible byte values)
-p: the size of one pointer, 8 bytes under an assumed 8-byte pointer representation
-B: byte, 8 bits
-KiB: kibibyte as used here, 1,024 bytes
-In words: an array-of-pointers node costs one pointer for every letter of the alphabet, even though most nodes use only one or two of them.
-```
+Common child representations differ in how much they reserve per node. An array of child pointers reserves one slot for every possible character, used or not: with 8-byte pointers, a node for lowercase English reserves 26 slots, 208 bytes, and a node for arbitrary bytes reserves 256 slots, 2 KiB (2,048 bytes), before any object header.
 
 | Children as | Lookup | Memory per node |
 |---|---|---|
@@ -34,47 +21,26 @@ In words: an array-of-pointers node costs one pointer for every letter of the al
 | Hash map / dict | O(1) expected | Small, but high constant overhead |
 | Sorted list | O(log σ) | Compact |
 
-O(log σ) is the cost of a binary search among at most σ sorted children. Dictionary and node object sizes vary by interpreter build.
+Here σ (sigma) is the alphabet size, and O(log σ) is the cost of a binary search among at most σ sorted children. A tree of N nodes has only N − 1 child links in total, so in a 26-slot array trie only about one slot in 26 ever holds a child, whatever the words are. Dictionary and node object sizes vary by language and interpreter build, so measure before choosing between the compact options.
 
-> [!note] Evidence gap
-> The claimed CPython dictionary sizes and 100,000-word, 65 MB benchmark are omitted because the pinned build, word list, measurement code and retained-object accounting were unavailable. No measured tenfold memory ratio is established.
+> [!analogy] Real-world analogy: a rack of letter trays at every desk
+> An office gives every desk a rack of 26 letter trays, one per letter of the alphabet, so post can be filed instantly. But most desks only ever receive post in one or two trays, and the racks take up more room than the post.
+>
+> **How it maps:** each desk is a trie node, each tray is a child-pointer slot, and post arriving is a child that actually exists. Instant filing is the O(1) array lookup; the empty trays are the wasted slots.
+>
+> **Where it stops:** an office could share racks between desks. A trie node's slots belong to that node alone, so the only cures are to store just the children that exist or to merge chains of single-child nodes.
 
 With long mostly unshared suffixes, many nonterminal trie nodes have exactly one child: the unshared tail of a single word like `...ication`. That observation drives the fix.
 
 ## Why uniform hashes share little structure
 
-SHA-256 values use 64 hexadecimal characters when encoded as hex. Imagine one million independent, approximately uniform hashes. Each additional character multiplies the possible prefixes by sixteen. At shallow depths many keys collide; farther down, almost every key owns its entire remaining suffix.
+SHA-256 values use 64 hexadecimal characters when encoded as hex. Imagine storing one million independent, approximately uniform hashes in a character trie. Each additional character multiplies the possible prefixes by sixteen, so the keys run out of company quickly:
 
-```formula
-P_d = 16^d
-q_d = (1 − 16^(−d))^(n − 1)
-q_5 ≈ 0.385
-q_7 ≈ 0.996
-where
-d: prefix depth in characters, from 1 to 64
-P_d: number of possible hexadecimal prefixes at depth d
-q_d: probability that one chosen key shares its depth-d prefix with no other stored key
-n: number of independent uniform keys, here 1,000,000
-q_5, q_7: that probability at depths five and seven
-≈: approximately equal to, with probabilities rounded
-In words: at depth five many keys still share prefixes, but by depth seven almost every key has a prefix to itself.
-```
+- At depth 5 there are just over a million possible prefixes, about one per key, so many keys still share: only about 39 % have a 5-character prefix to themselves.
+- By depth 7 there are 268 million possible prefixes, and about 99.6 % of keys are alone.
+- From there to character 64, almost every key owns a private chain of single-child nodes.
 
-Counting occupied prefixes at each depth estimates the non-root node count:
-
-```formula
-M = Σ_d 16^d (1 − (1 − 16^(−d))^n)
-M ≈ 59.68 × 10^6
-where
-M: expected number of non-root character-trie nodes
-Σ_d: sum across all depths d from 1 to 64
-d: prefix depth in characters
-n: number of independent uniform keys, here 1,000,000
-≈: approximately equal to, rounded to two decimal million nodes
-In words: count a node wherever at least one key uses a prefix, then add those counts over all depths.
-```
-
-This model estimates about 59.68 million nodes, not bytes. Allocation overhead remains representation-dependent. A radix tree compresses the long private suffixes; a hash set is usually the first structure to consider when the task needs only exact membership and no prefix queries. Real hashes are modelled as approximately uniform here, rather than assumed to make every finite sample perfectly balanced.
+Adding up the expected number of distinct prefixes at every depth gives about 60 million nodes for a million keys: roughly 60 nodes per key, each carrying its own child structure. A radix tree compresses those long private suffixes, but a hash set is usually the first structure to consider when the task needs only exact membership and no prefix queries.
 
 ## Key takeaways
 - Child arrays reserve every alphabet position even when unused.

@@ -11,76 +11,21 @@ Continue with prime modulus 23, generator 5 and secret exponents 6 and 15. The p
 
 ### Why they agree
 
-Exponents multiply, and the order doesn't matter:
-
-```formula
-B^a ≡ (g^b)^a ≡ g^(ba) (mod p)
-A^b ≡ (g^a)^b ≡ g^(ab) (mod p)
-g^(a × b) = 5^(6 × 15) = 5^90
-5^22 ≡ 1 (mod 23)
-90 = 4 × 22 + 2
-5^90 ≡ 1^4 × 5^2 = 25 ≡ 2 (mod 23)
-where
-g: the generator, 5
-p: the prime modulus, 23
-a, b: Alice's and Bob's secret exponents, 6 and 15
-A, B: the public values g^a and g^b (mod 23)
-mod: "modulo": arithmetic on remainders after dividing by 23
-≡: "is congruent to": both sides leave the same remainder after dividing by 23
-In words: both sides compute g raised to a × b, just in a different order; and because 5^22 leaves remainder 1, only the remainder of the exponent after dividing by 22 matters.
-```
-
-The fact that the twenty-second power of 5 leaves remainder 1 is an instance of **Fermat's little theorem**:
-
-```formula
-x^(p − 1) ≡ 1 (mod p)
-5^(23 − 1) = 5^22 ≡ 1 (mod 23)
-where
-p: a prime
-x: any whole number not divisible by p
-mod: "modulo": arithmetic on remainders after dividing by p
-≡: "is congruent to": both sides leave the same remainder after dividing by p
-In words: modulo a prime p, raising any number not divisible by p to the power p − 1 gives remainder 1, so exponents can be reduced modulo p − 1.
-```
+Both sides end up with the generator raised to the product of the two secret exponents, just computed in a different order. Raising a power to a power multiplies the exponents, and multiplication doesn't care about order. With the toy numbers that is 5 raised to 6 × 15 = 90, which leaves remainder 2 after dividing by 23.
 
 ### Why Eve can't
 
-Eve sees everything public: 23, 5, 8 and 19. Recovering either secret exponent is one way to compute the DH shared secret, and that is the **discrete logarithm problem**:
+Eve sees everything public: 23, 5, 8 and 19. One way to get the shared value is to recover a secret exponent from its public value: given the generator, the prime and Alice's public value 8, find the exponent that produced it. That is the **discrete logarithm problem**. Going forwards (raising the generator to a known exponent) is fast; going backwards has no known efficient classical method in a well-chosen large group.
 
-```formula
-g^a ≡ A (mod p)
-5^a ≡ 8 (mod 23)
-5^6 = 15625 = 679 × 23 + 8
-where
-g: the public generator, 5
-p: the public prime, 23
-A: Alice's public value, 8
-a: the secret exponent Eve wants: the discrete logarithm of A to base g
-mod: "modulo": arithmetic on remainders after dividing by p
-≡: "is congruent to": both sides leave the same remainder after dividing by p
-In words: given g, p and A, find the exponent a; with only 22 possible exponents Eve tries them all and finds 6, but for a well-chosen 2,048-bit group no known method is practical.
-```
+In the toy group Eve simply tries all 22 possible exponents and finds that 5 to the power 6 leaves remainder 8. For a well-chosen 2,048-bit group no known classical method is practical.
 
 The **computational Diffie–Hellman assumption** directly assumes that obtaining the DH shared secret from the public values is infeasible in the chosen group; it does not assert a general equivalence to solving discrete logs. A prime's bit length alone is insufficient: subgroup order, exponent randomness and known attacks matter. Vetted 2,048-bit finite-field groups target roughly 112-bit classical strength, not 2^2048 work.
 
 ### What "generator" means
 
-The **element order** of a number is how many steps its powers take to get back to 1:
+The **element order** of a number is how many steps its powers take to get back to 1. Powers of 5 modulo 23 visit every number from 1 to 22 before returning to 1, so 5 has order 22: it generates the whole group. Not every base does. Powers of 2 modulo 23 run 2, 4, 8, 16, 9, 18, 13, 3, 6, 12 and then 1, cycling through only 11 values. A shared secret built from base 2 can only ever be one of those 11 values, half as many.
 
-```formula
-g^k ≡ 1 (mod p)
-5^22 ≡ 1 (mod 23), 5^11 ≡ 22 (mod 23)
-2^11 ≡ 1 (mod 23)
-where
-g: a base, such as 5 or 2
-k: the order of g: the smallest positive exponent for which the first line holds
-p: the prime modulus, 23
-mod: "modulo": arithmetic on remainders after dividing by p
-≡: "is congruent to": both sides leave the same remainder after dividing by p
-In words: 5 needs all 22 steps to return to 1, but 2 is back at 1 after only 11, so its powers can only ever reach half the values.
-```
-
-Powers of 5 mod 23 visit every number from 1 to 22 before repeating, so 5 has order 22: it generates the whole group. Not every base does. Powers of 2 mod 23 cycle through only 11 values, so a secret derived from base 2 has half as many possible values. Real parameters are chosen so the generator's order is a large prime.
+At real sizes the same principle decides security: what matters is the size of the subgroup the generator produces, not just the size of the prime. Real parameters, such as the RFC 7919 groups, are chosen so the generator's order is a large prime.
 
 ## Key takeaways
 - Exponent multiplication explains agreement; computational DH is the direct shared-secret hardness assumption.

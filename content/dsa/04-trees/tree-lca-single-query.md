@@ -17,11 +17,10 @@ This lesson works through the classics. Assume finite acyclic binary trees witho
 
 ## Lowest common ancestor
 
-The **lowest common ancestor** (LCA) of nodes p and q is the deepest node that has both as descendants (a node counts as its own descendant). It underlies "how are these two related?" questions: the nearest shared directory of two files, merge bases of Git commits (a DAG can have several incomparable best common ancestors, unlike a rooted tree), or the distance between two nodes. The path from p to q climbs from p up to their LCA, then goes down to q, so:
+The **lowest common ancestor** (LCA) of nodes p and q is the deepest node that has both as descendants (a node counts as its own descendant). It underlies "how are these two related?" questions: the nearest shared directory of two files, merge bases of Git commits (a DAG can have several incomparable best common ancestors, unlike a rooted tree), or the distance between two nodes. The path from p to q climbs from p up to their LCA, then goes down to q, so the distance between two nodes follows directly from their depths once you know the LCA:
 
-```formula
+```formula reference
 d(p, q) = D(p) + D(q) − 2D(a)
-d(3, 5) = 3 + 3 − 2 × 2 = 2
 where
 p, q: the two nodes being compared
 a: their lowest common ancestor
@@ -30,7 +29,14 @@ d(p, q): the distance between p and q: the number of edges on the path joining t
 In words: climb from p up to the common ancestor, then down to q; each leg is a difference in depths, and together they give depth(p) + depth(q) minus twice the ancestor's depth.
 ```
 
-The example line uses nodes 3 and 5 in the BST drawn below: both have depth 3 and their LCA, 4, has depth 2, so they are 2 edges apart (3–4–5).
+For example, nodes 3 and 5 in the BST drawn below both have depth 3, and their LCA, 4, has depth 2: one edge up from 3 to 4 and one edge down to 5, so they are 2 edges apart. Get the LCA wrong and the distance comes out wrong too.
+
+> [!analogy] Real-world analogy: the smallest area containing two addresses
+> Two houses on the same street share that street; two on different streets in the same town share only the town; two in different towns may share only the county. The smallest area containing both tells you how they are related, and how far up you must go before coming back down.
+>
+> **How it maps:** areas nested inside areas form a tree, each house is a node, and the smallest area containing both houses is their lowest common ancestor. Going up from one house to that area and down to the other is the path between the two nodes.
+>
+> **Where it stops:** real boundaries overlap and change, while a tree gives every node exactly one parent. And areas have no ordering, so finding the shared area needs a search like the general-tree algorithm below, not the BST shortcut.
 
 ### In a BST: follow the split
 

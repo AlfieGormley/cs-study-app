@@ -2,7 +2,7 @@
 id: app-http-message-boundaries
 title: "HTTP/1.1 messages and body boundaries"
 level: basic
-minutes: 4
+minutes: 3
 sourceLesson: app-http-wire
 summary: "HTTP/1.1 framing follows ordered rules; a TCP read is not an HTTP message."
 ---
@@ -36,37 +36,9 @@ Content-Length: 1256\r\n
 <1256 bytes of body>
 ```
 
-This bounded wire-inspection example opens a plain HTTP socket. It collects bytes until close; it does not implement a complete response parser, decode transfer codings, or authenticate the server:
+A TCP read returns whatever bytes have arrived: half a header, or the end of one response plus the start of the next. The receiver therefore needs rules that say where a message ends.
 
-```python
-import socket
-
-with socket.create_connection(
-        ("example.com", 80),
-        timeout=3) as s:
-    # Send one CRLF-framed request.
-    s.sendall(b"GET / HTTP/1.1\r\n"
-              b"Host: example.com\r\n"
-              b"Connection: close\r\n"
-              b"\r\n")
-    reply = bytearray()
-    # A read can contain any byte slice.
-    while chunk := s.recv(4096):
-        reply.extend(chunk)
-        if len(reply) > 1_000_000:
-            raise ValueError("demo limit")
-# Separate headers from buffered bytes.
-head, sep, body = bytes(reply).partition(
-    b"\r\n\r\n")
-if not sep:
-    raise ValueError("incomplete headers")
-# Show only the status line.
-print(head.split(b"\r\n")[0])
-# Example: b'HTTP/1.1 200 OK'
-# Actual status depends on the server.
-```
-
-`Connection: close` asks the server to close the TCP connection after the response, so EOF can end this inspection loop when the peer complies. EOF alone does not establish a valid or complete response. Without it, HTTP/1.1 uses **persistent connections** by default, so a read-until-close loop can wait after the response is complete. Timeouts and server policy still apply. That is exactly why message framing matters.
+A quick inspection tool can send `Connection: close` and read until the server closes the connection. EOF alone still does not prove the response is valid or complete. Without that header, HTTP/1.1 uses **persistent connections** by default, so a read-until-close loop can sit waiting after the response has fully arrived, until a timeout or the server closes. That is exactly why message framing matters.
 
 ## Where does the body end?
 

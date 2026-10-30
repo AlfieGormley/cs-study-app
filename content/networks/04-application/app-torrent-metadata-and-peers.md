@@ -28,6 +28,13 @@ Dictionary keys are byte strings and must be **sorted by raw bytes**. Canonical 
 
 The **info-hash** is the SHA-1 of the bencoded `info` dictionary. It identifies the torrent everywhere: to trackers, in the DHT, in the peer handshake and in magnet links (`magnet:?xt=urn:btih:<info-hash>`). It ties the metadata to the piece hashes, subject to SHA-1's security limitations. An info-hash is not a publisher identity or proof that downloaded content is safe.
 
+> [!analogy] Real-world analogy: A packing list with a fingerprint for every box
+> Someone ships a flat-pack wardrobe in many boxes, which you may collect from different strangers. The packing list gives a unique fingerprint for each box, and the whole list has its own fingerprint, which a friend you trust read out to you.
+>
+> **How it maps:** The packing list is the `info` dictionary, each box fingerprint is a piece hash, and the fingerprint of the whole list is the info-hash. Knowing the info-hash lets you check a list fetched from strangers, and the list then lets you check every box.
+>
+> **Where it stops:** The fingerprints prove the boxes match the list, not that the wardrobe is safe or who designed it. And because the list's fingerprint is taken over its exact bytes, everyone must write the list identically, which is why bencoding sorts dictionary keys.
+
 ```python
 import hashlib
 

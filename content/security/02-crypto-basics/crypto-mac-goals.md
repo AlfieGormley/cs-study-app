@@ -9,23 +9,18 @@ summary: A MAC supports key-holder authenticity and integrity, with no secrecy o
 
 A hash tells you whether data changed, but only if you trust where the expected digest came from. An attacker who can modify a message can just recompute its SHA-256. What you want is an authentication tag that outsiders cannot feasibly forge under a specified shared-key construction.
 
-That is a **message authentication code (MAC)**. It takes a key and a message and outputs a short **tag**:
+That is a **message authentication code (MAC)**. It takes a secret key and a message and outputs a short **tag** (32 bytes for HMAC-SHA256). The sender sends the message with its tag. The receiver, who holds the same key, recomputes the tag over the message that actually arrived and accepts it only if the two tags match.
 
-```formula
-t = MAC_K(m)
-MAC_K(m′) = t′
-where
-t: the tag: a short value, often 32 bytes (256 bits) for HMAC-SHA256
-MAC_K: the MAC function, keyed with the secret key K
-K: the secret key shared by sender and receiver, typically 32 random bytes
-m: the message the sender sends
-m′, t′: the message and tag as they arrive at the receiver, possibly altered in transit
-In words: the sender attaches the tag computed from the key and message; the receiver recomputes the tag over the message it actually received and accepts only if the second line holds, that is, if it matches the tag that arrived.
-```
-
-For example, a sender computes t over `transfer £10` and sends both. If an attacker changes the message to `transfer £1000`, the receiver rejects it unless the altered message and received tag pass verification. A suitable construction makes finding such a new accepted pair difficult without K, but guessing has a nonzero success probability.
+For example, a sender computes a tag over `transfer £10` and sends both. If an attacker changes the message to `transfer £1000`, the receiver's recomputed tag no longer matches the one that arrived, so the message is rejected. Producing a matching tag for the altered message would need the key; guessing one has only a tiny, nonzero chance of success.
 
 With a suitable MAC, protected key and correct verification, forging a tag for a new message is computationally infeasible within the intended security bounds. A verified tag supports integrity and key-holder authenticity; tag guessing has a nonzero probability, and replay does not establish freshness.
+
+> [!analogy] Real-world analogy: A wax seal from a shared signet ring
+> Two merchants each own an identical signet ring. Every letter between them is closed with a wax seal pressed by the ring. A courier cannot change the letter without breaking the seal, and cannot make a new seal without a ring.
+>
+> **How it maps:** The ring is the shared secret key and the seal is the tag. An unbroken seal shows the letter was not altered and came from someone holding a ring. Because both merchants hold the same ring, the seal cannot show *which* of them wrote it, so it gives no non-repudiation. A courier can still hand over yesterday's genuine sealed letter again, which is a replay.
+>
+> **Where it stops:** A wax seal sits on the outside and a skilled forger might copy it; a MAC tag is computed from every bit of the message, and forging one without the key is computationally infeasible within its security bounds. A sealed letter is also closed; a MAC alone does not hide the message at all.
 
 ## What a MAC does and doesn't give you
 
@@ -43,20 +38,7 @@ The security goal is called **existential unforgeability**: even after seeing ta
 
 ## The tempting mistake: hashing the key with the message
 
-The obvious construction is to hash the key and message together:
-
-```formula
-t = H(K ‖ m)
-where
-t: the tag
-H: a hash function, here SHA-256
-K: the secret key
-m: the message
-‖: concatenation: the key's bytes followed by the message's bytes
-In words: the tag is the hash of the key with the message appended, which looks like it should need the key to compute, but doesn't.
-```
-
-With SHA-256 (and SHA-1, MD5, SHA-512) this is **broken by length extension**. As the hashes lesson showed, a Merkle–Damgård digest is the hash function's entire internal state after the last block. An attacker who sees one valid tag can resume hashing from that state.
+The obvious construction is to hash the key followed by the message and use the digest as the tag. It looks as if it should need the key to compute, but it doesn't. With SHA-256 (and SHA-1, MD5, SHA-512) this is **broken by length extension**. As the hashes lesson showed, a Merkle–Damgård digest is the hash function's entire internal state after the last block. An attacker who sees one valid tag can resume hashing from that state.
 
 > [!example] Forging an API request
 > An API signs `user=alice&amount=10` by SHA-256-hashing the key followed by the message. The attacker sees the tag. Without knowing the key (only guessing its length), they compute a valid tag for `user=alice&amount=10<padding>&amount=9999`. Application abuse also requires the server to accept the inserted padding and interpret the extra parameter as intended; parser and encoding behaviour matter.

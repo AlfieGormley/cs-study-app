@@ -11,45 +11,30 @@ NTP estimates server time minus client time by averaging the apparent difference
 
 ### The symmetry assumption
 
-The formula assumes the outbound and return trips take **equal** time. If they don't, the error in the offset is half the difference:
+The offset calculation assumes the outbound and return trips take **equal** time. If they don't, the estimate is biased by half the difference between them. Suppose the request takes 5 ms but the reply takes 35 ms, for example because of congestion on the return path. The round trip is 40 ms, and the offset comes out 15 ms too low: the client appears 15 ms further ahead of the server than it really is.
 
-```formula
+```formula essential
 ε = (d_out − d_back) / 2
-ε = (5 ms − 35 ms) / 2 = −15 ms
 |ε| ≤ δ / 2
 where
 ε: epsilon, the error in the offset estimate caused by unequal paths, in milliseconds (ms)
-d_out: the one-way time from client to server; here 5 ms
-d_back: the one-way time from server back to client; here 35 ms, for example because of congestion on the return path
-δ: delta, the measured round-trip delay, here 40 ms
+d_out: the one-way time from client to server, in ms
+d_back: the one-way time from server back to client, in ms
+δ: delta, the measured round-trip network delay, in ms
 |ε|: the size of the error, ignoring its sign
 ≤: is at most
 ms: milliseconds, thousandths of a second
-In words: if the reply takes 30 ms longer than the request, the offset comes out 15 ms wrong, and the error can never be more than half the round trip.
+In words: unequal paths shift the offset by half their difference, and that shift can never be bigger than half the round trip.
 ```
 
-So in this example the offset estimate is biased by **−15 ms**. Those four timestamps alone cannot distinguish this from clock offset. With nonnegative delays and otherwise ideal timestamps, the error magnitude is at most half the measured network round-trip delay. Low-delay samples reduce that bound but do not prove symmetry; multiple sources and filtering can help reject bad measurements.
+The four timestamps alone cannot tell this bias apart from a real clock offset. The bound assumes nonnegative delays and otherwise ideal timestamps. Low-delay samples reduce the bound but do not prove symmetry; multiple sources and filtering can help reject bad measurements.
 
 ### Disciplining the clock
 
 Clock-discipline behaviour depends on implementation and configuration. Wall-clock steps can disrupt duration calculations and timestamp ordering:
 
-- **Slewing**: run the clock slightly fast or slow until the offset is gone. The time needed is the offset divided by the slew rate; at an illustrative 500 ppm, correcting 1 second takes 1 ÷ 0.0005 = 2,000 seconds, about 33 minutes (see the formula below). This is not a universal Linux limit: chrony supports higher slew rates on Linux.
-- **Stepping the clock**: set the time directly when policy permits. Classic ntpd uses a 128 ms step threshold with state-machine safeguards; stepping is not inherently restricted to boot.
-
-```formula
-T = θ / r
-T = 1 s / (500 × 10^{−6}) = 2,000 s ≈ 33 min
-where
-T: how long slewing takes to remove the offset, in seconds (s)
-θ: theta, the offset to correct; here 1 second
-r: the slew rate as a fraction; 500 parts per million (ppm) is 500 × 10^{−6} = 0.0005, so the clock gains or loses half a millisecond per second
-^: "to the power of"; 10^{−6} is one millionth
-≈: approximately equal to
-s: seconds
-min: minutes
-In words: running the clock 0.05% fast takes about 33 minutes to catch up one second, which is why big offsets are usually stepped.
-```
+- **Slewing**: run the clock slightly fast or slow until the offset is gone. The time needed is the offset divided by the slew rate: at an illustrative 500 ppm (half a millisecond per second), correcting a 1-second offset takes about 33 minutes. This is not a universal Linux limit: chrony supports higher slew rates on Linux.
+- **Stepping the clock**: set the time directly when policy permits. Classic ntpd uses a 128 ms step threshold with state-machine safeguards; stepping is not inherently restricted to boot. Large offsets are usually stepped because slewing them would take too long.
 
 Programs should measure durations with a **monotonic clock** (`time.monotonic()` in Python), which is never stepped, and use wall-clock time only for timestamps.
 

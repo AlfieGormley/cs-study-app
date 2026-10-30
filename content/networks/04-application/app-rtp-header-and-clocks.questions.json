@@ -3,29 +3,29 @@
     "id": "app-p2p-webrtc-q3",
     "level": "basic",
     "type": "single",
-    "prompt": "An Opus audio RTP stream sends one 20 ms frame per packet. By how much does the RTP timestamp increase per packet?",
+    "prompt": "A receiver logs an Opus RTP stream negotiated at the usual 48 kHz RTP clock with 20 ms packets. Sequence numbers run 1000, 1001, 1002, 1003 with no gaps, and the timestamps rise by 960 each time, except that packet 1003's timestamp is 1,920 above packet 1002's. What happened?",
     "options": [
       {
-        "text": "20",
-        "explanation": "RTP timestamps are in media clock ticks, not milliseconds."
+        "text": "A packet between 1002 and 1003 was lost in the network",
+        "explanation": "Loss shows up as a gap in sequence numbers. 1002 and 1003 are consecutive, so no sent packet is missing."
       },
       {
-        "text": "960",
-        "explanation": "Correct. Opus uses a 48,000 Hz RTP clock: 48,000 × 0.020 = 960."
+        "text": "Packet 1003 arrived 20 ms late, so its timestamp was increased",
+        "explanation": "The sender stamps the media time when it builds the packet. Arrival delay never changes the timestamp; it shows up as jitter."
       },
       {
-        "text": "1",
-        "explanation": "That's the sequence number, which increases by one per packet."
+        "text": "The sender switched to a 96 kHz clock for that packet",
+        "explanation": "The clock rate is fixed by the negotiated payload format; Opus over RTP always uses 48,000 Hz."
       },
       {
-        "text": "1,800",
-        "explanation": "That would be 20 ms at the 90 kHz video clock. Opus uses 48 kHz."
+        "text": "Nothing was lost: the sender sent no packet for one 20 ms interval, for example silence under discontinuous transmission, so media time advanced by 40 ms while the packet count advanced by one",
+        "explanation": "Correct. Sequence numbers count packets sent; timestamps count media time. A timestamp jump with consecutive sequence numbers means the sender skipped media, not that the network lost a packet."
       }
     ],
-    "answer": 1,
-    "workedExample": "1. Opus RTP clock rate: 48,000 ticks per second (always, regardless of actual sample rate).\n2. 20 ms = 0.02 s.\n3. Multiply:\n\n```formula\nΔ = ft\nΔ = 48,000 Hz × 0.020 s = 960\nwhere\nΔ: delta, the RTP timestamp increase per packet, in clock ticks\nf: the Opus RTP clock rate, 48,000 hertz (Hz), ticks per second\nt: the audio duration in each packet, 20 ms = 0.020 seconds (s)\nHz: hertz, per second\ns: seconds\nIn words: 20 ms of audio at a 48,000-tick-per-second clock is 960 ticks.\n```\n\nWith illustrative zero initial values, timestamps would be 0, 960, 1920... and sequences 0, 1, 2...; actual initial values are randomised and wrap modulo their field widths.",
+    "answer": 3,
+    "workedExample": "1. At the 48 kHz Opus RTP clock, a 20 ms packet advances the timestamp by 960 ticks.\n2. Sequence numbers rise by exactly one per packet sent, so 1000 to 1003 with no gaps means every sent packet arrived.\n3. The jump of 1,920 ticks is 40 ms of media time between consecutive packets: one 20 ms interval had no packet at all.\n4. That is what Opus discontinuous transmission (DTX) does during silence; RFC 7587 notes that a receiver tells DTX from loss by looking for sequence-number gaps.\n5. The decoder fills the skipped interval with comfort noise or concealment rather than treating it as a loss.",
     "link": {
-      "title": "RFC 7587: RTP Payload Format for Opus",
+      "title": "RFC 7587: RTP payload format for Opus",
       "url": "https://www.rfc-editor.org/rfc/rfc7587"
     }
   },
@@ -33,27 +33,27 @@
     "id": "app-p2p-webrtc-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "Parse this RTP header: `80 e0 00 05 00 01 5f 90 12 34 56 78`. What are the marker bit, payload type, sequence number and timestamp?",
+    "prompt": "Your RTP parser reports payload type 96 for most packets of an H.264 video stream, but payload type 224 for others. SDP maps only PT 96, and the PT 224 packets are always the last packet of a video frame. What is wrong?",
     "options": [
       {
-        "text": "M=0, PT=224, seq=5, ts=90,000",
-        "explanation": "This reads the whole second byte as the payload type. Its top bit is the marker, leaving 7 bits for PT."
+        "text": "The sender is mixing in a second codec on PT 224 for keyframes",
+        "explanation": "Payload types are only 7 bits, 0 to 127, so 224 cannot be a valid payload type at all; the parser is misreading the byte."
       },
       {
-        "text": "M=1, PT=96, seq=5, ts=1,000",
-        "explanation": "0x00015f90 is 90,000, not 1,000. Convert: 0x15f90 = 1×65,536 + 0x5f90 (24,464)."
+        "text": "The parser reads the second header byte in little-endian order",
+        "explanation": "Byte order affects multi-byte fields such as the sequence number and timestamp. The payload type sits within a single byte."
       },
       {
-        "text": "M=1, PT=96, seq=1280, ts=90,000",
-        "explanation": "That reads the sequence number in little-endian. Network byte order is big-endian: `00 05` = 5."
+        "text": "The parser treats the whole second byte as the payload type, so the marker bit, set on a frame's last packet, adds 128",
+        "explanation": "Correct. The second byte holds the marker bit followed by a 7-bit payload type. 96 + 128 = 224. Mask with 0x7F to get the payload type and read the top bit as the marker."
       },
       {
-        "text": "M=1, PT=96, seq=5, ts=90,000",
-        "explanation": "Correct. `e0` = 1 1100000: marker 1, PT 96. Sequence 0x0005 = 5. Timestamp 0x00015f90 = 90,000 (90,000 ticks, corresponding to a one-second interval if the negotiated clock is 90 kHz)."
+        "text": "Those packets are RTCP packets that arrived on the same port",
+        "explanation": "RTCP reports are sent on their own schedule, not in step with the video, and their packet types (such as 200 for a sender report) are not 224."
       }
     ],
-    "answer": 3,
-    "workedExample": "```formula\nb_0 = 0x80 = 0b10000000\nV = 0b10 = 2, P = 0, X = 0, CC = 0\nb_1 = 0xe0 = 0b11100000\nM = 1\nPT = 0b1100000 = 96\nts = 0x00015f90\nts = 1 × 65,536 + 24,464 = 90,000\nwhere\nb_0, b_1: the first and second header bytes; 0x marks hexadecimal (base 16) and 0b marks binary (base 2)\nV: version, the top 2 bits of b_0\nP: the padding bit\nX: the extension bit\nCC: the CSRC count, the low 4 bits of b_0\nM: the marker bit, the top bit of b_1\nPT: payload type, the low 7 bits of b_1: 64 + 32 = 96\nts: the 32-bit timestamp; hex 5f90 is 24,464\nIn words: 0x80 means version 2 with nothing extra, 0xe0 means marker set and payload type 96, and the timestamp bytes read as 90,000.\n```\n\nThe big-endian sequence 0x0005 is 5, and the SSRC is 0x12345678.\n\nPT 96 is dynamically mapped; the header alone does not identify the codec or clock rate. A difference of 90,000 ticks means one second at 90 kHz, but this absolute timestamp does not show elapsed stream time without a reference. Marker semantics depend on the negotiated payload format.",
+    "answer": 2,
+    "workedExample": "1. In the RTP fixed header the second byte is one marker bit (M) followed by a 7-bit payload type (PT), so PT can only be 0 to 127.\n2. For H.264 the marker bit is set on the last packet of each video access unit, the coded data for one picture.\n3. A parser that reads the whole byte as PT gets 96 normally and 96 + 128 = 224 whenever the marker is set.\n4. Fix: `pt = byte1 & 0x7F` and `marker = byte1 >> 7`.\n\nThe lesson's parser does this with `b1 & 0x7F`. Big-endian order matters for the 16-bit sequence number and 32-bit timestamp, not for a field inside one byte.",
     "link": {
       "title": "RFC 3550: RTP — IETF",
       "url": "https://www.rfc-editor.org/rfc/rfc3550"

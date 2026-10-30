@@ -24,27 +24,20 @@ Notice that changing one letter (`c` to `d`) changed the whole digest. This is t
 
 ## The three security properties
 
-A function that just compresses data (like CRC32) is not enough. A cryptographic hash must resist three kinds of attack. To compare them we need some notation, and a way to count an attacker's work: the number of hash computations a generic attack needs against an ideal hash.
+A function that just compresses data (like CRC32) is not enough. A cryptographic hash must resist three kinds of attack. To compare them, count an attacker's work as the number of hash computations a generic attack needs against an ideal hash with an n-bit digest. The key relationship is that finding *any* clash is far cheaper than hitting a *particular* digest:
 
-```formula
-h = H(m)
+```formula essential
 W_pre ≈ 2^n
-W_2nd ≈ 2^n
 W_coll ≈ 2^(n/2)
 where
-H: the hash function, for example SHA-256
-m: a message: any input the hash accepts
-h: the digest that H outputs for m, n bits long
+W_pre: the work to find a preimage (or a second preimage): an input that matches one particular digest, counted in hash computations
+W_coll: the work to find a collision: any two different inputs with equal digests
 n: the digest length in bits: 256 for SHA-256, 160 for SHA-1, 128 for MD5
-W_pre: the work to find a preimage: any message whose digest equals a given h, counted in hash computations
-W_2nd: the work to find a second preimage: a different message with the same digest as a given one
-W_coll: the work to find a collision: any two different messages with equal digests
-2^n: n copies of 2 multiplied together, which is the number of possible digests
 ≈: approximately equal to
-In words: hitting one particular digest takes about 2^n tries, but finding any two inputs that clash takes only about 2^(n/2), its square root.
+In words: hitting one particular digest takes about 2^n tries, but finding any two inputs that clash takes only about 2^(n/2), its square root. For SHA-256 that is about 2^256 versus 2^128.
 ```
 
-For SHA-256 that is about 2^256 hash computations for a preimage but about 2^128 for a collision. These are generic classical work estimates for an ideal hash and suitably unconstrained inputs, not guarantees for weak input dictionaries or every long-message construction.
+These are generic classical work estimates for an ideal hash and suitably unconstrained inputs, not guarantees for weak input dictionaries or every long-message construction. The square root comes from the birthday effect, explained in the next unit.
 
 | Property | Attacker's task | Ideal cost |
 |---|---|---|
@@ -53,6 +46,13 @@ For SHA-256 that is about 2^256 hash computations for a preimage but about 2^128
 | Collision | Find any two different inputs with equal hashes | Square-root digest-space scale |
 
 **Preimage resistance** (one-wayness) means you can't run the hash backwards. **Second-preimage resistance** means that, given a specific document, you can't craft a different one with the same fingerprint. **Collision resistance** means you can't find *any* two inputs that clash, even ones you choose freely.
+
+> [!analogy] Real-world analogy: Fingerprints
+> Police can match a fingerprint to a suspect on file, but a fingerprint alone does not let them reconstruct the person. Fingerprints are meant to be practically unique, even though nothing in principle stops two people sharing one.
+>
+> **How it maps:** The person is the input and the fingerprint is the digest. A preimage attack is building a person to fit a given print; a second-preimage attack is finding someone whose print matches a particular suspect's; a collision attack is finding *any* two people in the world with matching prints, which is far easier to stumble on.
+>
+> **Where it stops:** Real fingerprints were never designed against an adversary, and only the owner can produce theirs. Anyone can compute a digest of any input, there is no key, and the hash's resistance is a calculated work estimate rather than a biological accident.
 
 Collisions must exist: there are more permitted messages than the 2^256 possible SHA-256 outputs. The point is that nobody should be able to *find* one.
 

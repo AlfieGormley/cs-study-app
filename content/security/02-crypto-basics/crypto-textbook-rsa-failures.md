@@ -17,41 +17,27 @@ What we just did is **textbook RSA**, and you must never use it directly. It has
 - **It is malleable.** Multiply the ciphertext by the encryption of 2 (which anyone can compute with the public key) and the plaintext doubles. In our example, 65 becomes 130. An attacker can change your message in a predictable way without decrypting it.
 - **Small messages leak.** With a public exponent of 3 and a message whose cube is smaller than the modulus, no wrap-around happens at all. The attacker takes an ordinary cube root of the ciphertext and reads the message.
 
-The malleability, worked through with the toy key:
+The malleability comes from one property of RSA arithmetic: multiplying two ciphertexts gives the ciphertext of the product of their messages, because raising a product to the public exponent is the same as raising each factor and multiplying. Anyone can encrypt a chosen factor with the public key, so anyone can multiply a hidden message by it. The algebra is in the card if you want it.
 
-```formula
-c′ = (c × 2^e) mod n
-c′^d ≡ m^(ed) × 2^(ed) (mod n)
-c′^d ≡ m × 2 (mod n)
-c′ = (2790 × 2^17) mod 3233 = 3017
-3017^2753 mod 3233 = 130
+```formula reference
+c′ = (c × s^e) mod n
+(c′)^d mod n = (m × s) mod n
 where
-c: the original ciphertext, 2790 (the encryption of 65)
+c: the original ciphertext of the hidden message m
+m: the hidden message, as a whole number below n
+s: any factor the attacker chooses, for example 2
 c′: the attacker's altered ciphertext
-e, d: the public and private exponents, 17 and 2753
-n: the modulus, 3233
-m: the original message, 65
-mod: "modulo": arithmetic on remainders after dividing by n
-≡: "is congruent to": both sides leave the same remainder after dividing by n
-In words: multiplying ciphertexts multiplies the hidden plaintexts, so the attacker doubles the message without ever seeing it.
-```
-
-The small-message leak:
-
-```formula
-c = m^3 mod n = m^3  when m^3 < n
-m = ∛(c)
-c = 125  gives  m = ∛(125) = 5
-where
-m: the message as a whole number, for example a PIN
-n: the modulus, about 2^2048 for a 2,048-bit key
-c: the ciphertext
-m^3: three copies of m multiplied together (the public exponent here is 3)
-∛: the ordinary cube root: ∛(c) is the number whose cube is c
+e, d: the public and private exponents
+n: the public modulus
 mod: "modulo": the remainder after dividing by n
-<: is less than
-In words: if the cube never reaches the modulus there is no remainder to hide anything, so the ciphertext is just the cube of the message and an ordinary cube root undoes it.
+In words: multiplying a textbook RSA ciphertext by the public-key encryption of a chosen factor makes it decrypt to the original message times that factor, without the attacker ever learning the message or the key.
 ```
+
+With the toy key, multiplying 2790 by the encryption of 2 gives a ciphertext that decrypts to 130, twice the original 65.
+
+The small-message leak needs no key either. With public exponent 3 and a 2,048-bit modulus, any message below about 2^682 cubes to less than the modulus, so the remainder step never happens: the ciphertext is just the ordinary cube. If the ciphertext is 125, the message is 5, found with an ordinary cube root.
+
+All three problems come from using the raw arithmetic directly. Real RSA encryption first applies a randomised encoding (OAEP, next unit), which makes encryption non-deterministic, destroys the useful multiplicative structure and pads short messages up to nearly the size of the modulus.
 
 ## Key takeaways
 - Textbook RSA leaks guesses, permits multiplicative changes and can expose small cubes.

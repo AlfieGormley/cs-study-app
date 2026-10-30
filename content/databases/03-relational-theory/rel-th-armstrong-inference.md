@@ -4,7 +4,7 @@ title: Inferring dependencies with Armstrong rules
 level: intermediate
 minutes: 3
 sourceLesson: rel-th-functional-deps
-summary: Inferring dependencies with Armstrong rules, with explicit examples and the conditions that make the reasoning valid.
+summary: Which dependencies follow from others: Armstrong's rules, the rules derived from them, and the left-side trap.
 ---
 
 ## Armstrong's axioms
@@ -15,7 +15,7 @@ Given some FDs, which others must also hold? William Armstrong gave three infere
 2. **Augmentation**: adding the same attributes to both sides keeps an FD true.
 3. **Transitivity**: if X determines Y and Y determines Z, then X determines Z.
 
-```formula
+```formula reference
 Y ⊆ X gives X → Y
 X → Y gives XZ → YZ
 X → Y and Y → Z gives X → Z
@@ -25,12 +25,16 @@ X, Y, Z: sets of attributes of one relation
 →: functionally determines
 XZ, YZ: sets written side by side are combined: XZ means X ∪ Z, the attributes of X together with those of Z
 ∪: union: everything in either set
-In words: line 1 is reflexivity, line 2 is augmentation and line 3 is transitivity.
+In words: a set determines its own parts (reflexivity); adding the same attributes to both sides keeps a rule true (augmentation); and rules chain (transitivity).
 ```
 
-The rules have **soundness** (every conclusion follows from the given FDs) and **completeness** (every FD that follows from those premises can be derived). Three useful rules follow from them: the **FD union rule**, the **decomposition rule** and **pseudotransitivity**.
+The rules have **soundness** (every conclusion follows from the given FDs) and **completeness** (every FD that follows from those premises can be derived). Three useful rules follow from them:
 
-```formula
+- The **FD union rule**: if X determines Y and X determines Z, X determines both together.
+- The **decomposition rule**: if X determines Y and Z together, it determines each of them.
+- **Pseudotransitivity**: if X determines Y, and W together with Y determines Z, then W together with X determines Z. Chains still work when the second rule needs extra attributes.
+
+```formula reference
 X → Y and X → Z gives X → YZ
 X → YZ gives X → Y and X → Z
 X → Y and WY → Z gives WX → Z
@@ -39,40 +43,13 @@ W, X, Y, Z: sets of attributes of one relation
 →: functionally determines
 YZ, WY, WX: combined sets, for example YZ = Y ∪ Z
 ∪: union: everything in either set
-In words: the FD union rule combines right sides that share a left side; decomposition splits a right side apart; pseudotransitivity chains two FDs when extra attributes W are needed on the second one's left.
+In words: the FD union rule combines right sides that share a left side; decomposition splits a right side apart; pseudotransitivity chains two FDs even when the second one needs extra attributes on its left.
 ```
 
 > [!warning] The left side does not decompose
-> A right side can be split, but a left side cannot. Grade depends on student *and* course together, not on either alone.
+> A right side can be split, but a left side cannot. Grade depends on student *and* course together, not on either alone. One counterexample settles it: student 1 with grade A in DB and grade B in AI satisfies "student and course fix the grade" but breaks "student alone fixes the grade".
 
-```formula
-XY → Z ⇏ X → Z
-{sid, cid} → grade ⇏ sid → grade
-where
-X, Y, Z: sets of attributes
-XY: X ∪ Y, the two sets combined
-∪: union
-→: functionally determines
-⇏: "does not imply": the left FD can hold while the right one fails
-sid, cid, grade: the student-id, course-code and grade attributes
-{ }: a set of attributes
-In words: knowing that X and Y together determine Z tells you nothing about X alone. One student has several grades, one per course.
-```
-
-The **FD closure** contains every functional dependency implied by a given basis:
-
-```formula
-X → Y in F⁺ when F ⊨ X → Y
-where
-F: the set of FDs you were given
-F⁺: the FD closure of F: every FD that follows logically from F, including the trivial ones
-X, Y: sets of attributes
-→: functionally determines
-⊨: "logically implies": every relation state that satisfies all of F also satisfies X → Y
-In words: F⁺ is everything you can derive from F with Armstrong's axioms.
-```
-
-F⁺ can be exponentially large, so in practice you never list it. You compute attribute closures instead.
+The **FD closure** of a set of dependencies contains every dependency that set implies, trivial ones included. It can be exponentially large, so in practice you never list it. To answer "does this rule follow?", you compute the attribute closure of one left side instead: the next unit.
 
 ## Key takeaways
 
@@ -82,4 +59,4 @@ F⁺ can be exponentially large, so in practice you never list it. You compute a
 ## Further reading
 
 - [Silberschatz, Korth and Sudarshan: relational database design](https://www.db-book.com/slides-dir/PDF-dir/ch7.pdf)
-- [PostgreSQL 18: constraints](https://www.postgresql.org/docs/18/ddl-constraints.html)
+- [Armstrong's axioms (Wikipedia)](https://en.wikipedia.org/wiki/Armstrong%27s_axioms)

@@ -1,30 +1,15 @@
 ---
 id: app-ntp-four-timestamps
-title: "NTP drift and four-timestamp arithmetic"
+title: "NTP drift and the four-timestamp exchange"
 level: advanced
-minutes: 5
+minutes: 4
 sourceLesson: app-ntp-ssh-grpc
 summary: "Four NTP timestamps estimate clock offset and network round-trip delay under an explicit timing model."
 ---
 
 ## NTP: agreeing on the time
 
-Clocks drift. A clock's error rate is quoted in parts per million (ppm): how many microseconds it gains or loses per second. Multiplying by the time elapsed gives the accumulated error:
-
-```formula
-E = rt
-E = 20 × 10^{−6} × 86,400 s ≈ 1.7 s
-where
-E: the accumulated clock error, in seconds (s)
-r: the drift rate as a fraction; 20 parts per million (ppm) is 20 × 10^{−6} = 0.00002
-t: the elapsed time, in seconds; one day is 86,400 s
-^: "to the power of"; 10^{−6} is one millionth
-≈: approximately equal to
-s: seconds
-In words: a clock that is off by 20 parts in a million drifts by about 1.7 seconds every day if nothing corrects it.
-```
-
-This is an illustrative rate; actual oscillators and environmental conditions differ. Clock synchronisation matters for logs, certificates, Kerberos tickets, TOTP codes and lease timeouts. Acceptable error depends on each protocol and application policy.
+Clocks drift. A clock's error rate is quoted in parts per million (ppm): how many microseconds it gains or loses per second. A clock that is 20 ppm fast gains about 1.7 seconds a day if nothing corrects it. This is an illustrative rate; actual oscillators and environmental conditions differ. Clock synchronisation matters for logs, certificates, Kerberos tickets, TOTP codes and lease timeouts. Acceptable error depends on each protocol and application policy.
 
 **NTP** (version 4, [RFC 5905](https://www.rfc-editor.org/rfc/rfc5905)) runs over **UDP port 123**. Servers are arranged in **strata**: reference clocks (such as GPS or atomic sources) are informally called stratum 0, stratum 1 is a server attached to one, stratum 2 syncs from stratum 1, and so on. Stratum 16 means "unsynchronised". In an NTP packet, a stratum field of zero instead means unspecified/invalid and can identify a Kiss-o'-Death response; it is not an ordinary reference-clock server reply.
 
@@ -42,7 +27,7 @@ client           server
 
 The first and fourth timestamps come from the client's clock; the middle two come from the server's clock. From them the client estimates how far its clock is from the server's, and how long the network took:
 
-```formula
+```formula essential
 θ = ((t_2 − t_1) + (t_3 − t_4)) / 2
 δ = (t_4 − t_1) − (t_3 − t_2)
 where
@@ -55,6 +40,13 @@ t_4: client receive time in seconds (s), by the client's clock
 s: seconds
 In words: the offset averages the apparent clock difference seen in each direction, which cancels the travel time if both directions take equally long; the delay is the time on the wire.
 ```
+
+> [!analogy] Real-world analogy: Checking your watch against a friend's by letter
+> You post a letter noting the time on your watch when you sent it. Your friend notes their watch time when it arrives and again when they post a reply. When the reply reaches you, you note your watch again. From those four times you can work out both how long the post took and how far apart your watches are.
+>
+> **How it maps:** Your two notes are the client's send and receive times, and your friend's two notes are the server's receive and send times. Subtracting the time your friend held the letter gives the time spent in the post (the round-trip delay). Averaging the two apparent watch differences, one from each direction, cancels the postal time and leaves the offset.
+>
+> **Where it stops:** That cancelling only works if the post takes equally long each way; the next unit shows what happens when it does not. NTP also repeats this exchange many times and filters the results rather than trusting one letter.
 
 **Round-trip delay** is the round trip minus the server processing time. **Clock offset** estimates server time minus client time under the model that each clock runs at a steady rate and the path delay is symmetric; it is not an instruction to step the clock immediately.
 
@@ -76,23 +68,7 @@ print(round(o, 3), round(d, 3))
 # 0.13 0.04
 ```
 
-Check it: the client sends at its 10.000, which is server time 10.130; 20 ms later the server receives at 10.150. It replies at 10.152; 20 ms later it is server time 10.172, which on the client's clock is 10.042. Substituting:
-
-```formula
-θ = ((10.150 s − 10.000 s)
-  + (10.152 s − 10.042 s)) / 2
-θ = (0.150 s + 0.110 s) / 2 = 0.130 s
-δ = (10.042 s − 10.000 s)
-  − (10.152 s − 10.150 s)
-δ = 0.042 s − 0.002 s = 0.040 s
-where
-θ: theta, the estimated clock offset (server minus client), in seconds (s)
-δ: delta, the estimated round-trip network delay, in seconds
-s: seconds
-In words: the client is 130 ms behind the server, and the network round trip took 40 ms (20 ms each way).
-```
-
-The ideal arithmetic recovers 130 ms; floating-point computation has rounding error.
+Check it: the client sends at its 10.000, which is server time 10.130; 20 ms later the server receives at 10.150. It replies at 10.152; 20 ms later it is server time 10.172, which on the client's clock is 10.042. The two apparent differences are 150 ms outbound and 110 ms on the return; their average is the true 130 ms offset, because the 20 ms travel times cancel. The 2 ms the server held the request is subtracted from the 42 ms exchange, leaving a 40 ms round trip. The ideal arithmetic recovers 130 ms exactly; the printed values are rounded because floating-point computation has small errors.
 
 ## Key takeaways
 - Four NTP timestamps estimate clock offset and network round-trip delay under an explicit timing model.

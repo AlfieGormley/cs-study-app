@@ -4,7 +4,7 @@ title: Entities, cardinality and participation
 level: advanced
 minutes: 4
 sourceLesson: rel-th-er-modelling
-summary: Entities, cardinality and participation, with explicit examples and the conditions that make the reasoning valid.
+summary: ER modelling basics: entities, attributes, cardinality versus participation, and mapping each to tables.
 ---
 
 Normalisation tells you whether a set of tables is well formed. It does not tell you which tables to start with. That comes from **conceptual modelling**: working out, with the people who know the domain, what things exist, how they relate, and which rules always hold.
@@ -28,16 +28,7 @@ Each end of a relationship has two constraints:
 - **Relationship cardinality** (maximum): can one entity relate to *one* or *many* on the other side? Written 1:1 (one-to-one), 1:N (one-to-many) or M:N (many-to-many), where N and M just stand for "many".
 - **Participation** (minimum): must every entity take part (**total**, minimum 1), or may it not (**partial**, minimum 0)?
 
-```formula
-1:1
-1:N
-M:N
-where
-1: a maximum of one related entity at the marked end
-N, M: any permitted number of related entities, with no fixed maximum in the model
-:: separates the maximum cardinalities at the two relationship ends; it is not arithmetic division here
-In words: the three patterns are one-to-one, one-to-many and many-to-many. They do not by themselves state whether zero related entities are allowed.
-```
+The colon in 1:N is not division: it separates the maximum at each end. And these labels say nothing about minimums: "1:N" alone does not tell you whether an album may have zero tracks.
 
 Crow's foot notation, the most common in industry tools, draws both at each end of the line:
 

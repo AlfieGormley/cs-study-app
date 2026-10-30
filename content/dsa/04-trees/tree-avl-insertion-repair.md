@@ -9,7 +9,7 @@ summary: Repair LL and RR cases with a single rotation.
 
 Start with the distinct-key BST ordering from the previous units. A rotation must keep the same sorted in-order sequence while changing local links. Here n counts stored keys and h measures real-node height in edges; empty subtrees have height minus one unless a NIL-path convention is explicitly given. Height bounds assume constant-cost key comparisons, rather than measuring application latency.
 
-### Insert and rebalance
+## Insert and rebalance
 
 Insert as in a plain BST, then walk back up the path updating heights. At the first node whose balance factor becomes +2 or −2, one of four cases applies, named after the path from that node down to where the new key went.
 

@@ -1,6 +1,6 @@
 ---
 id: app-email-envelope-and-tls
-title: "SMTP envelopes, parser boundaries and TLS policy"
+title: "SMTP envelopes versus message headers"
 level: intermediate
 minutes: 3
 sourceLesson: app-email
@@ -48,6 +48,13 @@ There are **two** sets of addresses:
 - The **message header**: the `From:`, `To:` and `Cc:` lines inside the message ([RFC 5322](https://www.rfc-editor.org/rfc/rfc5322)). These are what your mail client displays.
 
 They need not match. In a common Bcc implementation, the recipient appears in `RCPT TO` while the Bcc header is removed before delivery. RFC 5322 also permits other Bcc-header handling for separate copies. Mailing lists set the envelope sender to the list's bounce address. And a spammer can put *anything* in `From:`, which is the core spoofing problem email SPF, DKIM and DMARC address.
+
+> [!analogy] Real-world analogy: The envelope and the letterhead
+> The post office delivers a letter using only what is written on the envelope. The letter inside can carry any letterhead, any "To" line and any signature, and the post office never reads them.
+>
+> **How it maps:** The envelope is `MAIL FROM` and `RCPT TO`: they decide where the message goes and where failures return. The letter's own headers, `From:`, `To:` and `Cc:`, are what the recipient sees. A Bcc copy is like an extra envelope addressed to Carol containing the same letter, which does not mention her.
+>
+> **Where it stops:** Envelopes are thrown away on arrival but SMTP keeps a trace: the receiver records the envelope sender in a `Return-Path:` header. And because anyone can print any letterhead, receivers need email SPF, DKIM and DMARC to judge whether a visible `From:` is genuine.
 
 Bounces are sent with an empty envelope sender, `MAIL FROM:<>`, so conforming servers do not generate another delivery failure notification in response.
 

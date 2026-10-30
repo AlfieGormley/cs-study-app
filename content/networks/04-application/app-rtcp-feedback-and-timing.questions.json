@@ -3,27 +3,27 @@
     "id": "app-p2p-webrtc-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "Using seconds for this arithmetic example rather than the compact wire representation, a sender's RTCP sender report leaves the sender. The receiver holds it for 40 ms (reported back as DLSR, the delay since last sender report), then sends a receiver report echoing the original report's timestamp (LSR, last sender report). That receiver report arrives back at the sender 190 ms after the original report left. What is the round-trip time?",
+    "prompt": "A monitoring tool computes RTCP round-trip time as (time the receiver report arrives) minus (echoed LSR timestamp), but ignores the DLSR field. Most receivers reply to a sender report within a few milliseconds, but receivers in one region batch their reports and hold each for about 200 ms. Network paths to every region are similar. What will the dashboard show?",
     "options": [
       {
-        "text": "190 ms",
-        "explanation": "This includes the 40 ms the receiver held the report before replying, which isn't network time."
+        "text": "Correct round-trip times everywhere, because LSR already includes the receiver's holding time",
+        "explanation": "LSR is just the echoed timestamp of the sender report. The holding time is reported separately in DLSR, which the tool ignores."
       },
       {
-        "text": "230 ms",
-        "explanation": "This adds DLSR instead of subtracting it."
+        "text": "Round-trip times about 200 ms too high for the batching region, and roughly right elsewhere",
+        "explanation": "Correct. Arrival minus LSR is the whole interval from sending the report to getting the reply. Without subtracting DLSR, the receiver's 200 ms holding time is counted as network delay."
       },
       {
-        "text": "150 ms",
-        "explanation": "Correct. The reply arrived 190 ms after the report was sent; subtract the 40 ms the receiver held it to get 150 ms of network time."
+        "text": "Meaningless values everywhere, because the sender's and receivers' clocks are not synchronised",
+        "explanation": "The arrival time and LSR both come from the sender's clock, and DLSR is a duration measured by the receiver, so no clock synchronisation is needed."
       },
       {
-        "text": "75 ms",
-        "explanation": "That's half the round trip, a one-way estimate that assumes both directions take equally long."
+        "text": "Round-trip times about 200 ms too low for the batching region",
+        "explanation": "Ignoring a holding time can only add it to the result, never subtract it."
       }
     ],
-    "answer": 2,
-    "workedExample": "```formula\nA = T + 190 ms\nLSR = T\nDLSR = 40 ms\nRTT = A − LSR − DLSR\nRTT = (T + 190 ms) − T − 40 ms\nRTT = 150 ms\nwhere\nA: when the receiver report arrived back at the sender, by the sender's clock\nT: when the sender report originally left, by the sender's clock\nLSR: last sender report timestamp, echoed back by the receiver; equal to T\nDLSR: delay since last sender report: how long the receiver held it before replying\nRTT: the round-trip network time\nms: milliseconds\nIn words: 190 ms passed between sending and getting the reply, 40 ms of which the receiver spent holding it, so 150 ms was network travel.\n```\n\nNeither side's clocks need to agree: A and LSR are both read from the sender's clock, and DLSR is a duration measured by the receiver. This assumes stable rates and no intervening clock step. On the wire LSR/A use compact NTP fields, DLSR uses 1/65536-second units, and subtraction must handle wraparound.",
+    "answer": 1,
+    "workedExample": "1. The sender report leaves at time T by the sender's clock, and the receiver echoes T as LSR.\n2. The receiver holds the report for DLSR before replying, then the reply crosses the network back.\n3. The reply arrives at A, again by the sender's clock. A − LSR is network time out, plus holding time, plus network time back.\n4. The correct round trip is A − LSR − DLSR. Dropping DLSR adds each receiver's holding time to its reported RTT.\n5. Receivers that reply within milliseconds look almost right; the batching region looks about 200 ms worse than it is, although its network is no slower.\n\nOn the wire, LSR and A use compact 1/65,536-second fixed-point values, and the subtraction must allow for the values wrapping round.",
     "link": {
       "title": "RFC 3550: RTP — IETF",
       "url": "https://www.rfc-editor.org/rfc/rfc3550"

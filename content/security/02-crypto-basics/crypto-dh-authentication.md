@@ -23,27 +23,16 @@ Alice and Mallory share: 6
 Bob and Mallory share:   5
 ```
 
-The arithmetic, with the same public prime and generator:
-
-```formula
-M = g^m mod p = 5^3 mod 23 = 10
-K_A = M^a mod p = 10^6 mod 23 = 6
-K_A = A^m mod p = 8^3 mod 23 = 6
-K_B = M^b mod p = 10^15 mod 23 = 5
-K_B = B^m mod p = 19^3 mod 23 = 5
-where
-g, p: the public generator 5 and prime 23
-m: Mallory's secret exponent, 3
-M: Mallory's public value, which she sends to both sides
-a, b: Alice's and Bob's secret exponents, 6 and 15
-A, B: Alice's and Bob's public values, 8 and 19, which Mallory intercepts
-K_A: the key Alice ends up sharing, which Mallory computes too
-K_B: the key Bob ends up sharing, which Mallory computes too
-mod: "modulo": x mod p is the remainder left after dividing x by p
-In words: each victim does a normal exchange with Mallory, and Mallory can compute both resulting keys because she holds m and sees A and B.
-```
+Each victim performs a perfectly normal exchange, just with Mallory instead of the other victim. Mallory knows her own secret exponent and has seen both victims' public values, so she can compute both resulting keys: 6 with Alice and 5 with Bob.
 
 Alice thinks she shares key 6 with Bob; she actually shares it with Mallory. Bob shares key 5 with Mallory. Mallory decrypts each message, reads or alters it, and re-encrypts it for the other side. Neither notices.
+
+> [!analogy] Real-world analogy: A switchboard operator you never chose
+> Alice asks the operator to connect her to Bob. The operator instead answers Alice personally, places a separate call to Bob, and relays every sentence between the two lines, reading and editing as they go. Each call is private between its two ends, yet neither end is talking to whom they think.
+>
+> **How it maps:** Each phone line is a separate DH exchange, and the operator is Mallory. Both victims get a working encrypted channel, but the other end of each channel is the attacker. Encryption works perfectly; identity is what is missing.
+>
+> **Where it stops:** On the phone you might recognise a voice. A DH public value carries no identity at all, so recognition has to be added deliberately, by signing the exchange with a key the other side already trusts (a certificate, a pinned host key or a pre-configured static public key).
 
 DH tells you "I share a key with whoever sent this number". It doesn't tell you *who* sent it. Every real protocol therefore **authenticates** the exchange:
 

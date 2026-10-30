@@ -17,57 +17,26 @@ Search and single-key updates cost O(h + 1) for a tree of height h; full validat
 |---|---|---|
 | Ascending | Right chain | 999 |
 | Uniformly random permutation | Random shape | Expected O(log n); no fixed height |
-| Median first, recursively | Perfect-ish | 9 |
+| Median first, recursively | Shortest possible | 9 |
 
-Inserting sorted keys into a plain BST produces a linked list with extra pointers: every insert walks the whole chain built so far. The first insert visits no existing nodes, the second visits 1, and so on:
+Inserting sorted keys into a plain BST produces a linked list with extra pointers. Each new key is larger than everything already stored, so it goes right at every node and walks the whole chain built so far: the first insert visits no existing nodes, the second visits 1, the third 2, and so on.
 
-```formula
-V = 0 + 1 + 2 + … + (n − 1)
-V = (n(n − 1)) / 2
-V = 1000 × 999 / 2 = 499500
-V ≈ 10^6 × 10^6 / 2 = 5 × 10^11
-where
-V: the total number of existing nodes visited while building the tree
-n: the number of keys inserted, in ascending order; 1,000 in the third line, a million (10^6) in the fourth
-…: "and so on": the count keeps rising by 1 each insert
-10^6: ten to the power 6, one million
-≈: approximately equal to (rounded)
-In words: the k-th sorted insert walks past all k − 1 earlier keys, and adding those up gives about n²/2, half of n squared.
-```
+Adding those up gives about half the square of the number of keys, so the total work grows **quadratically**: ten times as many sorted keys costs about a hundred times as much. 1,000 sorted keys cost about half a million node visits; a million keys cost about 500 billion. Searches afterwards are no better: looking up a late key walks the chain like a linked-list scan.
 
-The total has tight quadratic growth:
+Random insertion order is much kinder. For distinct keys inserted in a uniformly random permutation, the average depth of a stored key grows only logarithmically: for large trees it is about 1.39 times the depth of the best possible shape.
 
-```formula
-V = Θ(n^2)
-where
-V: existing-node visits across all sorted insertions
-n: the number of distinct keys inserted
-Θ(f(n)): tight asymptotic growth, bounded above and below by positive constant multiples of f(n) for sufficiently large n
-f(n): the comparison growth function, here the square of the key count
-In words: doubling a sufficiently large sorted batch multiplies these visits by about four; this is a tight bound, rather than only an upper bound.
-```
-
-Ten times as many keys costs about a hundred times as much: 1,000 sorted keys cost about half a million node visits, and a million keys about 5 × 10¹¹.
-
-Random insertion order is much kinder. For distinct keys inserted in a uniformly random permutation, the average depth of a stored key grows only logarithmically:
-
-```formula
-D ≈ 2 ln(n)
-D ≈ 2 ln(2) log_2(n)
-D ≈ 1.39 log_2(n)
-D ≈ 2 ln(1000) ≈ 2 × 6.91 ≈ 13.8
+```formula reference
+D ≈ 2 ln(n) ≈ 1.39 log_2(n)
 where
 D: the expected (average) depth, in edges, of a uniformly chosen key in a BST built from a random insertion order; this is the leading term only
 n: the number of distinct keys in the tree
-ln(n): the natural logarithm of n: the power you raise e ≈ 2.718 to in order to get n; ln(1000) ≈ 6.91
-ln(2): the natural logarithm of 2, about 0.693, which converts natural logs into base-2 logs
-log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n; log_2(1000) ≈ 9.97
-e: Euler's number, about 2.718, the base of the natural logarithm
+ln(n): the natural logarithm of n, about 0.693 times log_2(n)
+log_2(n): the base-2 logarithm of n: how many times you can halve n before reaching 1
 ≈: approximately equal to
-In words: for large n, a randomly built BST is on average only about 39 % deeper than the best possible shape, because 2 × ln(n) is about 1.39 times log_2(n).
+In words: for large trees, a randomly built BST is on average only about 39 % deeper than the best possible shape.
 ```
 
-For 1,000 random keys that is an average depth of about 14 by the leading term. Lower-order terms matter for finite sizes: the exact expected average is about 11, against an average depth of about 8 in the best (complete) shape, whose height is 9. Expected height is also O(log n); this is an expectation, not a bound on every insertion order.
+For 1,000 random keys the exact expected average depth is about 11, against about 8 in the best (complete) shape, whose height is 9. Expected height is also logarithmic, but this is an average over random orders, not a bound on every insertion order.
 
 But real data is rarely random. Timestamps, auto-increment IDs and alphabetically sorted imports all arrive in order. For workloads requiring worst-case logarithmic access, use a **self-balancing** tree (AVL, red-black; the balanced-tree units), a B-tree (System Design, databases), a skip list, or a sorted sequence implementation. Python sortedcontainers uses a list of sorted lists; Redis can use a skip list plus dictionary or a compact encoding for sorted sets.
 

@@ -7,7 +7,7 @@ sourceLesson: app-http-wire
 summary: "SameSite uses site relationships and request context; __Host- prefixes constrain supporting browsers."
 ---
 
-A cookie is a stored name/value pair with scope and security attributes. Earlier units covered host-only cookies, Domain, Path, Secure and HttpOnly. This unit adds cross-site sending rules and cookie-name prefixes, then estimates repeated HTTP/1.1 upload bytes.
+A cookie is a stored name/value pair with scope and security attributes. Earlier units covered host-only cookies, Domain, Path, Secure and HttpOnly. This unit adds cross-site sending rules and cookie-name prefixes, then looks at the cost of repeating cookies on every request.
 
 ### SameSite and the meaning of "site"
 
@@ -17,7 +17,14 @@ For these ordinary domain URLs, a **schemeful site** is the scheme plus the *reg
 - `Lax`: also sent on **top-level navigations** with safe methods (clicking a link, a GET form). Not sent on cross-site `POST`s, iframes, images or `fetch`.
 - `None`: removes the SameSite restriction and requires Secure in supporting browsers. Domain/path rules, partitioning and third-party-cookie policies still apply.
 
-The 6265bis draft specifies Lax-style default enforcement and allows a user-agent-chosen recent-cookie exception for cookies with no explicit SameSite value. Explicit Lax excludes that exception. SameSite helps against cross-site CSRF, but does not cover same-site sibling attacks or all application flows. Use appropriate CSRF protection for state-changing requests; GET should not perform state changes.
+The 6265bis draft specifies Lax-style default enforcement and allows a user-agent-chosen recent-cookie exception for cookies with no explicit SameSite value. Explicit Lax excludes that exception. SameSite helps against cross-site CSRF, but does not cover same-site sibling attacks or every application workflow. Use appropriate CSRF protection for state-changing requests; GET should not perform state changes.
+
+> [!analogy] Real-world analogy: An assistant who carries your membership card
+> Your assistant automatically shows your club membership card on every errand to the club. A stranger hands the assistant a sealed note for the club saying "transfer £500". Without a rule, the assistant shows your card and the club acts on the note as if you sent it.
+>
+> **How it maps:** The assistant is the browser, the card is a cookie, and the stranger's note is a cross-site request. `Strict` means "show the card only on errands I started from the club's own pages". `Lax` adds "or when a stranger's link just sends you to the club's front page", which is a top-level navigation with a safe method such as GET. It still withholds the card from a cross-site POST and from requests embedded in the stranger's page, such as images or `fetch`.
+>
+> **Where it stops:** "Same site" means the same scheme and registrable domain, so every subdomain of the club counts as the club, including a compromised one. Browser policies also differ, so SameSite supplements CSRF protection rather than replacing it.
 
 ### Prefixes
 
@@ -33,23 +40,9 @@ Supporting browsers enforce cookie-name prefixes:
 
 RFC 6265 asks browsers to support **at least** 4096 bytes per cookie, 50 cookies per domain and 3000 in total, as recommended minimum capabilities in that RFC, not universal current limits. Cookie inclusion also depends on path, security, SameSite, credentials mode and browser policy.
 
-Because HTTP/1.1 repeats the `Cookie` header on every request, large cookies multiply. To estimate the upload cost, multiply the request count by the cookie bytes each request carries:
-
-```formula
-C = Nc
-C = 80 × 3,000 B = 240,000 B
-where
-C: the total repeated cookie bytes uploaded, in bytes (B)
-N: the number of actual HTTP/1.1 requests that carry the cookies; here 80
-c: the cookie bytes in each request's Cookie header; here 3,000
-B: bytes
-In words: 80 requests each carrying 3,000 bytes of cookies upload 240,000 bytes of cookie values, before any other header overhead.
-```
+Because HTTP/1.1 repeats the `Cookie` header on every request, large cookies multiply. A page that makes 80 requests, each carrying 3,000 bytes of cookies, uploads about 240,000 bytes of cookie values before any other header overhead. On a slow mobile uplink that can be noticeable. Two practical fixes are keeping cookies small (a short random session ID rather than stored state) and serving static files from a host the cookies are not scoped to.
 
 This assumes every request is eligible to carry the cookies and that nothing compresses them. Cache hits can avoid requests; HTTP/2 or HTTP/3 compression savings depend on encoder/table decisions.
-
-> [!note] Content omitted after review
-> A current browser-by-browser cookie limit, prefix-support and eviction-policy matrix is absent because those version-specific implementations were not tested here.
 
 ## Pitfalls
 

@@ -13,9 +13,6 @@ The result is a hard guarantee: for n keys, the height stays O(log n) (growing o
 
 ## Rotations
 
-Here n is the stored key count; a rotation changes only a fixed number of links.
-
-
 A rotation changes the shape of a small part of the tree while **preserving the in-order sequence**, so the BST property still holds.
 
 ```
@@ -29,6 +26,13 @@ A rotation changes the shape of a small part of the tree while **preserving the 
 Here A, B and C are whole subtrees. In both shapes the in-order sequence is A, x, B, y, C. A right rotation at y lifts x up one level and pushes y down; subtree **B changes parent** from x to y. A left rotation is the mirror image.
 
 A rotation updates a constant number of links and metadata fields and does no searching, so it is **O(1)**: a fixed amount of work, however big the tree. AVL and red-black trees use rotations plus bookkeeping (heights for AVL, colours for red-black).
+
+> [!analogy] Real-world analogy: a group photo on tiered steps
+> A group stands on tiered steps for a photo, arranged left to right in name order. The photographer asks one person to step up a tier and their neighbour to step down. Heights in the picture change, but reading the faces from left to right still gives the same alphabetical order.
+>
+> **How it maps:** left-to-right order is the in-order sequence, which a rotation never changes. The tier each person stands on is their depth: a right rotation lifts x up a level and drops y down one, which is how rotations shorten a tall side.
+>
+> **Where it stops:** people in a photo have no parent links. In a tree, the middle subtree B must be handed from x to y so that every node still has exactly one parent; forgetting that hand-over is the classic rotation bug.
 
 ```python
 def rotate_right(y):
@@ -50,10 +54,9 @@ Named after Adelson-Velsky and Landis, the AVL tree was the first self-balancing
 
 **Invariant:** at every node, the heights of the left and right subtrees differ by at most 1. The difference is the node's **balance factor**:
 
-```formula
+```formula essential
 b(x) = h(x_L) − h(x_R)
 b(x) ∈ {−1, 0, +1}
-b(30) = 1 − (−1) = 2
 where
 b(x): the balance factor of node x; positive means left-heavy, negative means right-heavy
 x: any node in the tree
@@ -64,7 +67,7 @@ h(x_R): the height of x's right subtree, in edges; −1 if the subtree is empty
 In words: a node's balance factor is its left subtree's height minus its right subtree's height, and an AVL tree requires it to be −1, 0 or +1 at every node.
 ```
 
-The third line is node 30 in the "insert 30, 10, 20" example in the later AVL insertion unit: its left child 10 has a child of its own and 30 has no right child, so the heights are 1 and −1 and the balance factor is 2, which breaks the invariant. The insertion unit's `bf(n)` computes exactly this.
+The sign tells you which side is too tall: +2 means the left side is two levels taller, −2 the right. For example, if node 30's left child 10 has a child of its own (left height 1) and 30 has no right child (height −1), its balance factor is 2, which breaks the invariant. The later insertion unit's `bf(n)` computes exactly this, and the sign decides which rotation repairs it.
 
 ## Key takeaways
 - A rotation preserves in-order order while changing local parent links.

@@ -7,7 +7,7 @@ sourceLesson: app-email
 summary: Relay security depends on both consistent framing and an effective authenticated-TLS policy.
 ---
 
-An SMTP sender transmits an envelope followed by message headers and body. email SPF authenticates a connecting IP for an envelope domain; DKIM binds covered content to a signing domain, and DMARC checks alignment with the visible From. Those authentication results do not replace safe SMTP framing or confidential, authenticated transport.
+An SMTP sender transmits an envelope followed by message headers and body. Email SPF authenticates a connecting IP for an envelope domain; DKIM binds covered content to a signing domain, and DMARC checks alignment with the visible From. Those authentication results do not replace safe SMTP framing or confidential, authenticated transport.
 
 ## Dot-stuffing and SMTP smuggling
 

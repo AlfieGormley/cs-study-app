@@ -4,7 +4,7 @@ title: Star schemas and embedded records
 level: advanced
 minutes: 2
 sourceLesson: rel-th-denormalisation
-summary: Star schemas and embedded records, with explicit examples and the conditions that make the reasoning valid.
+summary: Star schemas and document embedding: deliberate redundancy shaped around read patterns.
 ---
 
 ## Star and snowflake schemas
@@ -19,20 +19,9 @@ dim_store - fact_sales - dim_product
          dim_customer
 ```
 
-`dim_product` holds product, category and department names in one row, even though that contains a transitive dependency:
+`dim_product` holds product, category and department names in one row, even though that contains a transitive dependency: the product fixes its category, and the category fixes its department, so the department depends on the key only indirectly. A normalised design would move category and department into their own tables.
 
-```formula
-product → category
-category → department
-where
-→: functionally determines: rows that agree on the left side agree on the right side
-product: the product's id, the key of dim_product
-category: the product's category name
-department: the department the category belongs to
-In words: the product fixes its category, and the category fixes its department, so the department depends on the key only indirectly. A normalised design would move category and department into their own table.
-```
-
-Storing it flat repeats each department name on every product row. The **snowflake schema** variant normalises dimensions back out. Stars can help when controlled data-loading pipelines keep duplicated dimension attributes consistent; batch loading alone does not prevent update anomalies and queries join one big table to a few small ones, which columnar engines handle well.
+Storing it flat repeats each department name on every product row. The **snowflake schema** variant normalises dimensions back out. Stars suit analytics because queries join one big fact table to a few small, flat dimensions, which is simple for analysts and efficient for columnar engines. The redundancy has to be managed by a controlled loading pipeline that rewrites dimension rows consistently and checks them after each load; batch loading by itself does not prevent update anomalies.
 
 ## Embedding and access patterns
 

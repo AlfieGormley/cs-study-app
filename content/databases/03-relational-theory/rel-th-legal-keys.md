@@ -4,16 +4,16 @@ title: Choosing keys from legal states
 level: basic
 minutes: 2
 sourceLesson: rel-th-relational-model
-summary: Choosing keys from legal states, with explicit examples and the conditions that make the reasoning valid.
+summary: Superkeys, candidate keys and primary keys, chosen from rules about every legal state rather than today's rows.
 ---
 
 ## Keys
 
-A relation has no duplicate relational tuples, so the full set of attributes always identifies a relational tuple uniquely. Usually a smaller set does too.
+A relation has no duplicate relational tuples, so the full set of attributes always identifies a tuple uniquely. Usually a smaller set does too.
 
-- A **superkey** is any set of attributes whose values are unique across every relational tuple the relation could legally contain.
+- A **superkey** is any set of attributes whose values are unique across every tuple the relation could legally contain.
 - A **candidate key** is a *minimal* superkey: remove any attribute and it stops being unique.
-- The **primary key** is the candidate key you choose as the main way to identify relational tuples. The others are **alternate keys**, normally enforced in SQL with UNIQUE plus NOT NULL on their attributes.
+- The **primary key** is the candidate key you choose as the main way to identify tuples. The others are **alternate keys**, normally enforced in SQL with UNIQUE plus NOT NULL on their attributes.
 
 Consider employees described by identifier `emp_id`, email address `email`, personal `name` and department `dept`. The domain guarantees that each identifier and each email belongs to only one employee:
 

@@ -35,6 +35,13 @@ configured root trust anchor
   child key verifies A RRset RRSIG
 ```
 
+> [!analogy] Real-world analogy: A chain of signed references
+> You trust one head office whose signature you already know. Head office signs a note vouching for a regional office's stamp; the regional office signs a note vouching for a branch's stamp; the branch stamps the document you care about. You can check the document without ever having met the branch.
+>
+> **How it maps:** The head office signature you already know is the root trust anchor. Each vouching note is a DS record in the parent zone, the stamps are each zone's DNSKEYs, and the stamped document is an RRset with its RRSIG.
+>
+> **Where it stops:** A stamped document can still be read by anyone: DNSSEC gives no secrecy. And a broken link is not a weaker answer but a failed one: if the parent's note names a stamp the branch no longer uses, a validating resolver rejects the data (normally SERVFAIL) rather than accepting it with less confidence.
+
 A validating resolver walks this chain. AD can signal that the relevant answer/authority data was validated, subject to request flags and response rules. With checking enabled, bogus data normally produces SERVFAIL; an authenticated unsigned delegation is an **insecure delegation**, not automatically bogus. CD can request data without that rejection. A non-validating stub must trust the resolver and protected path for its AD assertion; a validating stub can check signatures itself.
 
 ### Proving non-existence
@@ -43,9 +50,9 @@ An attacker could also forge "this name does not exist". To sign a negative answ
 
 ### Costs and pitfalls
 
-- **Bigger answers.** Signatures and keys make responses much larger, which means more truncation, TCP fallback and fragmentation, and makes signed zones more attractive for **amplification attacks** (a form of DDoS). ECDSA P-256 (algorithm 13) has far smaller signatures than RSA-2048 in the compared algorithms (64-byte ECDSA signatures versus 256-byte RSA-2048 signatures). No deployment-prevalence claim is made here.
+- **Bigger answers.** Signatures and keys make responses much larger, which means more truncation, TCP fallback and fragmentation, and makes signed zones more attractive for **amplification attacks** (a form of DDoS). Algorithm choice matters: an ECDSA P-256 (algorithm 13) signature is 64 bytes, against 256 bytes for RSA-2048.
 - **Operational fragility.** Expired signatures or a key rollover with a stale DS record can make affected signed data fail validation once usable cached data and overlapping valid chains are exhausted.
-- **Validator DoS.** The 2024 KeyTrap vulnerability showed that crafted key-tag collisions and many candidate signatures can force excessive validation work in vulnerable implementations. This refers to key-tag matching, not a break of signature cryptography; no universal CPU duration is asserted here.
+- **Validator DoS.** The 2024 KeyTrap vulnerability showed that crafted key-tag collisions and many candidate signatures can force excessive validation work in vulnerable implementations. It exploited how validators match keys to signatures, not a break of the signature cryptography.
 - **Last mile.** DNSSEC authenticates signed data to whichever endpoint performs validation, through intervening caches or transports. It does nothing about who can *see* your queries.
 
 ## Key takeaways

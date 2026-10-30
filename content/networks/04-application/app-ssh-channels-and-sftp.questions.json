@@ -33,27 +33,27 @@
     "id": "app-ntp-ssh-grpc-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A simplified SFTP client downloads 1 GiB using one 32 KiB READ per 80 ms round trip, waiting for each complete response. Ignoring setup, serialisation, processing and link bandwidth, how long does it take?",
+    "prompt": "A company's custom SFTP client downloads a large file from a server 80 ms away at about 3 Mbit/s, although the path is a quiet 1 Gbit/s link and CPU is idle on both ends. The client sends one 32 KiB `SSH_FXP_READ`, waits for the `SSH_FXP_DATA` reply, then sends the next. Which change most directly fixes this?",
     "options": [
       {
-        "text": "About 8 seconds",
-        "explanation": "The model transfers 32 KiB per 0.08 seconds, or 400 KiB/s, far below the rate needed for eight seconds."
+        "text": "Raise the SSH channel window so more data can be in flight",
+        "explanation": "The window only limits data the server may send. Here the client has asked for just 32 KiB, so the server has nothing more to send whatever the window allows."
       },
       {
-        "text": "About 4 hours",
-        "explanation": "This overestimates by using a much smaller read size or larger RTT. 32,768 × 0.08 s ≈ 44 minutes."
+        "text": "Enable SSH compression with `ssh -C`",
+        "explanation": "Compression shrinks the bytes in each reply but does not remove the round trip the client waits through between requests. The request pattern is the limit."
       },
       {
-        "text": "About 1 minute, because SSH windows allow pipelining automatically",
-        "explanation": "Channel windows allow data to flow, but this client only ever has one request outstanding, so it waits a full RTT per block."
+        "text": "Keep many READ requests outstanding at once, each with its own request ID, as OpenSSH's sftp does",
+        "explanation": "Correct. One 32 KiB read per 80 ms round trip caps the rate at about 3.3 Mbit/s. With 64 reads in flight the ceiling rises 64-fold, until bandwidth or windows limit it."
       },
       {
-        "text": "About 44 minutes",
-        "explanation": "1 GiB / 32 KiB = 32,768 exchanges; at 0.08 seconds each that is 2,621.44 seconds, or 43.69 minutes."
+        "text": "Use smaller 4 KiB reads so each reply arrives sooner",
+        "explanation": "Each read still costs a whole round trip, so smaller reads make the ceiling eight times lower, not higher."
       }
     ],
-    "answer": 3,
-    "workedExample": "```formula\nN = F / b = (2^30 B) / (2^15 B)\nN = 32,768\nT = N RTT = 32,768 × 0.080 s\nT = 2,621.44 s ≈ 43.69 min\nR = b / RTT = 32 KiB / 0.080 s\nR = 400 KiB/s ≈ 3.2768 Mbit/s\nwhere\nN: the number of read round trips needed\nF: the file size, 1 GiB = 2^30 bytes\nb: the read size, 32 KiB = 2^15 = 32,768 bytes\nT: the total transfer time\nRTT: the round-trip time per read, 80 ms = 0.080 s\nR: the resulting throughput\n^: \"to the power of\"; 2^30 is 30 copies of 2 multiplied together\nB: bytes\nKiB: kibibyte, 1,024 bytes\nMbit: megabit, one million bits (400 × 1,024 × 8 = 3,276,800 bits)\ns: seconds\nmin: minutes\n≈: approximately equal to\nIn words: one 32 KiB read per 80 ms round trip needs 32,768 round trips for a gibibyte, about 44 minutes.\n```\n\nAn idealised batch of 64 outstanding reads transfers 2 MiB per RTT and takes 40.96 seconds for the same file. Real transfer time also depends on bandwidth, channel windows, processing and partial responses. OpenSSH documents a default maximum of 64 concurrent requests; that does not guarantee this ideal throughput.",
+    "answer": 2,
+    "workedExample": "1. Symptom: a steady rate far below the link speed, with idle CPUs. That points to a per-round-trip ceiling.\n2. The client has only one 32 KiB request outstanding, so at most 32 KiB arrives per 80 ms round trip, about 400 KiB/s or roughly 3.3 Mbit/s. That matches the observation.\n3. SFTP requests carry IDs precisely so a client can send many READs at different offsets without waiting; replies are matched to requests by ID.\n4. Pipelining 64 reads raises the ceiling 64-fold. In practice bandwidth, channel windows, server speed or partial replies then become the limit.\n5. Compression, a bigger window or smaller reads do not change the one-request-per-round-trip pattern.",
     "link": {
       "title": "SSH File Transfer Protocol — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/SSH_File_Transfer_Protocol"

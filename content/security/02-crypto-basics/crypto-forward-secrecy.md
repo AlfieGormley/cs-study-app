@@ -20,7 +20,14 @@ With **RSA key transport** (TLS 1.2 and earlier), the client encrypts a premaste
 
 With **ephemeral** Diffie–Hellman (DHE or ECDHE), both sides generate a fresh key pair for every connection and delete it afterwards. The long-term key only *signs* the exchange. Stealing it later lets an attacker impersonate the server in future, but past session keys are gone. This property is **forward secrecy** (or perfect forward secrecy). TLS 1.3 made ephemeral key exchange mandatory for certificate-based handshakes and removed RSA key transport.
 
-The Signal Protocol's Double Ratchet evolves message keys and periodically incorporates fresh DH material. Erasure protects older keys; recovery after compromise requires fresh secret contributions no longer visible to the attacker. Continuous endpoint access or retained keys can prevent recovery, so there is no guaranteed short exposure window.
+> [!analogy] Real-world analogy: A fresh padlock for every delivery, then destroyed
+> A courier firm signs each delivery note with its company stamp, but locks every box with a brand-new padlock whose combination exists only for that delivery and is destroyed afterwards. A thief who steals the company stamp next year can forge future delivery notes, but cannot open any box photographed in the past.
+>
+> **How it maps:** The company stamp is the long-term signing key, which authenticates each handshake. Each throwaway padlock is an ephemeral (EC)DHE key pair, and destroying the combination is erasing the ephemeral secret and session keys. RSA key transport is like locking every box with the firm's one master padlock: steal it later and every recorded box opens.
+>
+> **Where it stops:** Forward secrecy only helps if the ephemeral secrets and session keys really are erased, and it does nothing for a thief who is inside the endpoint during the session. A recorded session also stays exposed if the ephemeral exchange itself is later broken, which is the quantum risk below.
+
+The Signal Protocol's Double Ratchet evolves message keys and periodically incorporates fresh DH material. Erasing old keys protects earlier messages. Healing after a compromise needs fresh secret contributions that the attacker can no longer see, so an attacker with continuing access to the device, or keys that were never erased, can stay in; there is no guaranteed short exposure window.
 
 ## Beyond classical DH
 

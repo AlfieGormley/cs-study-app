@@ -3,27 +3,27 @@
     "id": "crypto-symmetric-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A server encrypts `amount=100` with AES-CTR and no MAC. An attacker who knows the format wants the server to decrypt `amount=700`. What should they XOR into the ciphertext byte that sits under the `1`?",
+    "prompt": "A payments service encrypts `amount=100` with AES-CTR and no MAC, and an attacker on the network wants the server to decrypt `amount=700` instead. Which of these does the attacker actually need?",
     "options": [
       {
-        "text": "`0x37`, the ASCII code of `7`",
-        "explanation": "XORing with `0x37` would turn `'1'` (`0x31`) into `0x06`, a control character. You need the difference between old and new bytes."
+        "text": "The AES key, so they can decrypt, edit and re-encrypt the message",
+        "explanation": "Unauthenticated CTR is malleable: decryption carries flipped ciphertext bits straight into the plaintext, so no key is required."
       },
       {
-        "text": "`0x06`, the XOR of `'1'` and `'7'`",
-        "explanation": "Correct. Ciphertext bit flips pass straight through to the plaintext in CTR mode, so XORing that byte with `0x06` (the XOR of `0x31` and `0x37`) turns `1` into `7`."
+        "text": "The nonce, because it must be secret for CTR to be secure",
+        "explanation": "The nonce is public and only has to be unique. It plays no part in this attack."
       },
       {
-        "text": "Nothing works: they need the key to change any byte",
-        "explanation": "Unauthenticated stream-style encryption is malleable. Appropriate authentication, such as a MAC or AEAD tag, is needed to detect unauthorised changes under its security bounds."
+        "text": "To know or guess the byte at that position (`1`) and to be able to change the ciphertext in transit",
+        "explanation": "Correct. XORing the difference between `1` and `7` into the ciphertext byte at that position changes the decrypted `1` into `7`. Only the guessed plaintext and the ability to modify data are needed."
       },
       {
-        "text": "`0x06` in every byte of the ciphertext",
-        "explanation": "That would change every character. The attack is precise: only the byte under the `1` needs to change."
+        "text": "Many captured messages under the same nonce, so the keystream cancels",
+        "explanation": "That describes the two-time pad, a separate failure. Malleability works on a single message with a correctly unique nonce."
       }
     ],
-    "answer": 1,
-    "workedExample": "CTR decryption XORs each ciphertext byte with a keystream byte. If the attacker XORs a difference into the ciphertext, the same difference lands in the plaintext:\n\n```formula\nP′ = (C ⊕ D) ⊕ K = P ⊕ D\nD = '1' ⊕ '7'\nD = 0x31 ⊕ 0x37 = 0x06\nwhere\nC: the ciphertext byte under the '1'\nK: the keystream byte at that position, unknown to the attacker\nP: the original plaintext byte, '1' = 0x31\nD: the difference the attacker XORs in\nP′: the byte the server decrypts after the change, which should become '7' = 0x37\n0x31, 0x37, 0x06: byte values in hexadecimal (base 16, marked by 0x)\n⊕: XOR (exclusive or): each output bit is 1 where the two inputs differ and 0 where they match\nIn words: choose D as the XOR of the old and wanted characters, and P ⊕ D turns '1' into '7' without the key.\n```\n\nIn binary:\n\n```\n'1' = 0x31 = 0011 0001\n'7' = 0x37 = 0011 0111\nXOR = 0x06 = 0000 0110\n```\n\nXOR byte 7 of the ciphertext (counting from 0: `amount=` is 7 characters) with `0x06`. The server decrypts `amount=700`.\n\nWith AES-GCM, the tag check fails and decryption raises an error instead.",
+    "answer": 2,
+    "workedExample": "1. CTR decryption XORs each ciphertext byte with a keystream byte. Whatever difference the attacker XORs into a ciphertext byte appears, unchanged, in the decrypted byte.\n2. The attacker guesses the format, so they know which byte holds `1`.\n3. They XOR that ciphertext byte with the difference between `1` (0x31) and `7` (0x37), which is 0x06. The server decrypts `amount=700`.\n4. They never learn the key or the keystream, and the nonce is irrelevant.\n5. Defence: authenticated encryption. With AES-GCM or ChaCha20-Poly1305 the changed ciphertext fails tag verification and decryption raises an error instead of returning `amount=700`.",
     "link": {
       "title": "Authenticated encryption (AEAD) — cryptography.io",
       "url": "https://cryptography.io/en/latest/hazmat/primitives/aead/"

@@ -4,7 +4,7 @@ title: Maintaining counters under writes
 level: advanced
 minutes: 2
 sourceLesson: rel-th-denormalisation
-summary: Maintaining counters under writes, with explicit examples and the conditions that make the reasoning valid.
+summary: Trigger-maintained counters: what they save, the hot-row contention they create and the events they must cover.
 ---
 
 ## Counters and write contention
@@ -30,6 +30,13 @@ FOR EACH ROW EXECUTE FUNCTION bump_count();
 ```
 
 The fixture assumes `post.id` is a primary key, `comment.post_id` is a non-null foreign key, and `post.comment_count` is non-null and initialised to zero. Each inserted comment adds one; rolling back its transaction also rolls back the increment. A production implementation must cover deletion, moving a comment between posts, bulk maintenance and any path that bypasses ordinary row triggers, such as `TRUNCATE`. This insert-only example intentionally demonstrates drift when another event is omitted. The hidden cost is **contention**. Every comment on a viral post updates the same row, and each `UPDATE` holds that row's lock until its transaction commits, so writers queue behind one another. Remedies: split the counter into several rows (say 16) and sum them on read (sharded counters), or buffer increments and apply them in batches.
+
+> [!analogy] Real-world analogy: one tally clicker at a busy gate
+> A stadium counts fans with a single hand-held clicker passed between stewards. Each steward must wait for the clicker before counting the next fan, so the queue grows at the busiest gate. Give each gate its own clicker and add the totals when someone asks.
+>
+> **How it maps:** The shared clicker is the single `comment_count` row, waiting for it is waiting for the row lock, and per-gate clickers summed on demand are sharded counter rows.
+>
+> **Where it stops:** A steward holds the clicker only for a moment. A database transaction holds the row lock until it commits, so a slow transaction elsewhere stretches every wait, and a rollback must also undo its click.
 
 ## Key takeaways
 

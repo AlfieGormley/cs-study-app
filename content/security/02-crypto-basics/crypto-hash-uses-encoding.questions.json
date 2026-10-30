@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Hashing establishes that the received bytes produce the compared digest; this is not mathematical proof that they are the unique bytes with that digest.\n2. It does not prove who chose D. Anyone can compute the SHA-256 of any file.\n3. The attacker swaps in `malware.zip`, computes its SHA-256, and puts that on the page.\n4. Your check passes perfectly.\n5. The fix is to get D (or a signature over it) from somewhere the attacker can't change: the vendor's HTTPS site, a GPG- or Sigstore-signed checksums file, or a package manager's signed index.",
+    "workedExample": "1. Hashing establishes that the received bytes produce the compared digest; this is not mathematical proof that they are the unique bytes with that digest.\n2. It does not prove who chose the published digest. Anyone can compute the SHA-256 of any file.\n3. The attacker swaps in `malware.zip`, computes its SHA-256, and puts that on the page.\n4. Your check passes perfectly.\n5. The fix is to get the digest (or a signature over it) from somewhere the attacker can't change: the vendor's HTTPS site, a GPG- or Sigstore-signed checksums file, or a package manager's signed index.",
     "link": {
       "title": "Cryptographic hash function — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cryptographic_hash_function"
@@ -33,30 +33,30 @@
     "id": "crypto-hashes-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "In a simplified model an identifier is exactly the ASCII string 07 followed by nine decimal digits. Ignore candidate generation, storage and lookup overhead. At an assumed rate of one billion SHA-256 evaluations per second, how long does hashing every candidate take?",
+    "prompt": "A marketing team wants to share customer data with a partner and \"anonymises\" UK mobile numbers by replacing each with its unsalted SHA-256 digest. Every number has the form `07` followed by nine digits. Is this anonymisation?",
     "options": [
       {
-        "text": "Effectively forever: SHA-256 is preimage resistant",
-        "explanation": "Preimage resistance assumes the input is unpredictable. Here there are only a billion possible inputs, so the attacker just hashes them all."
+        "text": "Yes: SHA-256 is preimage resistant, so the digests cannot be reversed",
+        "explanation": "Preimage resistance assumes unpredictable inputs. Here there are only a billion possible numbers, so the partner can simply hash every candidate and match."
       },
       {
-        "text": "About a month",
-        "explanation": "That overestimates the work: there are only one billion possible identifiers in the specified format."
+        "text": "Yes, provided the digests are truncated to 64 bits",
+        "explanation": "Truncation does not shrink the candidate list. Hashing every possible number still matches every record, and shorter digests only add accidental clashes."
       },
       {
-        "text": "About one second",
-        "explanation": "Correct for the stated model: a billion candidates at a billion evaluations per second takes one second. This excludes generation, storage and lookup overhead and is not a measured recovery benchmark."
+        "text": "No: there are only a billion possible numbers, so anyone can hash them all and look up every customer; deterministic digests also let records be linked",
+        "explanation": "Correct. The input space is tiny by computing standards, so a dictionary attack recovers the numbers. A keyed HMAC with a protected key can support pseudonymisation, but that is still not anonymisation; minimise what you share."
       },
       {
-        "text": "About a year, because each number needs a separate attack",
-        "explanation": "Unsalted hashes let one table cover every record at once. Even per-record, the space is tiny."
+        "text": "No, because SHA-256 is broken and should be replaced by SHA-3",
+        "explanation": "SHA-256 is not broken. SHA-3 would fail in exactly the same way, because the weakness is the small, predictable input space."
       }
     ],
     "answer": 2,
-    "workedExample": "Nine free decimal digits give one billion candidates. At the assumed hash-only rate:\n\n```formula\nt = N / r\nt = 10^9 / (10^9 per s) = 1 s\nwhere\nt: the time to hash every candidate, in seconds (s)\nN: the number of candidates: 10^9, one per nine-digit number\nr: the assumed hashing rate, 10^9 SHA-256 evaluations per second\ns: seconds\nIn words: a billion candidates at a billion hashes a second takes one second.\n```\n\nBuilding/querying a billion-entry lookup structure, encoding candidates and matching records add costs not measured here. Deterministic hashes of predictable data can be dictionary-tested; HMAC with a protected key can support pseudonymisation but is not automatic anonymisation.",
+    "workedExample": "1. Nine free digits give a billion possible numbers. That is a small candidate list for a computer.\n2. SHA-256 is deterministic and keyless, so anyone can hash all one billion candidates once and build a table mapping each digest back to its number.\n3. Every \"anonymised\" record then maps straight back to its phone number. Even without reversing, identical digests let the partner link the same customer across datasets.\n4. A keyed HMAC whose key never leaves your organisation blocks the partner from building that table, giving pseudonymisation. It is still personal data, and anyone holding the key can re-identify people.\n5. The real fix is to share less: aggregate, drop the identifier, or use a properly reviewed privacy technique.",
     "link": {
-      "title": "Cryptographic hash function — Wikipedia",
-      "url": "https://en.wikipedia.org/wiki/Cryptographic_hash_function"
+      "title": "ICO: anonymisation and pseudonymisation",
+      "url": "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-sharing/anonymisation/"
     }
   },
   {
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Compute the hash inputs:\n\n```\nb\"alice\"  + b\"report\"\n  = b\"alicereport\"\nb\"alicer\" + b\"eport\"\n  = b\"alicereport\"\n```\n\n2. Identical bytes give identical digests, so the cache lookup hits alice's approval.\n3. No hash weakness is involved; the encoding loses the boundary between fields.\n4. Fixes: prefix each field with its length (below), use a separator that can't appear in either field, or serialise a tuple with a canonical format before hashing.\n\n```formula\nH(5 ‖ \"alice\" ‖ 6 ‖ \"report\")\n≠ H(6 ‖ \"alicer\" ‖ 5 ‖ \"eport\")\nwhere\nH: SHA-256\n‖: concatenation: joining byte strings end to end\n5, 6: each length is encoded as a single byte (0x05 or 0x06); the following text is ASCII\n≠: is not equal to\nIn words: the length prefixes make these encodings distinct. Their SHA-256 values are different for this checked concrete pair; distinct encodings do not mathematically guarantee different digests.\n```",
+    "workedExample": "1. Compute the hash inputs:\n\n```\nb\"alice\"  + b\"report\"\n  = b\"alicereport\"\nb\"alicer\" + b\"eport\"\n  = b\"alicereport\"\n```\n\n2. Identical bytes give identical digests, so the cache lookup hits alice's approval.\n3. No hash weakness is involved; the encoding loses the boundary between fields.\n4. Fixes: prefix each field with its length (below), use a separator that can't appear in either field, or serialise a tuple with a canonical format before hashing.\n\nWith length prefixes the two hash inputs become `05 alice 06 report` and `06 alicer 05 eport` (each length written as one byte before its field). They are different byte strings, so they get different digests.",
     "link": {
       "title": "Cryptographic hash function — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cryptographic_hash_function"
@@ -93,27 +93,27 @@
     "id": "crypto-hashes-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "A balanced binary Merkle tree has 1,048,576 leaves and uses a 32-byte hash. For a leaf-to-root inclusion path, how many sibling hashes are needed?",
+    "prompt": "A transparency log publishes a signed root hash over a binary Merkle tree of about a million entries. A client wants to check that its own entry is included without downloading the log. What does it need?",
     "options": [
       {
-        "text": "1,048,575, one per other entry",
-        "explanation": "That's what you'd send without a tree. A Merkle proof only needs one sibling per level."
+        "text": "Every other entry in the log, so it can rebuild the tree itself",
+        "explanation": "That defeats the purpose. A Merkle proof needs only one sibling hash per level of the tree."
       },
       {
-        "text": "1,024, the square root of the entry count",
-        "explanation": "Square roots come up in the birthday bound, not tree height. The tree is binary, so the height is a logarithm."
+        "text": "Only the signed root hash: if the root verifies, every entry is included",
+        "explanation": "The root depends on the whole tree, but on its own it says nothing about whether a particular entry is in it. You need the path linking the entry to the root."
       },
       {
-        "text": "1, because the root alone proves inclusion",
-        "explanation": "The root alone tells you nothing about a particular entry; you need the path linking the entry to the root."
+        "text": "About a thousand hashes, the square root of the number of entries",
+        "explanation": "Square roots belong to the birthday bound. A binary tree halves at each level, so the proof size grows with the logarithm of the entry count."
       },
       {
-        "text": "20, one per level of the tree",
-        "explanation": "Correct. Repeatedly halving 1,048,576 reaches one after 20 steps, giving 20 sibling hashes from leaf to root in this complete binary tree."
+        "text": "Its entry, the sibling hash at each of about 20 levels with their left or right positions, and a root it already trusts",
+        "explanation": "Correct. Hashing upwards from the entry with each sibling must reproduce the trusted root. A million leaves need about 20 levels, so the proof is about 20 hashes."
       }
     ],
     "answer": 3,
-    "workedExample": "A binary tree halves the number of nodes at each level, so its height is a base-2 logarithm, and the proof needs one sibling hash per level:\n\n```formula\nh_tree = log_2(N)\nh_tree = log_2(2^20) = 20\nS = h_tree × 32 bytes = 640 bytes\nwhere\nh_tree: the number of levels between a leaf and the root\nN: the number of leaves: 1,048,576 = 2^20\nlog_2: the base-2 logarithm: log_2(N) is the power you raise 2 to in order to get N\nS: the size of the sibling hashes in the proof, in bytes\n32: the size of one SHA-256 hash, in bytes\nbytes: the unit of data, 8 bits each\nIn words: a million leaves need only 20 levels, so 20 sibling hashes, 640 bytes of hash material, prove that any one leaf is in the tree.\n```\n\nThe verifier also needs position/tree-size information and must preserve left/right order; the root must be trusted. A secure encoding distinguishes leaves and internal nodes (Certificate Transparency uses separate domain prefixes). Total proof encoding can exceed 640 bytes.",
+    "workedExample": "1. Each level of a binary Merkle tree halves the number of nodes, so a million leaves need about 20 levels (2^20 is 1,048,576).\n2. To recompute the root from one entry, the client hashes its entry, then combines the result with the sibling hash at each level, in the right left or right order.\n3. If the final value equals the root, the entry was in the tree that produced the root. That only means something if the root itself is trusted, for example because the log signed it.\n4. Twenty 32-byte hashes is about 640 bytes of hash material, instead of a million entries. Secure designs, such as Certificate Transparency, also hash leaves and internal nodes with different prefixes so one cannot be presented as the other.",
     "link": {
       "title": "Merkle tree — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Merkle_tree"

@@ -57,22 +57,16 @@ top_k([5, 1, 9, 3, 7, 9, 2, 8], 3)
 # [9, 9, 8]
 ```
 
-Each item costs one comparison with the root, and at most one replace that sifts through a binary heap of only k items:
+Each item costs one comparison with the root, and at most one replace that sifts through a binary heap of only k items. Many items fail that first comparison and cost nothing more. So the worst case is O(n log(k + 1)) time, including the final sort of the k keepers, and O(k) memory (the + 1 just keeps the logarithm above zero when k is 1). Larger k returns all n items; zero keepers returns immediately.
 
-```formula
-W_scale = n log_2(k + 1)
-log_2(100 + 1) ≈ 6.7
-log_2(10^9) ≈ 29.9
-where
-W_scale: a worst-case growth scale for top-k, not the actual levels sifted; many items can fail the root comparison without any sift
-n: the number of input items; 10^9 (a billion) log lines in the example
-k: how many of the largest items you want, between 1 and n; 100 in the example
-log_2(x): the base-2 logarithm of x: the power you raise 2 to in order to get x; it counts the levels in a heap of x items
-≈: approximately equal to
-In words: each of the n items costs at most about log_2(k + 1) heap levels, because the heap never grows beyond k items.
-```
+With a billion log lines and 100 keepers, that is at most about 7 heap levels per item instead of the 30 a heap of all n items would need, and it works on a stream that never fits in memory. `heapq.nlargest` does this for you.
 
-So for a keeper count between one and the input size, cost is O(n log(k + 1)) time including final sorting, and O(k) memory. The + 1 keeps the logarithm above zero when there is one keeper. Larger k returns all n items; zero keepers returns immediately. With a billion log lines and 100 keepers, that is about 7 binary heap levels per item instead of the 30 a binary heap of all n items would need, and it works on a stream that never fits in memory. `heapq.nlargest` does this for you.
+> [!analogy] Real-world analogy: a door policy at a full venue
+> A small venue holds exactly 100 people. Once it is full, the door staff let a newcomer in only if they beat the least impressive person currently inside, who is then asked to leave. The staff never need to compare a newcomer with anyone except that one weakest guest.
+>
+> **How it maps:** the venue is the min-heap of size k, the weakest guest is the root `h[0]`, the comparison at the door is `x > h[0]`, and the swap is `heapreplace`. Everyone turned away costs one comparison.
+>
+> **Where it stops:** door staff could simply know who is weakest. A heap must do a few swaps after each replacement, about log₂ k of them, to bring the next weakest keeper to the root.
 
 > [!tip] Min-heap for the largest, max-heap for the smallest
 > It feels backwards, but for the k **largest** you want quick access to the **smallest** of your keepers, because that is the one a newcomer must beat.

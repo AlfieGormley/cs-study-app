@@ -21,15 +21,7 @@ Peers talk over TCP (or uTP, a UDP-based protocol with delay-based congestion co
 20  peer_id
 ```
 
-The field sizes add up to the fixed length:
-
-```formula
-H = 1 B + 19 B + 8 B + 20 B + 20 B = 68 B
-where
-H: the length of the handshake, in bytes (B)
-B: bytes: 1 for pstrlen, 19 for the text "BitTorrent protocol", 8 reserved, 20 for the info-hash and 20 for the peer ID
-In words: every BitTorrent v1 handshake is exactly 68 bytes, so a receiver knows how much to read before checking the info-hash.
-```
+The fixed length lets a receiver read exactly 68 bytes, then check that the info-hash names a torrent it is serving before going further.
 
 After that, every message except the zero-length keep-alive carries a 4-byte big-endian length, a 1-byte ID and a payload:
 
@@ -53,6 +45,13 @@ Two policies make swarms work:
 
 - **Rarest first.** Download the pieces that the fewest of your peers have. This promotes availability of scarce pieces but cannot guarantee that every piece remains online and makes you useful to others sooner.
 - **Tit-for-tat choking.** You upload only to a few peers at a time. BEP 3 describes decisions on a 10-second cadence and rotation of an optimistic slot every 30 seconds. The optimistic interested peer counts within the four allowed interested downloaders, rather than being an unconditional fifth slot; new connections receive selection bias. Seeders use upload performance rather than download reciprocation. Client policies can differ.
+
+> [!analogy] Real-world analogy: A swap shop with a free-sample table
+> At a swap shop, regulars trade mostly with the people who have recently given them the most. To give newcomers a chance, each trader also hands a free item to one stranger at a time, rotating every so often. A newcomer who receives something can start trading.
+>
+> **How it maps:** Trading with your best recent partners is tit-for-tat choking; the free item is the optimistic unchoke. Rarest first is choosing to pick up the items few people have, so you have something others want and the item survives if its owner leaves.
+>
+> **Where it stops:** BitTorrent's partners are judged on measured transfer rates and re-evaluated on a regular cadence (every ten seconds in BEP 3's description), not on goodwill. Seeders, which want nothing back, simply favour peers they can upload to well.
 
 Near the end, **endgame mode** requests the last few blocks from every peer that has them and cancels duplicates on arrival, so one slow peer doesn't hold up completion.
 

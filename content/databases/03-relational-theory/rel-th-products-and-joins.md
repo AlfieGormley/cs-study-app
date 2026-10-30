@@ -4,7 +4,7 @@ title: Products and joins
 level: basic
 minutes: 5
 sourceLesson: rel-th-algebra
-summary: Products and joins, with explicit examples and the conditions that make the reasoning valid.
+summary: Products pair everything; joins keep matching pairs. Natural, outer, semi and anti joins and their SQL forms.
 ---
 
 ## Local relations
@@ -13,37 +13,24 @@ summary: Products and joins, with explicit examples and the conditions that make
 Student            Enrolled     Course
 sid name year      sid cid      cid dept
  1  Ada   2         1  DB       DB  CS
- 2  Ben   1         1  OS       OS  CS
+ 2  Ben   1         1  AI       AI  CS
  3  Cat   2         1  LA       LA  MA
  4  Dev   3         2  DB
                     3  DB
-                    3  OS
+                    3  AI
 ```
 
 Four students, three courses, six enrolments. Dev is not enrolled on anything. (Course also has a `title` column, left out here for width.) `sid` is the student id, `cid` the course code, and `dept` the department that runs the course.
 
 ## Product and joins
 
-The **Cartesian product** pairs every relational tuple of one relation with every relational tuple of another, so its size is the product of the two sizes:
-
-```formula
-|R × S| = |R| × |S|
-|Student × Course| = 4 × 3 = 12
-where
-R, S: two relations with disjoint attribute names, renaming first if necessary
-× (between relations): the Cartesian product: one output relational tuple for every pairing of a relational tuple of R with a relational tuple of S, carrying the attributes of both
-× (between numbers): ordinary multiplication
-| |: the cardinality of the relation inside the bars: its number of relational tuples
-Student: the relation of students, 4 relational tuples
-Course: the relation of courses, 3 relational tuples
-In words: pairing 4 students with 3 courses in every possible way gives 12 relational tuples.
-```
+The **Cartesian product** pairs every relational tuple of one relation with every tuple of another, carrying the attributes of both. Its size is therefore the product of the two sizes: 4 students × 3 courses gives 12 pairs, whether or not anyone is enrolled. The attribute counts add instead: 3 + 3 = 6 attributes, which is why the two headings must not share names (rename first if they do).
 
 On its own the product is rarely what you want; it is the raw material for joins.
 
 A **theta join** is a product followed by a selection:
 
-```formula
+```formula reference
 R ⋈θ S ≡ σθ (R × S)
 where
 R, S: two relations with disjoint attribute names, renaming first if necessary
@@ -57,7 +44,7 @@ In words: a theta join is "pair everything, then keep the pairs that satisfy θ"
 
 When θ uses only equality it is an **equijoin**. A **natural join**, written with a bare bow-tie and no condition, is the equijoin on *all* attributes with the same name, keeping one copy of each:
 
-```formula
+```formula reference
 Student ⋈ Enrolled
 where
 ⋈: natural join (a bow-tie with no condition): pair the relational tuples that have equal values on every attribute name the two relations share, and keep one copy of each shared attribute
@@ -69,16 +56,16 @@ In words: attach to each student the courses they are enrolled on, matching on s
 ```
 sid name year cid
  1  Ada   2   DB
- 1  Ada   2   OS
+ 1  Ada   2   AI
  1  Ada   2   LA
  2  Ben   1   DB
  3  Cat   2   DB
- 3  Cat   2   OS
+ 3  Cat   2   AI
 ```
 
-Dev vanishes: an inner join keeps only relational tuples with a partner. The extended algebra adds **outer joins**, which keep unmatched relational tuples padded with NULLs, plus the **semijoin** and **antijoin**, which optimisers use constantly:
+Dev vanishes: an inner join keeps only tuples with a partner. The extended algebra adds **outer joins**, which keep unmatched tuples padded with NULLs, plus the **semijoin** and **antijoin**, which optimisers use constantly:
 
-```formula
+```formula reference
 R ⟕ S
 R ⟖ S
 R ⟗ S
@@ -94,14 +81,23 @@ R, S: two relations with compatible shared domains; these bare symbols use natur
 In words: outer joins keep the rows a join would drop; semijoin asks "does a match exist?" and antijoin asks "is there no match?".
 ```
 
-- **Semijoin** R ⋉ S is SQL's `WHERE EXISTS`.
-- **Antijoin** R ▷ S is SQL's `WHERE NOT EXISTS`.
-- **Left outer join** R ⟕ S is SQL's `LEFT JOIN`.
+In SQL terms:
+
+- A **semijoin** ("rows of R that have a match") is `WHERE EXISTS`.
+- An **antijoin** ("rows of R with no match") is `WHERE NOT EXISTS`.
+- A **left outer join** ("all of R, padded where unmatched") is `LEFT JOIN`.
+
+> [!analogy] Real-world analogy: laying out outfits
+> Lay every shirt next to every pair of trousers and you have all possible outfits, most of them clashing. A sensible wardrobe rule, such as "the colours must match", keeps only some of those pairs.
+>
+> **How it maps:** Shirts and trousers are two relations; laying out every pairing is the Cartesian product; the colour rule is the join condition θ, so the surviving outfits are a theta join. A natural join is the special rule "match on every label the two items share".
+>
+> **Where it stops:** You can see a clash at a glance without laying out the whole wardrobe, and a database is also not required to build the full product: the product-then-filter description defines the result, while hash, merge or index joins usually avoid generating the rejected pairs.
 
 > [!warning] Natural join is fragile
 > Natural join matches on every shared column name. If someone later adds `updated_at` to both Student and Enrolled, `NATURAL JOIN` silently starts requiring equal timestamps and returns almost nothing. Production SQL should spell out `JOIN ... ON` or `USING (sid)`.
 
-For a natural join, shared attribute names must have compatible domains. With no shared names, the matching condition is vacuously true, and the result is the Cartesian product: four students paired with three courses give twelve relational tuples. Adding a same-named column later changes a SQL `NATURAL JOIN` predicate, so explicit join conditions are safer in application SQL. The outer-join operators above belong to an extension with missing-value markers, rather than the null-free algebra.
+For a natural join, shared attribute names must have compatible domains. With no shared names, the matching condition is vacuously true, and the result is the Cartesian product: four students paired with three courses give twelve tuples. Adding a same-named column later changes a SQL `NATURAL JOIN` predicate, so explicit join conditions are safer in application SQL. The outer-join operators above belong to an extension with missing-value markers, rather than the null-free algebra.
 
 ## Key takeaways
 
@@ -111,4 +107,4 @@ For a natural join, shared attribute names must have compatible domains. With no
 ## Further reading
 
 - [Silberschatz, Korth and Sudarshan: relational model and algebra](https://www.db-book.com/slides-dir/PDF-dir/ch2.pdf)
-- [PostgreSQL 18: constraints](https://www.postgresql.org/docs/18/ddl-constraints.html)
+- [PostgreSQL 18: joined tables](https://www.postgresql.org/docs/18/queries-table-expressions.html)

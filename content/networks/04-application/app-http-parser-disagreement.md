@@ -24,23 +24,18 @@ Transfer-Encoding: chunked
 SMUGGLED
 ```
 
-The attacker chose `Content-Length: 13` by counting every byte after the blank line, CRLFs included:
-
-```formula
-L_CL = 3 B + 2 B + 8 B = 13 B
-L_TE = 3 B + 2 B = 5 B
-L_left = L_CL − L_TE = 8 B
-where
-L_CL: the body length the front end uses, from Content-Length: the line "0" plus its CRLF (3 bytes), the empty line's CRLF (2 bytes) and the 8 letters of SMUGGLED
-L_TE: the body length the back end uses when it decodes chunked framing: the "0" chunk line and the blank line that ends it
-L_left: the bytes the back end has not consumed, which stay in its buffer
-B: bytes
-In words: the two hops disagree by 8 bytes, and those 8 bytes become the start of whatever the back end reads next.
-```
+The attacker chose `Content-Length: 13` by counting every byte after the blank line, CRLFs included: `0` and its CRLF (3 bytes), the empty line's CRLF (2) and the 8 letters of `SMUGGLED`. A chunked parser stops after the first 5 of those bytes. The two hops therefore disagree by 8 bytes:
 
 1. The front end reads 13 body bytes (`0\r\n\r\nSMUGGLED`) and forwards everything as one request.
 2. The back end decodes chunked: the `0` chunk ends the body after 5 bytes.
 3. `SMUGGLED` is left in the back end's buffer on the shared, persistent connection. It becomes the **start of the next request**, which may belong to a different user.
+
+> [!analogy] Real-world analogy: Two clerks counting pages differently
+> A front desk accepts a bundle labelled "13 pages" and passes it to the back office as one customer's file. The back-office clerk ignores the label and stops at the sheet marked "END", which the customer slipped in after page 5. The last 8 pages stay on the clerk's desk and get stapled to the next customer's file.
+>
+> **How it maps:** The front desk is a proxy trusting `Content-Length`; the back office is a server using chunked framing, where the `0` chunk is the "END" sheet. The leftover pages are the bytes that become the start of the next request on the shared connection.
+>
+> **Where it stops:** A clerk might notice odd pages; a parser just carries on, and the attacker can shape the leftover bytes into the start of a request that merges with another user's. Conforming servers avoid the situation altogether by rejecting the ambiguous message or closing the connection.
 
 Attackers use this to poison caches, bypass front-end access controls and hijack other users' requests. Defences:
 

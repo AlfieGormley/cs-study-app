@@ -22,9 +22,16 @@ There are two kinds of random number generator in most languages:
 | Statistical PRNG | `random` | No |
 | CSPRNG | `secrets`, `os.urandom` | Yes |
 
-Python's `random` module uses the **Mersenne Twister**. It passes statistical tests and is fine for simulations and games. But it is completely predictable: its stored array contains 624 words of 32 bits each, plus a position index (the recurrence has a 19,937-bit effective state), so 624 consecutive full 32-bit outputs from the same unchanged generator can reveal enough state to predict subsequent output. Truncated, interleaved or reseeded observations need different analysis. This is not a claim that any 624 API calls reveal every past value.
+Python's `random` module uses the **Mersenne Twister**. It passes statistical tests and is fine for simulations and games, but it is completely predictable. Its internal state is 624 words of 32 bits, and each full 32-bit output is a reversible scrambling of one state word. An attacker who sees 624 consecutive full outputs from the same generator can rebuild the state and predict everything it produces next. (Truncated or interleaved outputs need more work, but "more work" is not a security guarantee.)
 
-A **cryptographically secure PRNG (CSPRNG)** is designed so that a computationally bounded attacker observing feasible amounts of output gains only negligible predictive advantage, assuming a secure seed and implementation. State compromise requires separate recovery and backtracking guarantees. Operating systems expose cryptographic randomness services, with entropy collection and reseeding rules specific to each platform: `getrandom()` on Linux, `getentropy()` / `arc4random` on macOS and BSDs, `BCryptGenRandom` on Windows.
+> [!analogy] Real-world analogy: A dealer who always shuffles the same way
+> A card dealer uses an elaborate shuffle that produces well-mixed-looking hands. But the shuffle is mechanical: the same starting deck always gives the same order. A player who watches enough cards come out can work out where the dealer is in the pattern and call the next cards before they are dealt.
+>
+> **How it maps:** The shuffle is the Mersenne Twister's fixed recurrence, the cards dealt are its outputs, and watching 624 outputs is enough to recover its position. A CSPRNG is a dealer whose next card cannot feasibly be predicted however many earlier cards you have seen.
+>
+> **Where it stops:** A real dealer's shuffles are a little imprecise; the generator is exactly deterministic, which makes prediction certain rather than likely once the state is known. And "looks well mixed" is precisely the property statistical tests check, which is why passing them says nothing about unpredictability.
+
+A **cryptographically secure PRNG (CSPRNG)** is designed so that a computationally bounded attacker observing feasible amounts of output gains only negligible predictive advantage, assuming a secure seed and implementation. What happens if its internal state ever leaks is a separate question; well-designed generators keep reseeding from fresh entropy so that they become unpredictable again. Operating systems expose cryptographic randomness services, with entropy collection and reseeding rules specific to each platform: `getrandom()` on Linux, `getentropy()` / `arc4random` on macOS and BSDs, `BCryptGenRandom` on Windows.
 
 ```python
 import secrets
@@ -39,19 +46,7 @@ pin = secrets.randbelow(10**6)
 print(len(token), len(key))
 ```
 
-This prints `43 32`: 32 random bytes are 43 URL-safe **base64** characters. Base64 writes 6 bits per character, so:
-
-```formula
-L_b64 = ⌈8L / 6⌉
-L_b64 = ⌈8 × 32 / 6⌉ = ⌈42.67⌉ = 43
-where
-L_b64: the length of the base64 text, in characters
-L: the number of random bytes, 32
-8: bits per byte
-6: bits carried by each base64 character (it has 64 = 2^6 symbols)
-⌈ ⌉: ceiling: round up to the next whole number
-In words: 32 bytes are 256 bits, which need 42 full characters plus one more for the last 4 bits; `token_urlsafe` drops base64's `=` padding.
-```
+This prints `43 32`. The 32 random bytes (256 bits) become 43 URL-safe **base64** characters, because each base64 character carries 6 bits and `token_urlsafe` drops base64's `=` padding. The encoding changes how the token looks, not how unpredictable it is: it still holds 256 random bits.
 
 `secrets` and `os.urandom` both read the operating system's CSPRNG. Don't build your own generator, and don't "improve" the OS one by mixing in timestamps or process IDs.
 
@@ -59,8 +54,8 @@ In words: 32 bytes are 256 bits, which need 42 full characters plus one more for
 
 Weak randomness breaks otherwise sound cryptography, often completely:
 
-- **Debian OpenSSL (2008).** A Debian-specific OpenSSL change made key generation predictable. Affected keys had to be replaced after updating the software. Small enumerations often quoted for particular PID limits and architectures are not one universal count covering every key type, architecture and generation path.
-- **Sony PlayStation 3 (2010).** ECDSA needs a per-message secret nonce generated securely, either randomly or by a standard deterministic construction such as RFC 6979. The 2010 fail0verflow presentation demonstrated reused ECDSA nonces in the examined PS3 signing system. Two distinct-message signatures under one key and nonce can expose that signing key. This does not establish that every Sony signature or key was affected.
+- **Debian OpenSSL (disclosed 2008).** A Debian-specific change to OpenSSL (package versions 0.9.8c-1 up to 0.9.8g-9) left its random number generator producing predictable numbers. Keys generated on affected systems came from a small enough set to be guessed by brute force, so they all had to be regenerated after the fix, not just the software updated.
+- **Sony PlayStation 3 (2010).** ECDSA needs a fresh secret nonce for every signature, generated securely either at random or by a standard deterministic construction such as RFC 6979. In 2010 the fail0verflow group showed that the PS3 signing system they examined reused the same nonce. Two signatures on different messages with the same key and nonce let anyone solve for the private signing key.
 - **Shared RSA primes (2012).** Embedded devices generating keys at first boot, before the OS had gathered entropy, produced keys that shared prime factors. A simple GCD across the keys factored them.
 
 > [!tip] Rule of thumb

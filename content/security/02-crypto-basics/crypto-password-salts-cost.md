@@ -32,33 +32,22 @@ Salts are not secret. They don't make a single guess slower; they force the atta
 
 ### Slowness (work factor)
 
-SHA-256 is built for speed.
+SHA-256 is built for speed, which is exactly what an offline attacker wants: every candidate password costs them one fast hash.
 
-> [!note] Content gap: cracking throughput
-> No reproducible GPU or end-to-end password-guessing benchmark was supplied, so fixed rate claims are omitted. Quiz rates are explicitly hypothetical arithmetic inputs.
+A password hash is built to be slow, with a tunable **work factor**. Suppose one verification takes 100 ms on your server. One sequential verifier can then check about ten candidates a second, so a list of a million candidates takes it about 28 hours instead of a fraction of a second.
 
-A password hash is built to be slow, with a tunable **work factor**. The arithmetic for one sequential verifier is simple:
-
-```formula
-r = 1 / t_hash
-r = 1 / (0.1 s) = 10 per s
-t_total = N / r
-t_total = 10^6 / (10 per s) = 10^5 s
-where
-r: guesses checked per second by one sequential verifier
-t_hash: the time for one hash, here 100 ms = 0.1 s
-t_total: the time to try every candidate
-N: the number of candidate passwords, here 10^6 (a million)
-s: seconds; 10^5 s is about 27.8 hours
-ms: milliseconds, thousandths of a second
-In words: a 100 ms hash allows ten guesses a second per verifier, so a million candidates take about a day instead of a fraction of a second.
-```
-
-So a 100 ms hash means about ten sequential verifications per second on that measured setup. It does not cap an attacker at that rate: hardware, parallelism and implementation differ, and ideal identical independent workers could divide the elapsed time by their number if no shared bottleneck intervened. Real memory, bandwidth and coordination limits affect scaling. Benchmark your deployment and use memory-hard settings to raise offline attack costs.
+That figure is a cost per guess, not a cap on the attacker. Attackers bring their own hardware and run many guesses in parallel, so a stolen table is still attacked at whatever rate they can afford. What the work factor does is multiply the price of every guess, for every account. Benchmark on your own production hardware and choose the highest cost your login latency and capacity allow.
 
 ### Memory-hardness
 
-Attackers use GPUs and custom ASICs with thousands of cores. If a hash needs only CPU time, these cores run it massively in parallel. A **memory-hard** function uses memory as a deliberate cost resource; the amount depends on its definition and parameters. Practical password settings often allocate tens of mebibytes or more, but memory hardness alone does not impose that fixed minimum. Memory is expensive to replicate across thousands of cores, so this blunts the attacker's hardware advantage.
+Attackers use GPUs and custom ASICs with thousands of cores. If a hash needs only CPU time, these cores run it massively in parallel. A **memory-hard** function also makes each guess use a deliberate amount of memory, set by its parameters; practical password settings allocate from about 19 MiB (OWASP's Argon2id minimum) to hundreds of mebibytes per guess. Memory is expensive to replicate across thousands of cores, so this blunts the attacker's hardware advantage.
+
+> [!analogy] Real-world analogy: A stolen crate of combination padlocks
+> A thief steals a crate of thousands of combination padlocks, each set by its owner. If every lock were the same model, a pre-printed book showing what the mechanism looks like for each popular combination would let the thief read off many combinations at a glance. If each lock is a slightly different model, the same combination looks different inside each one, so the book is useless and every lock must be tried separately. If each dial is also stiff, every try costs time, and a lock that needs a full workbench per attempt limits how many tries can run side by side.
+>
+> **How it maps:** Each padlock is one stored password hash and its owner's combination is the password. The book is a rainbow table or any precomputed list of hashes. The model number stamped on each lock is the salt: public, but it makes the same password hash differently for every account. The stiff dial is the work factor, and the workbench each attempt needs is memory-hardness.
+>
+> **Where it stops:** A stolen database can be copied to thousands of machines and attacked in parallel, which a crate of physical locks cannot. And none of this helps a lock set to `1234`: a common password is tried early whatever the cost per try.
 
 ## Key takeaways
 - Salts prevent reuse of precomputed work across distinct accounts but are not secrets.

@@ -31,32 +31,32 @@
   },
   {
     "id": "app-dns-wire-q2",
-    "level": "basic",
+    "level": "intermediate",
     "type": "single",
-    "prompt": "A DNS response header has flags `0x8183`. What does it say?",
+    "prompt": "At 10:00 a user's resolver looks up `new.example.com` and receives NXDOMAIN (RCODE 3). The zone's SOA record has a TTL of 3,600 seconds and a MINIMUM field of 600 seconds, and the response carries it in the authority section. At 10:02 you add the name, and your authoritative servers answer for it immediately. At 10:05 the same user, using the same resolver, still gets NXDOMAIN. Assuming the resolver applies no shorter limit of its own, what explains this?",
     "options": [
       {
-        "text": "A response with recursion available, RCODE 3: NXDOMAIN (the name does not exist)",
-        "explanation": "Correct. `0x8183` = `QR 1, RD 1, RA 1`, RCODE 3."
+        "text": "The resolver cached the NXDOMAIN for the SOA record's TTL, so it will keep answering NXDOMAIN until about 11:00",
+        "explanation": "RFC 2308 uses the smaller of the SOA record's TTL and its MINIMUM field. Here that is 600 seconds, not 3,600."
       },
       {
-        "text": "A successful recursive answer",
-        "explanation": "The low 4 bits are the RCODE. Here they are 3, not 0, so it is not a success."
+        "text": "Resolvers never cache negative answers, so the authoritative servers must still be returning NXDOMAIN",
+        "explanation": "Negative caching exists precisely so that missing names do not trigger a fresh authoritative query each time. The prompt says the authoritative servers already have the name."
       },
       {
-        "text": "A query with the truncation bit set",
-        "explanation": "The top bit (QR) is 1, so this is a response; and TC is bit 9 (0x0200), which is clear."
+        "text": "The resolver cached the NXDOMAIN for the smaller of the SOA TTL and MINIMUM, 600 seconds, so it should start resolving at about 10:10",
+        "explanation": "Correct. The negative answer is reused for its negative-caching time, even though the record now exists. Once it expires, the next lookup goes to the authoritative servers and finds the new name."
       },
       {
-        "text": "A SERVFAIL caused by DNSSEC validation failure",
-        "explanation": "SERVFAIL is RCODE 2. RCODE 3 is NXDOMAIN."
+        "text": "Only AAAA lookups are affected; an A lookup for the name would already succeed",
+        "explanation": "That describes NODATA, which is cached per name and type. NXDOMAIN says the name does not exist at all, so it is reused for every type of that name."
       }
     ],
-    "answer": 0,
-    "workedExample": "Write `0x8183` in binary and split it:\n\n```\n1 0000 0 0 1  1 000 0011\nQR Op  AA TC RD RA Z  RCODE\n```\n\n```formula\nQR = 1\nRD = 1\nRA = 1\nRCODE = 0b0011 = 3\nwhere\nQR: the query/response bit; 1 means this message is a response\nRD: recursion desired, copied from the query; 1 means the client asked the server to resolve the name fully\nRA: recursion available; 1 means the server offers recursive resolution\nRCODE: the 4-bit response code in the lowest bits; 0b0011 is binary (base 2) for 3, which means NXDOMAIN\nIn words: this is a response from a recursive server saying the name does not exist.\n```\n\nSo the answer is RCODE 3: **NXDOMAIN**.",
+    "answer": 2,
+    "workedExample": "1. RCODE 3 is NXDOMAIN: the whole name does not exist, for any type.\n2. The resolver caches negative answers (RFC 2308), using the SOA record the authoritative server put in the authority section.\n3. The negative-caching time is the smaller of the SOA record's own TTL (3,600 s) and its MINIMUM field (600 s): 600 seconds, or 10 minutes. RFC 2308 has the authoritative server put that smaller value on the SOA copy in the response.\n4. The answer was cached at 10:00, so this resolver keeps answering NXDOMAIN for any type of `new.example.com` until about 10:10, even though the name was added at 10:02.\n5. Practical lesson: when you plan to create a name, avoid querying it beforehand, or keep the zone's negative-caching time short. A resolver may also impose its own lower cap.",
     "link": {
-      "title": "RFC 1035: Domain Names, Implementation and Specification — IETF",
-      "url": "https://www.rfc-editor.org/rfc/rfc1035"
+      "title": "RFC 2308: Negative Caching of DNS Queries",
+      "url": "https://www.rfc-editor.org/rfc/rfc2308"
     }
   }
 ]

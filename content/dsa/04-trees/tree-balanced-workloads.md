@@ -11,30 +11,13 @@ Start with the distinct-key BST ordering from the previous units. A rotation mus
 
 ## AVL versus red-black
 
-Side by side, the two height bounds for n keys are:
-
-```formula
-h_AVL ≈ 1.44 log_2(n)
-h_RB ≤ 2 log_2(n + 1)
-h_AVL ≈ 1.44 × 19.93 ≈ 28.7
-h_RB ≤ 2 × 19.93 ≈ 39.9
-where
-h_AVL: the greatest possible height of an AVL tree, in edges (an approximation for large n)
-h_RB: the greatest possible height of a red-black tree, in edges
-n: the number of keys stored; the last two lines use n = 10^6, for which log_2(n) ≈ 19.93
-log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n
-≈: approximately equal to
-≤: is at most
-In words: the red-black worst-case height bound is about 40 % higher than the AVL one for the same number of keys; both are logarithmic in n.
-```
-
-(The exact AVL worst case for a million keys is 27, from the recurrence above.)
+The previous units gave each tree's worst-case height. For a million keys, an AVL tree has height at most 27 edges and a red-black tree at most about 40, against 19 for a complete tree. Both are logarithmic in the number of keys n; the difference is a constant factor, traded against how much repair work each update does.
 
 | | AVL | Red-black |
 |---|---|---|
-| Max height | Approx. 1.44 times the base-2 logarithm | Twice the base-2 log of one more key |
+| Max height | Approx. 1.44 times the base-2 logarithm | Twice the base-2 log of the key count plus one |
 | Lookup height bound | Tighter | Looser |
-| Rotations/insert | At most one repair | At most two |
+| Rotations/insert | One single or double rotation | At most two |
 | Rotations/delete | O(log n) | At most three |
 | Extra data | Height or balance factor | 1 colour bit |
 
@@ -46,7 +29,7 @@ Search and single-key updates are O(log n) for n keys, with constant-cost compar
 ## Where they are used
 
 - **Java `TreeMap` and `TreeSet`**: red-black trees, giving logarithmic get, put, floorKey and ceilingKey operations; full sorted iteration over n entries takes O(n).
-- **Java `HashMap`**: since Java 8, when a single bucket grows past 8 colliding entries (in a table of at least 64 buckets), it is converted into a small red-black tree, Comparable keys can use ordering to obtain logarithmic bin searches. Equal-hash keys without usable comparison ordering can still require linear search within a tree bin.
+- **Java `HashMap`**: since Java 8, when a single bucket grows past 8 colliding entries (in a table of at least 64 buckets), it is converted into a small red-black tree. Comparable keys can use ordering to obtain logarithmic bin searches. Equal-hash keys without usable comparison ordering can still require linear search within a tree bin.
 - **C++ `std::map` and `std::set`**: red-black trees in the major standard libraries (libstdc++, libc++, MSVC). The standard requires logarithmic key lookup and key-based updates for n elements, with other operation-specific bounds; erasing through a known iterator is amortised constant time. Insertion preserves iterators, without requiring a specific representation.
 - **Linux kernel**: a generic intrusive rbtree (`lib/rbtree.c`) used widely. The **Completely Fair Scheduler** kept runnable tasks in a red-black tree ordered by `vruntime` (virtual runtime) and ran the leftmost task, caching a pointer to it so picking the next task is O(1). Linux began transitioning fair scheduling toward EEVDF in version 6.6; its implementation uses an augmented red-black tree. `epoll` also stores its watched file descriptors in one.
 
@@ -60,8 +43,7 @@ Search and single-key updates are O(log n) for n keys, with constant-cost compar
 - **Treaps** and **splay trees** balance with randomness or by moving accessed nodes to the root.
 - Python has no built-in balanced tree. `sortedcontainers` uses a list of sorted lists, which offers different locality and update tradeoffs from pointer-based trees.
 
-> [!note] Evidence gap
-> Universal AVL-versus-red-black lookup wins and sortedcontainers performance wins are omitted because no matching workload, implementation and reproducible benchmark were supplied.
+Which of these is fastest for a given program depends on the implementation, the key types, the hardware and the mix of reads and writes. Height bounds tell you what cannot go wrong; only a benchmark of your own workload tells you which is quicker.
 
 ## Key takeaways
 - AVL has a tighter worst-case height bound, but speed needs measurement.

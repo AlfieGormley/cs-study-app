@@ -4,7 +4,7 @@ title: Equivalent query plans
 level: basic
 minutes: 4
 sourceLesson: rel-th-algebra
-summary: Equivalent query plans, with explicit examples and the conditions that make the reasoning valid.
+summary: How a query becomes an operator tree, and the equivalence rules optimisers use to find a cheaper tree.
 ---
 
 ## Local relations
@@ -13,11 +13,11 @@ summary: Equivalent query plans, with explicit examples and the conditions that 
 Student            Enrolled     Course
 sid name year      sid cid      cid dept
  1  Ada   2         1  DB       DB  CS
- 2  Ben   1         1  OS       OS  CS
+ 2  Ben   1         1  AI       AI  CS
  3  Cat   2         1  LA       LA  MA
  4  Dev   3         2  DB
                     3  DB
-                    3  OS
+                    3  AI
 ```
 
 Four students, three courses, six enrolments. Dev is not enrolled on anything. (Course also has a `title` column, left out here for width.) `sid` is the student id, `cid` the course code, and `dept` the department that runs the course.
@@ -33,9 +33,9 @@ FROM student s JOIN enrolled e
 WHERE e.cid = 'DB';
 ```
 
-Written as one algebra expression, read from the inside out:
+Written as one algebra expression, read from the inside out, it joins, filters and then projects:
 
-```formula
+```formula reference
 π name (σ cid='DB' (Student ⋈ Enrolled))
 where
 π: projection: keep only the listed attribute, removing duplicates (SQL's SELECT DISTINCT)
@@ -70,7 +70,7 @@ Because operators have precise meanings, there are rules that transform one expr
 3. **Push selection below a join**: if a condition mentions only one input's attributes, filter that input before joining.
 4. **Push projection down**: drop columns early, keeping any needed by later joins or filters.
 
-```formula
+```formula reference
 σ p∧q (R) ≡ σ p (σ q (R))
 R ⋈ S ≡ S ⋈ R
 (R ⋈ S) ⋈ T ≡ R ⋈ (S ⋈ T)
@@ -87,7 +87,7 @@ p, q: conditions on attributes. In the fourth line, p must mention only R's attr
 π: projection: keep only the listed attributes
 L: the attributes the final result needs
 L_R, L_S: the attributes of R (and of S) that are in L or are needed for the join
-In words: line 1 is rule 1, lines 2 and 3 are rule 2, line 4 is rule 3 and the last line is rule 4.
+In words: splitting an "and" into two filters, swapping or regrouping the inputs of joins, filtering one input before a join when the condition only mentions that input, and dropping columns early while keeping those still needed never change the result.
 ```
 
 Rule 3 is the big one. Take the tree above with 10,000 students and 200,000 enrolments, 1,000 of them for DB:
@@ -99,7 +99,16 @@ pushed:  filter E first -> 1k rows
          join 10k with 1k -> 1k rows
 ```
 
-The pushed plan feeds 1,000 enrolments into the join instead of 200,000. Every cost-based optimiser (Postgres, SQL Server, Oracle, the Spark SQL Catalyst optimiser) applies these algebraic rewrites, then uses statistics to choose among the equivalent trees. The query processing module covers how it picks.
+The pushed plan feeds 1,000 enrolments into the join instead of 200,000.
+
+> [!analogy] Real-world analogy: grading fruit at the farm
+> A supermarket wants only grade-A apples. The farm can ship every apple to the depot and grade them there, or grade them at the farm and ship only grade-A fruit. The shelves end up the same; the second plan moves far less.
+>
+> **How it maps:** The farm's crates are the Enrolled input, the grade check is the selection on `cid`, and the trip to the depot is the join. Pushing the selection below the join is grading before shipping: same final result, much less work in the expensive step.
+>
+> **Where it stops:** Grading early is only allowed when the check uses the crate's own information. A condition that needs both inputs, such as comparing an order total with the customer's credit limit, cannot be pushed to one side, and an optimiser estimates costs from statistics rather than seeing the fruit.
+
+Every cost-based optimiser (Postgres, SQL Server, Oracle, the Spark SQL Catalyst optimiser) applies these algebraic rewrites, then uses statistics to choose among the equivalent trees. The query processing module covers how it picks.
 
 ## Key takeaways
 
@@ -109,4 +118,4 @@ The pushed plan feeds 1,000 enrolments into the join instead of 200,000. Every c
 ## Further reading
 
 - [Silberschatz, Korth and Sudarshan: relational model and algebra](https://www.db-book.com/slides-dir/PDF-dir/ch2.pdf)
-- [PostgreSQL 18: constraints](https://www.postgresql.org/docs/18/ddl-constraints.html)
+- [PostgreSQL 18: using EXPLAIN](https://www.postgresql.org/docs/18/using-explain.html)

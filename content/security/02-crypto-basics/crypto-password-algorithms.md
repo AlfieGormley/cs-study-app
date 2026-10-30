@@ -20,18 +20,7 @@ summary: Argon2id is the OWASP starting choice for new password storage, subject
 
 **scrypt** (Colin Percival, 2009) is a memory-hard password KDF. It's a good choice where Argon2 isn't available.
 
-**bcrypt** (1999) is based on the Blowfish cipher and is still a respectable choice if it is what your framework provides. It has a cost parameter where each +1 doubles the work:
-
-```formula
-W ∝ 2^c
-W_12 / W_10 = 2^12 / 2^10 = 2^2 = 4
-where
-W: the work (and so the time) for one bcrypt hash
-c: the bcrypt cost parameter, at least 10 under OWASP guidance
-W_12, W_10: the work at cost 12 and cost 10
-∝: is proportional to: doubling the right-hand side doubles the left
-In words: bcrypt runs 2^c rounds of its expensive key setup, so raising the cost by 2 makes every hash, yours and the attacker's, four times slower.
-```
+**bcrypt** (1999) is based on the Blowfish cipher and is still a respectable choice if it is what your framework provides. Its cost parameter is an exponent: each +1 doubles the expensive key-setup work, so raising the cost from 10 to 12 makes every new hash, yours and the attacker's, roughly four times slower. Existing hashes keep the cost they were made with until you rehash them.
 
 It only uses the first **72 bytes** of the password. Some libraries truncate silently; the Python `bcrypt` package (version 5) raises an error instead.
 
@@ -46,9 +35,9 @@ OWASP's Password Storage Cheat Sheet gives these minimum settings:
 | bcrypt | cost 10 or more |
 | PBKDF2 | 600,000 iterations, HMAC-SHA-256 |
 
-The scrypt memory figure comes straight from its parameters:
+The scrypt memory figure comes straight from its parameters: memory grows in proportion to both the cost parameter and the block size.
 
-```formula
+```formula reference
 M ≈ 128Nr bytes
 M ≈ 128 × 2^17 × 8 bytes = 2^27 bytes
 M ≈ 128 MiB

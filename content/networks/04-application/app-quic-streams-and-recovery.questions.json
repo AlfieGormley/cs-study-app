@@ -33,30 +33,30 @@
     "id": "app-http2-quic-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A QUIC client opens HTTP/3 request streams. Assume it uses consecutive available bidirectional IDs from the start and no extension consumes them. Which IDs can its first three requests use?",
+    "prompt": "An HTTP/3 page fetches three images on the client's first three request streams, IDs 0, 4 and 8. One packet is lost, and it carried only stream 4's data. Assume no other loss. What happens next, compared with the same page over HTTP/2 on one TCP connection?",
     "options": [
       {
-        "text": "1, 3, 5",
-        "explanation": "That is HTTP/2's numbering for client streams. QUIC encodes stream type in the two low bits."
+        "text": "Streams 0 and 8 keep delivering while stream 4 waits for its retransmission; over HTTP/2 on TCP all three would wait behind the gap",
+        "explanation": "Correct. QUIC orders each stream separately, so only streams with data in the lost packet are blocked. TCP has one ordered byte stream, so a gap holds back every HTTP/2 stream's later bytes."
       },
       {
-        "text": "0, 1, 2",
-        "explanation": "IDs 1 and 2 have type bits `01` (server bidirectional) and `10` (client unidirectional), not client bidirectional."
+        "text": "All three streams wait, because QUIC delivers the whole connection in order just as TCP does",
+        "explanation": "That describes TCP. QUIC's streams are independently ordered; per-stream ordering is exactly what removes transport-level head-of-line blocking across streams."
       },
       {
-        "text": "0, 4, 8",
-        "explanation": "Correct. Client-initiated bidirectional streams have low bits `00`, so they go 0, 4, 8, 12..."
+        "text": "Stream 4's image is abandoned, because QUIC streams are unreliable like UDP",
+        "explanation": "QUIC runs over UDP but its streams are reliable: the lost data is sent again in a new packet. Unreliable delivery needs the separate DATAGRAM extension."
       },
       {
-        "text": "2, 6, 10",
-        "explanation": "Low bits `10` mean client-initiated **unidirectional** streams, used by HTTP/3 for its control and QPACK streams, not requests."
+        "text": "Streams 0 and 8 stall too, because IDs 0, 4 and 8 share the same type bits and so form one ordered group",
+        "explanation": "The two low bits only record who opened a stream and its direction. Streams of the same type are still ordered independently of each other."
       }
     ],
-    "answer": 2,
-    "workedExample": "Stream ID low two bits:\n\n```\n0x0 client bidi   0, 4, 8 ...\n0x1 server bidi   1, 5, 9 ...\n0x2 client uni    2, 6, 10 ...\n0x3 server uni    3, 7, 11 ...\n```\n\n```formula\nid = 4k + t\nid = 4 × 0 + 0, 4 × 1 + 0, 4 × 2 + 0\nid = 0, 4, 8\nwhere\nid: the QUIC stream ID\nk: which stream of that type it is, counting from 0\nt: the type in the two low bits; 0 for client-initiated bidirectional\nIn words: client bidirectional streams are every fourth ID starting at 0.\n```\n\nHTTP/3 requests are client-initiated bidirectional streams, so 0, 4, 8.",
+    "answer": 0,
+    "workedExample": "1. IDs 0, 4 and 8 are client-initiated bidirectional streams (low bits `00`), the type HTTP/3 uses for requests. The type bits create no ordering link between them.\n2. QUIC keeps a separate byte order for each stream, using each STREAM frame's offset.\n3. The lost packet held only stream 4's data, so only stream 4 has a gap. Streams 0 and 8 can hand their data to the application as it arrives.\n4. The sender puts the missing stream 4 bytes in a new packet; stream 4 resumes when they arrive.\n5. Over HTTP/2, all three streams share one TCP byte stream. The gap left by the lost segment holds back every later byte, whichever stream it belongs to, until the retransmission arrives.\n\nCaveat: if the lost packet had carried QUIC frames from several streams, all of those streams would wait.",
     "link": {
-      "title": "RFC 9000: QUIC — IETF",
-      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+      "title": "RFC 9000 section 13: packetization and reliability",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000#section-13"
     }
   },
   {

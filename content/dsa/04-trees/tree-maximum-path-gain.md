@@ -9,33 +9,16 @@ summary: Clamp a negative extension to zero rather than taking it.
 
 Use the binary Node with val, left and right fields introduced earlier. Assume a finite acyclic tree with no shared nodes or concurrent mutation. Throughout this unit n counts nodes and h is the tree height in edges. Recursive examples are limited by Python call depth; arithmetic has unit cost and hash-table operations have expected constant cost. Each example distinguishes working storage from returned output.
 
-### Maximum path sum: post-order with clamping
+## Maximum path sum: post-order with clamping
 
-"Largest sum over any path" (values may be negative). At each node, a path can bend here using the best **downward gain** from each side, but it can only pass **one** side up to the parent, because a path cannot fork. Negative gains are clamped to 0 (just don't extend that way).
+"Largest sum over any path" (values may be negative). At each node, a path can bend here using the best **downward gain** from each side, but it can only pass **one** side up to the parent, because a path cannot fork. Negative gains are clamped to 0: if extending down a side would lower the sum, just don't extend that way.
 
-```formula
-g(x) = v(x) + max(G_L, G_R)
-G_L = max(g(x_L), 0)
-G_R = max(g(x_R), 0)
-g(∅) = 0
-B(x) = v(x) + G_L + G_R
-B(x) = 2 + 1 + 3 = 6
-g(x) = 2 + 3 = 5
-where
-x: a node; x_L and x_R are its left and right children
-x_L: the left child of x
-x_R: the right child of x
-v(x): the value stored at x (may be negative)
-g(x): the gain of x: the largest sum of a path that starts at x and goes down one side only
-G_L: the gain from the left side, clamped so it is never below 0 (0 means "don't extend left")
-G_R: the gain from the right side, clamped the same way
-B(x): the best sum of a path that bends at x, using both sides
-max: the larger of the values listed
-∅: an empty child; its gain is zero, allowing the path to stop at its parent
-In words: a node passes up its own value plus the better of its two clamped gains, and records its value plus both clamped gains as a candidate answer.
-```
+So each node does two things:
 
-The example line is a node of value 2 whose children are leaves of value 1 and 3: the bend sums to 6, and the node offers its parent a one-sided gain of 5.
+- **Records a candidate answer**: its own value plus both clamped gains, the best path that bends here.
+- **Returns its gain** to its parent: its own value plus the *better* of the two clamped gains, the best path that starts here and goes down one side.
+
+For example, a node of value 2 whose children are leaves of value 1 and 3 records a bend of 2 + 1 + 3 = 6, and offers its parent a one-sided gain of 2 + 3 = 5. If the 1 were −1 instead, the left gain would be clamped to 0 and the bend would be 2 + 0 + 3 = 5.
 
 ```python
 def max_path_sum(root):

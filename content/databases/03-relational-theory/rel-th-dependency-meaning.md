@@ -4,12 +4,12 @@ title: What functional dependencies claim
 level: intermediate
 minutes: 5
 sourceLesson: rel-th-functional-deps
-summary: What functional dependencies claim, with explicit examples and the conditions that make the reasoning valid.
+summary: What a functional dependency claims about every pair of rows, why data can refute but never prove one, and how keys fit in.
 ---
 
-Normalisation, covered in the later normal-form units, can sound like a list of rules to memorise. It is not. The normal forms 2NF, 3NF and BCNF are defined using **functional dependencies** (FDs); higher forms also involve multivalued or join dependencies. Once you can reason about FDs, normal forms become mechanical checks.
+Normalisation, covered in the later normal-form units, can sound like a list of rules to memorise. It is not. The normal forms 2NF, 3NF and BCNF are defined using **functional dependencies** (FDs); higher forms also involve multivalued or join dependencies. Once you can reason about FDs, each normal form becomes a question you can answer about a real table: which facts does it repeat, and which rule causes the repetition?
 
-This unit establishes what an FD claims and how to refute a proposed one. The following units derive consequences, compute attribute closures and find every candidate key.
+This unit establishes what an FD claims and how to refute a proposed one. The following units show which other rules follow, and how to find every key.
 
 We use single capital letters for attribute names in abstract examples. Adjacent letters in a card denote an attribute set, never a numeric product; every card defines that convention locally.
 
@@ -17,9 +17,9 @@ We use single capital letters for attribute names in abstract examples. Adjacent
 
 A functional dependency is a universal rule comparing pairs of relational tuples, not a claim about one row in isolation:
 
-> Any two relational tuples that agree on X must also agree on Y.
+> Any two tuples that agree on X must also agree on Y.
 
-```formula
+```formula reference
 X → Y
 for all t_1, t_2 in R:
   t_1[X] = t_2[X] gives t_1[Y] = t_2[Y]
@@ -37,13 +37,13 @@ Take a spreadsheet of enrolments that someone has imported as one table:
 ```
 sid  sname  cid  ctitle      grade
  1   Ada    DB   Databases    A
- 1   Ada    OS   Op Systems   B
+ 1   Ada    AI   AI Basics    B
  2   Ben    DB   Databases    C
 ```
 
 The business rules say a student id identifies one name, a course code identifies one title, and there is one grade per student per course. As FDs:
 
-```formula
+```formula essential
 sid → sname
 cid → ctitle
 {sid, cid} → grade
@@ -60,43 +60,25 @@ In words: the id fixes the name, the code fixes the title, and only the pair (st
 
 An FD is a **constraint on every legal state**, exactly like a key. You get it from the domain, not from the data.
 
+> [!analogy] Real-world analogy: number plates and car models
+> A car-park log lists each car's number plate and model. If two entries share a plate, they should show the same model, because a plate is issued to one vehicle. Two entries with the same plate and different models mean the rule is broken or someone mistyped.
+>
+> **How it maps:** The plate is the determinant X, the model is Y, and every pair of logged sightings is checked: same plate, same model. That pairwise comparison is exactly what an FD constrains.
+>
+> **Where it stops:** Plates can be transferred between cars over the years, so the real rule holds only at one point in time. An FD holds in every legal state of the relation as designed; if the business rule is really "plate at a date determines model", the determinant must include the date.
+
 > [!warning] Data can refute an FD, never prove one
 > If two rows share a `cid` but have different titles, the FD from `cid` to `ctitle` is false (or the data is dirty). But if today's rows all happen to have unique surnames, that does not make surname a determinant of anything. Data-profiling tools that "discover" FDs find candidates that a human must confirm.
 
 ### Trivial and non-trivial FDs
 
-An FD is a **trivial FD** if its right side is part of its left side. Trivial FDs hold in every relation and tell you nothing. The interesting ones are non-trivial.
-
-```formula
-Y ⊆ X
-{sid} ⊆ {sid, cid}
-{sid, cid} → sid
-where
-X, Y: sets of attributes
-→: functionally determines
-⊆: "is a subset of": every attribute in Y is also in X (Y may equal X)
-sid, cid: the student-id and course-code attributes
-{ }: a set of attributes
-In words: X → Y is called trivial exactly when Y ⊆ X. A set of attributes always determines any part of itself, so {sid, cid} → sid is true in every relation and says nothing.
-```
+An FD is a **trivial FD** if its right side is part of its left side: "the student id and course code together determine the student id" holds in every relation and tells you nothing. The interesting rules are non-trivial: their right side contains something new.
 
 ### Keys are FDs too
 
-A set K is a **superkey** of R exactly when K determines every attribute of R:
+A set of attributes is a **superkey** exactly when it determines every attribute of the relation: knowing its values fixes the whole row.
 
-```formula
-K → R
-{sid, cid} → sname, ctitle, grade
-where
-K: a set of attributes of R
-→: functionally determines
-R: here, the set of all attributes of the relation R
-sid, sname, cid, ctitle, grade: the attributes of the enrolment table above
-{ }: a set of attributes
-In words: K is a superkey when knowing K's values fixes every other value in the row.
-```
-
-Here the student id and course code together determine name, title and grade, so it is a superkey. Neither attribute alone determines everything, so it is also a **candidate key**: a superkey with nothing that can be removed.
+In the enrolment spreadsheet, the student id and course code together determine name, title and grade, so that pair is a superkey. Neither attribute alone determines everything (one student has several grades), so the pair is also a **candidate key**: a superkey with nothing that can be removed.
 
 The inference examples treat their stated FDs as the complete basis being analysed. Extra rules such as a singleton domain or a fixed maximum row count can imply additional dependencies; include those assumptions when deciding which states are legal.
 
@@ -108,4 +90,4 @@ The inference examples treat their stated FDs as the complete basis being analys
 ## Further reading
 
 - [Silberschatz, Korth and Sudarshan: relational database design](https://www.db-book.com/slides-dir/PDF-dir/ch7.pdf)
-- [PostgreSQL 18: constraints](https://www.postgresql.org/docs/18/ddl-constraints.html)
+- [Functional dependency (Wikipedia)](https://en.wikipedia.org/wiki/Functional_dependency)

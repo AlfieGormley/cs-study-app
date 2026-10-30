@@ -54,22 +54,7 @@ print(len(q))  # 29
 print(q[:4].hex(" "))  # ab cd 01 00
 ```
 
-The length adds up from the three parts:
-
-```formula
-Q = H + N + T
-Q = 12 B + 13 B + 4 B = 29 B
-N = (1 + 7) B + (1 + 3) B + 1 B = 13 B
-where
-Q: the total query length, in bytes (B)
-H: the fixed header: six 16-bit fields, 12 bytes
-N: the encoded name: a length byte plus "example" (7 letters), a length byte plus "com" (3 letters), then the zero byte for the root
-T: QTYPE and QCLASS, two 16-bit fields, 4 bytes
-B: bytes
-In words: 12 bytes of header, 13 bytes of length-prefixed name and 4 bytes of type and class make the 29 bytes printed above.
-```
-
-Note that the encoded name is two bytes longer than the dotted text `example.com` (11 characters): one length byte per label replaces each `.` separator, plus the leading length and the root byte. A hypothetical reply with flags `0x8180` would decode as `QR=1, RD=1, RA=1` and RCODE 0.
+The 29 bytes are the 12-byte header, 13 bytes of encoded name and 4 bytes of type and class. The encoded name is two bytes longer than the dotted text `example.com` (11 characters): one length byte per label replaces each `.` separator, plus the leading length and the root byte. A hypothetical reply with flags `0x8180` would decode as `QR=1, RD=1, RA=1` and RCODE 0.
 
 ### Resource records and compression
 
@@ -86,20 +71,16 @@ c0 0c  name: pointer to offset 12
 xx xx xx xx  IPv4 address
 ```
 
-The 14-bit offset is what remains after removing the two `11` marker bits, which are worth `0xc000` together:
-
-```formula
-o = P − 0xc000
-o = 0xc00c − 0xc000 = 0x0c = 12
-where
-o: the offset, counted in bytes from the first byte of the DNS message, where the rest of the name is stored
-P: the two pointer bytes read as one 16-bit number, here 0xc00c. Numbers starting 0x are hexadecimal (base 16); 0x0c is 12
-In words: drop the top two marker bits and the remaining number is the byte position to jump to.
-```
-
-The TTL bytes decode the same way, as one big-endian number: `00 00 01 0e` is 1 × 256 + 14 = 270 seconds.
+Clear the two `11` marker bits and the remaining 14 bits are a byte offset from the start of the message: `c0 0c` points to offset 12. The other fields are ordinary big-endian numbers; `00 00 01 0e` is a TTL of 270 seconds.
 
 Offset 12 is where the question's name starts, straight after the header, so `c0 0c` means "example.com". Parsers must guard against pointer loops; a self-referential pointer can otherwise cause an infinite loop or resource exhaustion. Parsers also need bounds and expanded-name-length checks.
+
+> [!analogy] Real-world analogy: "See note 3" in a footnote
+> A book that cites the same long source many times writes it out once, then says "see note 3" each time after that.
+>
+> **How it maps:** The first full copy of `example.com` in the question is the original note, and `c0 0c` is "see the name at byte 12". A pointer can also stand for the end of a name, so `www` followed by a pointer to `example.com` spells `www.example.com`.
+>
+> **Where it stops:** A reader would notice a note that only says "see this note". A parser will not, unless it limits how many pointers it follows, insists that pointers lead to earlier bytes, or keeps the expanded name within 255 bytes. A hostile message can otherwise trap it in a loop.
 
 ## Key takeaways
 - A DNS question combines a fixed header, encoded name and four bytes of type/class.

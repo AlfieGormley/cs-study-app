@@ -19,9 +19,9 @@ IV -> [f] -> [f] -> [f] -> digest
        M1     M2     M3 (+ padding)
 ```
 
-For MD5, SHA-1, SHA-256 and SHA-512, the digest exposes the final chaining state. This does not apply equally to truncated variants such as SHA-384 and SHA-512/256. So anyone who sees the digest can carry on hashing from where it stopped. This is a **length-extension attack**. It doesn't break the hash's three properties, but it breaks naive constructions that hash a secret key followed by the message and use the result as an authentication code:
+For MD5, SHA-1, SHA-256 and SHA-512, the digest exposes the final chaining state. This does not apply equally to truncated variants such as SHA-384 and SHA-512/256. So anyone who sees the digest can carry on hashing from where it stopped. This is a **length-extension attack**. It doesn't break the hash's three properties, but it breaks naive constructions that hash a secret key followed by the message and use the result as an authentication code. The server's tag is the hash's internal state after the key, the message and the hash's own padding. An attacker who sees it can load it as their starting state, hash some extra data of their choosing, and get a valid tag for a longer message: the original message, then that padding, then the extra data. They never learn the key. The card shows this symbolically.
 
-```formula
+```formula reference
 t = H(k ‖ m)
 t′ = H(k ‖ m ‖ p ‖ x)
 where
@@ -33,10 +33,17 @@ p: the padding the hash appended after k ‖ m; it depends only on their total l
 x: extra data the attacker chooses, for example `&amount=1000`
 t′: a valid tag for the longer message m ‖ p ‖ x, computed by restarting the hash from state t
 ‖: concatenation: joining byte strings end to end
-In words: because the digest is the whole internal state, an attacker holding t can keep hashing from where the server stopped and get a valid tag for an extended message, without knowing k.
+In words: because the digest is the whole internal state, an attacker holding one valid tag can keep hashing from where the server stopped and get a valid tag for the message followed by the hash's padding and their own extra data, without knowing the key.
 ```
 
-The attacker only has to guess the length of k (trying a few values is cheap), and the forged message contains the padding bytes p in the middle, which many parsers ignore. The later HMAC unit shows how a specified keyed construction avoids it.
+The attacker only has to guess the length of the key (trying a few values is cheap), and the forged message contains the original padding bytes in the middle, which many parsers ignore. The later HMAC unit shows how a specified keyed construction avoids it.
+
+> [!analogy] Real-world analogy: Continuing a till receipt from its printed total
+> A shop's till prints the total so far after a list of items. Suppose the first few items are hidden, but the printed total is visible. Anyone can carry on from that total, add more items and print a valid-looking longer receipt, without ever seeing the hidden items.
+>
+> **How it maps:** The hidden items are the secret key, the listed items are the message, and the printed total is the digest, which for SHA-256 is the hash's whole internal state. Carrying on from the total is length extension: the attacker resumes hashing from the published state and appends their own data.
+>
+> **Where it stops:** A hash state is not a sum: you cannot subtract items or work backwards to the hidden ones, and the forged message must include the hash's padding bytes in the middle. A truncated or sponge-based hash prints only part of its state, like a receipt that hides part of the total, so it cannot be continued.
 
 ### Sponge (SHA-3)
 

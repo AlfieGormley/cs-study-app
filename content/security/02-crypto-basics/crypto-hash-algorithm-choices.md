@@ -20,7 +20,7 @@ summary: MD5 and SHA-1 lack collision resistance; choose a specified modern hash
 
 **MD5** collisions were found in 2004 and became cheap enough to weaponise. In 2012 the Flame malware used an MD5 collision to forge a code-signing certificate that Windows Update trusted.
 
-**SHA-1** fell in 2017, when Google and CWI Amsterdam published **SHAttered**: two different PDF files with the same SHA-1 hash. It took around 2^63 SHA-1 computations, about 6,500 CPU-years plus 110 GPU-years. Later "chosen-prefix" attacks made it cheaper still. Browser vendors phased out SHA-1-signed public TLS certificates; the 2017 collision is a historical result, not a new benchmark.
+**SHA-1** fell in 2017, when Google and CWI Amsterdam published **SHAttered**: two different PDF files with the same SHA-1 hash. It took around 2^63 SHA-1 computations, about 6,500 CPU-years plus 110 GPU-years. Later "chosen-prefix" attacks made it cheaper still. Browser vendors phased out SHA-1-signed public TLS certificates; the 2017 collision is a historical result, not a new benchmark. In December 2022 NIST announced that SHA-1 should be phased out of its remaining uses by 31 December 2030, after which FIPS-validated cryptographic modules are not to use it (NIST IR 8547, October 2026, repeats this date). Treat any SHA-1 you find in a design today as a migration item, most urgently where collisions matter, such as signatures.
 
 **SHA-2** (SHA-224, SHA-256, SHA-384, SHA-512 and the truncated variants SHA-512/224 and SHA-512/256) is the workhorse: TLS certificates, code signing, Bitcoin, package managers. **BLAKE2** and **BLAKE3** provide modern alternatives. WireGuard specifies BLAKE2s; do not infer that each named product uses both families.
 
@@ -35,3 +35,4 @@ summary: MD5 and SHA-1 lack collision resistance; choose a specified modern hash
 - [NIST FIPS 180-4: secure hashes](https://csrc.nist.gov/pubs/fips/180-4/upd1/final)
 - [NIST FIPS 202: SHA-3](https://csrc.nist.gov/pubs/fips/202/final)
 - [RFC 2104: HMAC](https://www.rfc-editor.org/rfc/rfc2104)
+- [NIST: SHA-1 retirement announcement (December 2022)](https://www.nist.gov/news-events/news/2022/12/nist-retires-sha-1-cryptographic-algorithm)

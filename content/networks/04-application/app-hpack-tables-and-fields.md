@@ -23,19 +23,19 @@ HTTP/1.1 headers repeat on every request: the same `user-agent`, `accept` and co
 | 7 | :scheme | https |
 | 8 | :status | 200 |
 
-**2. An HPACK dynamic table** per connection direction. Fields the encoder chooses to index are added at index **62**, pushing older entries to higher numbers. Each entry is charged a fixed overhead on top of its text, so both sides measure the table's usage the same way:
+**2. An HPACK dynamic table** per connection direction. Fields the encoder chooses to index are added at index **62**, pushing older entries to higher numbers. Both sides charge each entry the same size, so their tables stay identical without any messages about evictions:
 
-```formula
+```formula reference
 E = n + v + 32 B
 where
 E: the size an entry counts against the dynamic table limit, in bytes (B)
 n: the length of the header name, in bytes
 v: the length of the header value, in bytes
 B: bytes
-In words: an entry costs its name plus its value plus a flat 32 bytes of bookkeeping overhead.
+In words: each stored field costs its name length plus its value length plus a flat 32 bytes of bookkeeping, so short fields cost more table space than their text suggests.
 ```
 
-When adding an entry would push the total over the limit (default 4,096 bytes), the oldest entries are evicted first.
+When adding an entry would push the total over the limit (default 4,096 bytes), the oldest entries are evicted first. An entry larger than the whole table empties it and is not stored.
 
 **3. Static Huffman coding** for literal strings, with a code tuned to header text. Common characters take 5 or 6 bits.
 
@@ -50,18 +50,14 @@ The first bits of each field say what follows:
 | `0000xxxx` | Literal, don't index |
 | `0001xxxx` | Literal, never index |
 
-So `:method: GET` is one byte, `1` followed by index 2 in 7 bits. The leading 1 bit is worth 128, so the byte is 128 plus the index:
+So a field already in a table costs one byte while its index is below 127: the top bit is set and the other seven bits hold the index. `:method: GET` (index 2) is `0x82`, and `:scheme: https` (index 7) is `0x87`. A repeated 300-byte cookie that the encoder chose to index can likewise shrink to a byte or two on later requests, as long as it is still in the table.
 
-```formula
-x = 128 + i
-x = 128 + 2 = 130 = 0x82
-where
-x: the value of the single byte that encodes an indexed field for table indices below 127; larger indices need continuation bytes. The result is written in hexadecimal (base 16, marked by the prefix 0x): 0x82 means 8 × 16 + 2 = 130
-i: the field's index in the table; 2 for :method: GET
-In words: an indexed field is one byte whose top bit is set and whose other seven bits hold the index.
-```
-
-By the same rule, `:scheme: https` (index 7) is `0x87`.
+> [!analogy] Real-world analogy: A shared numbered phrasebook
+> Two colleagues on a long radio link each keep an identical notebook. The first time one says a long phrase, both write it down as the newest entry, numbered 62; afterwards the speaker can just say "entry 62". A printed list of common phrases, numbered 1 to 61, came in both notebooks from the start.
+>
+> **How it maps:** The printed list is the static table, the handwritten entries are the dynamic table, and "entry 62" is an indexed field. Writing a phrase down is a literal with incremental indexing; saying it without writing it down is a literal without indexing.
+>
+> **Where it stops:** HPACK renumbers as it goes: the newest entry is always 62, so older entries' numbers grow and the oldest drop off the end. Real notebooks could be compared if they disagreed; HPACK decoders cannot. Both sides must process every field block in the same order and evict the same entries, or every later index points at the wrong field. Each direction of a connection also keeps its own separate table.
 
 ## Key takeaways
 - HPACK shares static and dynamic table state independently in each connection direction.

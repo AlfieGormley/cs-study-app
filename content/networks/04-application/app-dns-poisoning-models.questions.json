@@ -3,27 +3,27 @@
     "id": "app-dns-wire-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "An old resolver always sends queries from UDP port 53 and picks random 16-bit IDs. An off-path attacker can send 200 forged responses before each real answer arrives. Assume independent uniform IDs, 200 distinct timely guesses per attempt, all other checked fields known, and forged data accepted if the ID matches. Roughly how many attempts does a Kaminsky-style attack need for a 50% chance of success?",
+    "prompt": "Before 2008, many operators thought a resolver with random 16-bit DNS transaction IDs was safe enough: an attacker could race forged replies only when a target name's cached answer expired, perhaps once a day. Dan Kaminsky's attack did not change how likely any single forged reply was to match. Why was it nonetheless so much more dangerous?",
     "options": [
       {
-        "text": "About 1",
-        "explanation": "Each attempt covers only 200 of 65,536 IDs, about 0.3%."
+        "text": "It made each forged reply much more likely to carry the right DNS transaction ID",
+        "explanation": "The per-guess odds were unchanged: a random 16-bit ID still has 65,536 possibilities. The danger came from the number of attempts, not from better guesses."
       },
       {
-        "text": "About 65,536",
-        "explanation": "For one distinct guess per independent attempt, 50% success needs about 45,426 attempts, not 65,536. Here 200 guesses per attempt reduce that number substantially."
+        "text": "It required the attacker to sit on the network path and read the resolver's queries",
+        "explanation": "An on-path attacker could simply copy the ID. Kaminsky's attack works off-path, by guessing."
       },
       {
-        "text": "About 230",
-        "explanation": "Correct. Each attempt succeeds with probability 200 in 65,536, about 0.31%. About 227 independent attempts give a 50% overall chance; the worked example solves for that number."
+        "text": "It needed the target's real authoritative servers to be offline",
+        "explanation": "The attack races the real answer rather than waiting for an outage; each fresh query gives a new race."
       },
       {
-        "text": "Impossible, because a cached name can only be attacked once per TTL",
-        "explanation": "That was the pre-2008 belief. Kaminsky's trick queries fresh random subdomains each time, so there is no TTL to wait for."
+        "text": "It asked for fresh random names under the target zone, so no cached answer blocked a new race; forged replies tried to install the attacker's server for the whole zone, and attempts could be repeated at once until one won",
+        "explanation": "Correct. Each attempt still had small odds, but unlimited immediate retries turn small odds into near-certain success, and a won race poisons the delegation for the whole zone rather than one name."
       }
     ],
-    "answer": 2,
-    "workedExample": "The chance that n independent attempts all fail is n copies of (1 − p) multiplied together, so solve for the n that makes overall success one half:\n\n```formula\np = g / 2^16 = 200 / 65,536\np ≈ 0.00305\n1 − (1 − p)^n = 0.5\nn = ln(0.5) / ln(1 − p)\nn ≈ 226.8\n⌈n⌉ = 227\nwhere\np: the probability that one attempt succeeds\ng: distinct forged IDs per attempt, 200\nn: the number of independent attempts for a 50% overall chance\n^: \"to the power of\"; 2^16 = 65,536 possible IDs\nln: the natural logarithm, used to bring n down from the exponent\n⌈ ⌉: ceiling, round up to a whole number of attempts\n≈: approximately equal to\nIn words: at about 0.3% per attempt, 227 fresh attempts give an even chance of a successful cache poisoning, roughly 230.\n```\n\nFresh query names avoid waiting for a particular cached positive answer in this simplified vulnerable-resolver model. This does not establish wall-clock duration or effectiveness against modern caching/validation. With randomised source ports also unknown, the denominator grows:\n\n```formula\np_port = g / (2^16 P)\nwhere\np_port: the per-attempt success probability when the port must also be guessed\ng: distinct forged responses per attempt, 200 here\nP: the number of source ports chosen from independently and uniformly\n^: \"to the power of\"; 2^16 = 65,536\nIn words: each extra port in the pool divides the attacker's per-attempt chance further.\n```",
+    "answer": 3,
+    "workedExample": "1. A forged reply must match an outstanding query, including its 16-bit DNS transaction ID, and arrive before the real answer.\n2. In the old model the attacker could only race when a specific cached name expired, so attempts were rare.\n3. Kaminsky's attacker makes the resolver look up `x71.bank.example`, `x72.bank.example` and so on. None is cached, so every lookup is a new race.\n4. Each forged reply also claims that `bank.example`'s name server is the attacker's machine. Winning one race can redirect the whole zone.\n5. With, say, a 1-in-650 chance per attempt, a few hundred attempts give an even chance of success, and they can be made quickly.\n\nThe fix was not a better ID alone: resolvers added source port randomisation, stricter acceptance rules and, where deployed, DNSSEC validation.",
     "link": {
       "title": "An illustrated guide to the Kaminsky DNS vulnerability — Unixwiz.net",
       "url": "http://unixwiz.net/techtips/iguide-kaminsky-dns-vuln.html"

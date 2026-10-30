@@ -13,14 +13,18 @@ Persistent connections are the default in HTTP/1.1; `Connection: close` opts out
 
 **Pipelining** lets a client send several requests without waiting, but responses must come back **in order**. A slow earlier response can delay later responses. Clients can instead use parallel connections, subject to their own limits.
 
-> [!note] Content omitted after review
-> A universal browser connection count, historical default-pipelining claim and typical keep-alive timeout range are omitted because browser/server versions and configurations were not reliably established here.
-
 One more mechanism: a client uploading a large body can send `Expect: 100-continue` and wait for an interim `100 Continue` before sending the body. If the server would reject the upload (too big, unauthorised), it can send a final error such as `413` or `401` before the body. Clients may send after a bounded wait, so Expect does not guarantee that no body bytes are transmitted.
 
 ### Trace a reusable connection
 
 Suppose a client pipelines three GETs on one TCP connection. The first response needs two seconds of application work, while the next two are ready almost immediately. Those later responses still wait for the first response to finish: HTTP/1.1 cannot interleave their bodies. Even correct Content-Length values only identify boundaries; they do not relax response ordering. Parallel TCP connections can avoid sharing this particular response queue, but each connection has its own setup and congestion state.
+
+> [!analogy] Real-world analogy: A takeaway counter with unnumbered orders
+> A takeaway kitchen cooks three orders at once, but the receipts carry no order numbers, so the counter must hand out food in the order it was ordered. The first order is a slow-cooked dish; the next two are ready in a minute and sit on the pass until it is done.
+>
+> **How it maps:** The counter is one persistent HTTP/1.1 connection and the receipts are pipelined requests. The server may prepare responses in parallel, but with no request identifiers it must send them in request order, so a slow first response delays ready ones. A second counter is a parallel connection, with its own setup cost.
+>
+> **Where it stops:** A real counter could shout names and hand food out in any order. HTTP/1.1 has no equivalent; HTTP/2 adds stream numbers so responses can interleave, although lost packets can still delay them at the TCP layer.
 
 When debugging an apparently idle client, distinguish an application waiting for the earlier response from a parser waiting for EOF. A length-framed response can finish while the connection remains open for reuse. Reading until close discards that distinction. Reusing a connection is safe only when the current message has been fully consumed under the framing rules. A framing error should end reuse rather than leave uncertain bytes for the next request.
 

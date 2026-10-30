@@ -45,22 +45,7 @@ Taking `len(q)` at the start of each round processes exactly one level per round
 
 ### Space for BFS
 
-Here n counts tree nodes, h is height in edges, and w is the maximum number of nodes on any level.
-
-
-The queue can mix the unprocessed part of one level with discovered nodes of the next; its size grows with the tree's **tree width** (the most nodes on any one level), written O(width). A perfect tree is widest at its last level, which holds just over half of all its nodes:
-
-```formula
-W = 2^h = (n + 1) / 2
-n = 2^(h+1) − 1
-W = (15 + 1) / 2 = 8
-where
-W: the number of nodes on the last (widest) level of a perfect binary tree
-h: the height of the tree in edges; the last level is at depth h
-n: the total number of nodes in the perfect tree
-2^h: h copies of 2 multiplied together
-In words: in a perfect binary tree the bottom level holds (n + 1)/2 nodes, just over half the tree, and BFS's queue fills with all of them.
-```
+The queue can mix the unprocessed part of one level with discovered nodes of the next, so its size grows with the tree's **tree width** (the most nodes on any one level), written O(width). In a perfect tree each level holds twice as many nodes as the one above, so the bottom level alone holds just over half of all the nodes. Once the level above it has been processed, every one of those leaves is waiting in the queue.
 
 A perfect tree of 15 nodes has 8 leaves; one of 1,048,575 nodes has 524,288. So BFS uses O(n) memory on bushy trees, while DFS needs only O(log n) there. On a degenerate chain it is the other way round: the queue never holds more than one node, but recursive DFS needs O(n) frames. Iterative pre-order can keep only one pending node on a chain.
 
@@ -72,6 +57,13 @@ For n nodes:
 | Chain | O(n) | O(1) |
 
 BFS has one big advantage: it reaches shallow nodes first. To find the **minimum depth** of a tree, or the nearest node satisfying a condition, BFS can stop as soon as it finds one, while DFS might explore a huge deep subtree first.
+
+> [!analogy] Real-world analogy: searching outwards street by street
+> You want the nearest shop that sells a spare part. You check every shop one street away before any shop two streets away, keeping a list of the side streets still to visit. The first shop that has it is guaranteed to be one of the nearest.
+>
+> **How it maps:** streets away is depth, the list of side streets still to check is the queue, and checking in the order you wrote them down is first in, first out. Stopping at the first shop that has the part is how BFS finds the minimum depth without exploring far-away branches.
+>
+> **Where it stops:** in a bushy tree the "still to check" list becomes enormous, because each level is twice as wide as the one before. Depth-first search needs only enough memory for the current path, but it can wander far down one branch before trying a nearer one.
 
 ## Key takeaways
 - A deque processes the shallowest pending nodes first.

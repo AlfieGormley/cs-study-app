@@ -32,6 +32,13 @@ So the minimum is always at the root. A **max-heap** flips the order rule.
 
 Notice how much weaker this is than a BST. Siblings are unordered (3 is left of 2), and 4 sits deep on the left while 2 is near the top on the right. The binary heap only promises that every path from the root downward is sorted. That weaker promise is what makes it cheap to maintain.
 
+> [!analogy] Real-world analogy: a chain of command
+> In a strict chain of command, every officer outranks the people directly under them, so the most senior person is always at the top. But two officers in different units are never compared, and someone low down in one unit may hold a higher rank than someone near the top of another.
+>
+> **How it maps:** "outranks" is the heap order (for a min-heap, "smaller key ranks higher"), the top officer is the root and the minimum, and units are subtrees. Only each chain from the top downwards is ordered; siblings and cousins are not.
+>
+> **Where it stops:** a real chain of command rarely changes shape. A heap reshuffles on every push and pop, and it must always stay a complete tree, filling each level from the left.
+
 ## The array layout
 
 Because the tree is complete, it packs into an array in level order with no gaps (the tree-structure units):
@@ -43,12 +50,10 @@ val: [1, 3, 2, 4, 8, 7, 6, 9]
 
 The parent and children of any slot are found by arithmetic on its index:
 
-```formula
+```formula essential
 i_parent = ⌊(i − 1) / 2⌋
 i_left = 2i + 1
 i_right = 2i + 2
-i_left = 2 × 1 + 1 = 3
-i_parent = ⌊(7 − 1) / 2⌋ = 3
 where
 i: the index (0-based position) of an item in the array; i_parent applies only when i > 0
 i_parent: the index of that item's parent
@@ -62,23 +67,17 @@ So the 3 at index 1 has children at indices 3 and 4 (4 and 8), and the 9 at inde
 
 Avoiding explicit tree links saves their storage. The array of slots is contiguous, though referenced payload objects need not be; actual cache behaviour depends on layout and access patterns.
 
-The second half of the array is all **leaves**:
+The second half of the array, rounded up, is all **leaves**. A slot has a child only if its left-child index is still inside the array, and that stops being true halfway along. In the 8-item example, indices 4 to 7 (values 8, 7, 6 and 9) are leaves: index 4's left child would be at 9, past the end. This fact matters later: building a heap only needs to repair the first half of the array, and with distinct keys the largest key in a min-heap must be somewhere in the leaf half.
 
-```formula
+```formula reference
 ⌊n / 2⌋ ≤ i ≤ n − 1
-L = ⌈n / 2⌉
-L = ⌈8 / 2⌉ = 4
 where
 n: the number of items in the heap (at least 1)
 i: the index of a leaf; every index in this range is a leaf, and no other index is
-L: the number of leaves
 ⌊ ⌋: floor: round down to a whole number
-⌈ ⌉: ceiling: round up to a whole number, so ⌈4.5⌉ = 5
 ≤: is at most
-In words: in an array heap of n items, the leaves are exactly the last ⌈n/2⌉ slots, starting at index ⌊n/2⌋.
+In words: in an array heap, the leaves start halfway along (rounded down) and run to the end.
 ```
-
-In the 8-item example, indices 4 to 7 (values 8, 7, 6 and 9) are leaves: index 4's left child would be at 9, past the end.
 
 ## Key takeaways
 - A binary heap combines complete shape with parent-child priority order.

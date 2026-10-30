@@ -11,28 +11,13 @@ summary: Small-order public values can collapse a DH shared secret or leak infor
 
 ### Small-subgroup and invalid values
 
-What if Mallory replaces Bob's value with 22, one less than the prime, which behaves like −1? Then:
+What if Mallory replaces Bob's value with 22, one less than the prime? Modulo 23, 22 behaves like minus one: squaring it gives remainder 1. So whatever Alice's secret exponent is, raising 22 to it gives either 1 (even exponent) or 22 (odd exponent).
 
-```formula
-B′ = p − 1 = 22 ≡ −1 (mod 23)
-s = B′^a mod p
-s = 1 if a mod 2 = 0
-s = 22 if a mod 2 = 1
-where
-p: the public prime, 23
-B′: the value Mallory substitutes for Bob's
-a: Alice's secret exponent
-s: the "DH shared secret" Alice computes
-mod: "modulo": x mod n is the remainder after dividing x by n (n is 23 or 2 here)
-≡: "is congruent to": both sides leave the same remainder after dividing by 23
-In words: −1 raised to any power is 1 or −1, depending only on whether the exponent is even or odd, so Alice's secret collapses to one of two values.
-```
+Alice's "secret" is now one of only two values, both known to Mallory, who can simply try both. The value 22 has **order 2**: its powers cycle through just two values. Values with other small orders do similar damage, and if Alice reuses a long-term secret exponent, an attacker who sends several such values and watches which result Alice uses can learn her exponent's remainder modulo each small order, building up information about the secret piece by piece.
 
-Alice's "secret" is now one of only two values, both known to Mallory. Similar tricks with values of small order can leak bits of a long-term private key.
+Defences: use a **safe prime**, use a generator of the large prime-order subgroup, and **validate** received values. In practice: reject 0, 1 and one less than the prime, and check that the received value lies in the large prime-order subgroup. The exact checks belong to the protocol and library you use.
 
-Defences: use a **safe prime**, use a generator of the large prime-order subgroup, and **validate** received values:
-
-```formula
+```formula reference
 p = 2 × q + 1
 23 = 2 × 11 + 1
 2 ≤ B ≤ p − 2
@@ -44,10 +29,10 @@ B: a public value received from the other side
 ≤: is less than or equal to
 mod: "modulo": arithmetic on remainders after dividing by p
 ≡: "is congruent to": both sides leave the same remainder after dividing by p
-In words: choose p so that p − 1 is twice a prime, reject the trivial values 0, 1 and p − 1, and check that the received value lies in the order-q subgroup.
+In words: choose the prime so that one less than it is twice another prime, reject the trivial received values 0, 1 and one less than the prime, and check that the received value lies in the large prime-order subgroup.
 ```
 
-For modulus 23, received value 22 fails the range check. Base 5 fails the order-11 subgroup check because its eleventh power leaves remainder 22 instead of 1. This toy full-group generator therefore does not meet the prime-order-subgroup profile shown in this card. Use the checks required by the protocol and library; not every low-level API enforces all of them.
+For modulus 23, received value 22 fails the range check. Base 5 fails the order-11 subgroup check because its eleventh power leaves remainder 22 instead of 1. This toy full-group generator therefore does not meet the prime-order-subgroup profile described above. Use the checks required by the protocol and library; not every low-level API enforces all of them.
 
 ### Weak or shared groups: Logjam
 

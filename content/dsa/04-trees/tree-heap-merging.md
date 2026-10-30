@@ -37,24 +37,14 @@ merge_k([[1, 4, 9], [2, 3, 10], [5]])
 # [1, 2, 3, 4, 5, 9, 10]
 ```
 
-The binary heap never holds more than k items, so each of the N output items costs one pop and at most one push through a small binary heap:
+The binary heap never holds more than k items, one current head per list, so each of the N output items costs one pop and at most one push through a small heap of about log₂ k levels. That is O(k + N log(k + 1)) time, including scanning empty input lists, with O(k) heap space plus O(N) returned output. Two simpler alternatives are much worse when k is large: scanning all k heads to find each next item costs about k comparisons per item, and merging the lists pairwise one after another can re-copy early items about k times, up to O(N·k), N times k. `heapq.merge` is a lazy version of the heap merge.
 
-```formula
-W ≈ k + N × log_2(k + 1)
-W ≈ 3 + 7 log_2(3 + 1)
-W ≈ 3 + 7 × 2 = 17
-W_pair ≈ N × k
-where
-W: the work for the heap merge, counted in list visits plus heap levels sifted
-k: the number of sorted input lists; 3 in the example above
-N: the total number of items across all the lists; 7 in the example
-log_2(k + 1): the base-2 logarithm of k + 1, about the number of levels in a heap of k items
-W_pair: the work, up to a constant factor, for merging the lists one after another instead
-≈: approximately equal to (these are growth estimates, not exact counts)
-In words: the heap merge visits every list once and then pays about log_2(k) heap levels per output item; merging lists one by one can re-copy items about k times.
-```
-
-So the binary heap merge costs O(k + N log(k + 1)), including scanning empty input lists, with O(k) binary heap space plus O(N) returned output. Merging the lists pairwise one after another would cost up to O(N·k), N times k. `heapq.merge` is a lazy version of this.
+> [!analogy] Real-world analogy: merging sorted piles of post
+> Several sorters each hand you a pile of letters already in postcode order. To make one sorted stack you only ever look at the top letter of each pile: take the smallest, then reveal the next letter from that same pile.
+>
+> **How it maps:** each pile is a sorted input list, the visible top letters are the heap's contents (one head per list), taking the smallest is `heappop`, and revealing the next letter from that pile is the push from the same list.
+>
+> **Where it stops:** with three piles you can spot the smallest top letter at a glance. With a thousand piles, scanning every top would take a thousand looks per letter; the heap keeps the tops arranged so each step walks only about ten levels of the heap.
 
 ## Beyond binary heaps
 

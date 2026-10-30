@@ -4,7 +4,7 @@ title: Preserving three-way facts
 level: advanced
 minutes: 3
 sourceLesson: rel-th-er-modelling
-summary: Preserving three-way facts, with explicit examples and the conditions that make the reasoning valid.
+summary: Why a genuine three-way fact cannot usually be rebuilt from three pairwise tables.
 ---
 
 ## Ternary relationships
@@ -20,7 +20,7 @@ S2 P1 J1
 
 Project into the three pairs and join them back:
 
-```formula
+```formula reference
 SP = π S,P (Supplies)
 PJ = π P,J (Supplies)
 SJ = π S,J (Supplies)
@@ -36,6 +36,13 @@ In words: rejoining the three pairs gives back all three real rows plus at least
 ```
 
 The join returns four rows: the three real ones and an extra one, `S1 P1 J1`. Each pair in it is true (S1 supplies P1 to someone; P1 goes to J1; S1 supplies J1), but S1 never supplied P1 to J1. Without a business rule guaranteeing reconstruction from the pairs, keep a three-way table with all three foreign keys. The displayed counterexample shows that the proposed join dependency does not hold. Join dependencies are the territory of 5NF; merely having three entities does not establish one, and some specially constrained ternary relationships can be decomposed safely.
+
+> [!analogy] Real-world analogy: who brought what to which party
+> Ann brought cake to Bo's party. Ann also brought something to Cy's party. Someone brought cake to Cy's party. Each statement is true, yet "Ann brought cake to Cy's party" does not follow: perhaps she brought crisps there, and Dee brought the cake.
+>
+> **How it maps:** Guest, dish and party are supplier, part and project. The three true pairwise statements are the projections SP, PJ and SJ, and the tempting conclusion is the spurious tuple their join constructs.
+>
+> **Where it stops:** A host could simply ask Ann. A database has only the three pairwise tables, so the invented row looks exactly as real as the others; only a stated business rule (a join dependency) can justify rebuilding triples from pairs.
 
 ## What each pair forgets
 

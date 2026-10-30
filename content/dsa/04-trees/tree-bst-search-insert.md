@@ -36,9 +36,6 @@ Duplicates need a policy. The common choices are to reject them (sets and maps),
 
 ## Search
 
-Here h measures height in edges, and a successful path also includes the root node.
-
-
 Start at the root. If the key is smaller, go left; if larger, go right; stop when you find it or fall off the tree.
 
 ```python
@@ -58,20 +55,16 @@ def search(node, key):
     return node        # None if absent
 ```
 
-Searching for 45: 50 (go left), 30 (go right), 40 (go right), 45. Four nodes visited; the Python code can perform both equality and ordering tests at a node. A search visits one node per level it passes through:
+Searching for 45: 50 (go left), 30 (go right), 40 (go right), 45. Four nodes visited; the Python code can perform both equality and ordering tests at a node.
 
-```formula
-V = D + 1 ≤ h + 1
-V = 3 + 1 = 4
-where
-V: the number of nodes a successful search visits
-D: the depth of the key's node: its number of edges below the root (45 is at depth 3)
-h: the height of the tree in edges (3 for the tree above); no node is deeper than h
-≤: is at most
-In words: a search visits each node on the path from the root to the key, which is one more than the key's depth and never more than the height plus one.
-```
+A search visits one node per level it passes through: one more node than the key's depth, and never more than the tree's height plus one. A miss walks a full path down to an empty child. So the cost depends on the tree's **height**, not directly on how many keys it holds: O(h + 1), where h is the height in edges. The minimum is the leftmost node and the maximum is the rightmost, found the same way.
 
-So the cost is O(h + 1). The minimum is the leftmost node and the maximum is the rightmost, also O(h).
+> [!analogy] Real-world analogy: a higher-or-lower guessing game
+> A friend thinks of a number and you guess; after each guess they say "higher" or "lower", and you never need to consider the other side again. You find the number in a handful of guesses if each guess is near the middle of what is left.
+>
+> **How it maps:** each node's key is a guess, "lower" sends you to the left subtree and "higher" to the right, and the number of guesses is the number of nodes on the search path.
+>
+> **Where it stops:** in the game you choose a fresh middle guess each time. A BST's guesses are fixed by where earlier keys were inserted, so a badly shaped tree keeps guessing near one end and can need as many guesses as there are keys.
 
 ## Insert
 

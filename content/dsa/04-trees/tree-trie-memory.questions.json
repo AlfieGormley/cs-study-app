@@ -3,27 +3,27 @@
     "id": "tree-tries-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A trie for lowercase English uses an **array of 26 child pointers** per node (assuming an eight-byte pointer representation). It has 1,000,000 nodes. Roughly how much memory do the child arrays alone use?",
+    "prompt": "A word-lookup service stores lowercase English words in a trie whose nodes each hold an **array of 26 child pointers**. It has about a million nodes, and memory profiling shows about 200 MB in the child arrays alone, almost all of it null pointers. Which change attacks the cause most directly?",
     "options": [
       {
-        "text": "About 208 MB",
-        "explanation": "Correct. 26 × 8 = 208 bytes per node; 1,000,000 × 208 B ≈ 208 MB, most of it null pointers."
+        "text": "Store only the children that exist, in a small map or sorted list, and compress single-child chains",
+        "explanation": "Correct. A tree of N nodes has only N − 1 child links, so about 25 of every 26 array slots are empty. Storing only real children removes that waste, and compressing chains (a radix tree) also removes most of the nodes."
       },
       {
-        "text": "About 8 MB",
-        "explanation": "8 MB would be one pointer per node. Each node reserves 26 pointer slots whether or not they are used."
+        "text": "Widen each node to 256 slots so that any byte can be stored",
+        "explanation": "That makes each node about ten times bigger, and nearly all the new slots would also be empty."
       },
       {
-        "text": "About 26 MB",
-        "explanation": "This counts 26 bytes per node, forgetting that each pointer is 8 bytes."
+        "text": "Switch to 4-byte pointers or indices",
+        "explanation": "Halving each slot halves the waste but leaves the cause: each node still reserves 26 slots when it typically uses one."
       },
       {
-        "text": "About 5.4 GB",
-        "explanation": "This multiplies by 26 one time too many. Each node has 26 slots of 8 bytes, not 26 × 26."
+        "text": "Add an end-of-word flag to each node",
+        "explanation": "Tries already need that flag to tell words from prefixes. It adds a little memory and does nothing about empty child slots."
       }
     ],
     "answer": 0,
-    "workedExample": "```formula\nM = N × σ p\nM = 1000000 × 26 × 8 B\nM = 208000000 B ≈ 208 MB\nU = (N − 1) / (σ N) ≈ 1/26\nwhere\nM: the memory used by all the child arrays, in bytes\nN: the number of trie nodes, 1,000,000\nσ: sigma, the number of child slots per node: one per letter, 26\np: the size of one pointer, 8 bytes under the stated pointer-size assumption\nU: the fraction of slots that hold a real child link; a tree of N nodes has N − 1 links\nB: byte\nMB: megabyte, a million bytes\n≈: approximately equal to\nIn words: a million nodes with 26 eight-byte slots each take about 208 MB, and only about one slot in 26 is ever used.\n```\n\n1. Per node: 26 slots × 8 bytes = 208 bytes.\n2. Total: about **208 MB**.\n3. About 25/26 of all slots are null, regardless of shape.\n\nThat waste is why real tries use hash maps or sorted lists for children, or compress chains into radix-tree edges.",
+    "workedExample": "1. Each node reserves 26 pointer slots, 208 bytes with 8-byte pointers, so a million nodes need about 208 MB for the arrays, whatever words are stored.\n2. A tree of N nodes has exactly N − 1 parent-child links. Spread over 26 slots per node, only about one slot in 26 can ever be used.\n3. So the cost comes from reserving slots for children that do not exist. The direct fix is to store only real children: a small hash map or a sorted list of (character, child) pairs.\n4. Many trie nodes also sit on single-child chains (unshared word endings). A radix tree merges those chains into labelled edges, cutting the node count as well.\n\nSmaller pointers or adding flags only change constants; they keep reserving space for the 25 missing children.",
     "link": {
       "title": "Tries — Algorithms, 4th ed. (Princeton)",
       "url": "https://algs4.cs.princeton.edu/52trie/"
@@ -33,27 +33,27 @@
     "id": "tree-tries-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "You need to store one million independent approximately uniform SHA-256 values (64 hex characters each) and test membership. A colleague suggests a character trie \"because tries are fast for strings\". Roughly how many trie nodes would it need, and what should you use instead?",
+    "prompt": "You need to store one million independent, approximately uniform SHA-256 values (64 hex characters each) and test membership. A colleague suggests a character trie \"because tries are fast for strings\". What is the main problem with that plan, and what should you use instead?",
     "options": [
       {
-        "text": "About 1,000,000 nodes; the trie is fine",
-        "explanation": "Random hashes share almost nothing beyond the first few characters, so each key needs its own chain of ~59 nodes."
+        "text": "None: the trie stores one node per key, so it is as compact as a hash set",
+        "explanation": "A trie stores one node per distinct prefix, not per key. Random hashes share almost nothing beyond the first few characters, so each key needs its own long chain."
       },
       {
-        "text": "About 64 nodes, since there are only 64 positions",
-        "explanation": "Nodes are per distinct *prefix*, not per position. Millions of different prefixes exist at depth 10."
+        "text": "The trie can hold only 64 nodes, one per character position, so most keys will not fit",
+        "explanation": "Nodes are per distinct *prefix*, not per position. There are millions of different prefixes after just a few characters."
       },
       {
-        "text": "About 59 million nodes; use a hash set",
-        "explanation": "Correct. At depth 5 many prefixes still collide; by depth 7 almost all keys are isolated. Summing expected distinct prefixes across depths gives about 59.68 million non-root nodes, consistent with this rough answer. A hash set stores each key once."
+        "text": "Random hashes stop sharing prefixes after about 5 to 7 characters, so each key needs a private chain of nearly 60 nodes, about 60 million in total; use a hash set",
+        "explanation": "Correct. With 16 choices per character, the number of possible prefixes passes a million at depth 5, and by depth 7 almost every key is alone. The rest of each hash becomes a single-child chain. A hash set stores each key once and answers exact membership directly."
       },
       {
-        "text": "About 16 nodes, one per hex digit",
-        "explanation": "That is the number of children per node, not the size of the trie."
+        "text": "Tries cannot store hexadecimal digits, only letters",
+        "explanation": "A trie can use any alphabet; a hex trie simply has up to 16 children per node."
       }
     ],
     "answer": 2,
-    "workedExample": "1. Each level has at most 16 branches (hex digits), so the number of possible prefixes multiplies by 16 per level. The chance that a key's prefix is shared by no other key follows from that:\n\n```formula\nP_d = 16^d\nP_5 = 16^5 = 1048576\nq_d = (1 − 16^(−d))^(n − 1)\nq_5 ≈ 0.385\nq_7 ≈ 0.996\nwhere\nd: a depth in the trie (prefix length), from 1 to 64\nP_d: the number of possible prefixes of length d\nP_5: the number of possible 5-character prefixes\nn: the number of keys, 1,000,000\nq_d: the probability that a given key's first d characters are shared by no other key\nq_5, q_7: q_d at depths 5 and 7\n16^(−d): one divided by 16^d: the chance one other random key shares a given d-character prefix\n≈: approximately equal to\nIn words: once there are far more possible prefixes than keys, almost every key has its prefix to itself.\n```\n\n2. 16⁵ ≈ 10⁶, so depth 5 is a collision-heavy transition, not near-certain isolation: only about 38.5% of keys are alone there, against 99.6% at depth 7.\n3. Below the collision-heavy transition, almost all suffix characters lie on single-child chains; the exact expected count accounts for sharing at every depth.\n4. The expected non-root node count adds up, at every depth, the expected number of distinct prefixes in use:\n\n```formula\nM = Σ_d 16^d (1 − (1 − 16^(−d))^n)\nM ≈ 59.68 × 10^6\nwhere\nM: the expected number of non-root trie nodes\nΣ_d: the sum over every depth d from 1 to 64\nd: a depth (prefix length)\n16^d: the number of possible prefixes of length d\nn: the number of keys, 1,000,000\n(1 − 16^(−d))^n: the probability that a particular prefix is used by none of the n keys\n10^6: one million\n≈: approximately equal to\nIn words: at each depth, count how many of the possible prefixes at least one key uses; the total over all 64 depths is about 59.68 million nodes.\n```\n\nByte usage depends on representation.\n5. Exact membership with no prefix queries: a hash set (or a Bloom filter, if false positives are acceptable). A radix tree would also collapse the chains, with different memory and update tradeoffs that would need measurement.",
+    "workedExample": "1. Each extra hex character multiplies the possible prefixes by 16. At depth 5 there are just over a million possible prefixes, about one per key, so many keys still share a path: only about 39 % are alone there.\n2. By depth 7 there are about 268 million possible prefixes and about 99.6 % of keys have a path to themselves.\n3. From there to character 64, each key's remaining characters form a private chain of single-child nodes. Adding up the expected distinct prefixes at every depth gives about 60 million nodes, roughly 60 per key.\n4. Exact membership with no prefix queries does not need a trie at all: a hash set stores each key once (or a Bloom filter, if false positives are acceptable). A radix tree would also collapse the chains, with different memory and update trade-offs that would need measuring.",
     "link": {
       "title": "Radix tree — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Radix_tree"

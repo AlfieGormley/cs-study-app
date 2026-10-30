@@ -31,42 +31,40 @@ Every node is coloured red or black, and empty (NIL) children count as black lea
 
 Every root-to-NIL path here has 3 black nodes, counting the root and the NIL itself (for example 13, 8, 1, 6, NIL passes 13, 1 and NIL), and no red node has a red child.
 
+> [!analogy] Real-world analogy: checkpoints on routes out of a city
+> Every route from a city's centre to its edge must pass the same number of official checkpoints. Between checkpoints a route may have at most one optional rest stop, never two in a row. However the roads are laid out, no route to the edge can have more than about twice as many stops as the route with the fewest.
+>
+> **How it maps:** routes are root-to-NIL paths, checkpoints are black nodes, and the equal checkpoint count is the black-height rule. Rest stops are red nodes, and "never two in a row" is the no-red-red rule. Together they cap how many more nodes one path can have than another.
+>
+> **Where it stops:** roads do not change. A red-black tree must recolour and rotate after every insert or delete to keep both rules true, and the rules bound only the *ratio* of path lengths; the logarithmic height comes from also counting how many nodes the checkpoints force into the tree.
+
 ### Why the height is O(log n)
 
-For this proof, count a node's black-height without the node itself: the number of black nodes on a path below it down to NIL, including the NIL (so a NIL has black-height 0). This differs from the inclusive count used in the preceding diagram. Two facts combine:
+Two facts combine:
 
-- No two reds are adjacent, so at least half the nodes on any path below the root are black: the height is at most twice the root's black-height.
-- A subtree whose root has black-height b holds a number of real (non-NIL) nodes that grows exponentially with its black-height (the first line below), which you can prove by mathematical induction: it holds for a NIL, and each child's black-height is at least the parent's black-height minus one.
+- **Paths are within a factor of two.** No two reds are adjacent, so at least half the nodes on any root-to-NIL path are black. Every path has the same number of black nodes, so the longest root-to-NIL path is at most twice as long as the shortest.
+- **Black nodes force lots of nodes.** Ignoring the red nodes, every path down from the root meets the same number of black nodes, so the black nodes alone behave like a perfectly balanced tree. If every path from a node down to NIL meets b black nodes (counting the NIL but not the node itself), that node's subtree must contain at least 2 to the power b, minus 1, real nodes; this can be proved by induction.
 
-```formula
-n_x ≥ 2^{bh(x)} − 1
-h ≤ 2 bh(r)
-n ≥ 2^{h/2} − 1
+Put together, the black levels can only be about log₂ n deep, and the full height at most twice that:
+
+```formula reference
 h ≤ 2 log_2(n + 1)
-h ≤ 2 log_2(10^6 + 1) ≈ 39.9
 where
-x: any node in the tree
-bh(x): the black-height of x: black nodes on any path from just below x down to a NIL leaf, counting the NIL but not x
-n_x: the number of real (non-NIL) nodes in the subtree rooted at x
-r: the root of the tree
-h: the height of the tree, in edges, measured from the root down to the deepest NIL leaf (the height counting only real nodes is one less, so it obeys the same bound)
-n: the number of keys (real nodes) in the whole tree
-2^{bh(x)}: 2 multiplied by itself bh(x) times
-log_2(n + 1): the base-2 logarithm of n + 1: the power you raise 2 to in order to get n + 1
-≥: is at least
+h: the height of the tree, in edges
+n: the number of keys (real, non-NIL nodes) in the tree
+log_2(n + 1): the base-2 logarithm of n + 1: how many times you can halve n + 1 before reaching 1
 ≤: is at most
-≈: approximately equal to
-In words: a red-black tree is at most twice as tall as its black-height, and the black-height can only be about log_2(n), so the height is at most 2 × log_2(n + 1).
+In words: a red-black tree is never more than about twice as tall as the shortest possible binary tree with the same number of keys.
 ```
 
-The third line comes from applying the first line at the root and substituting the second; solving it for h gives the fourth. For a million keys the bound is about 40; actual height depends on the implementation and update history.
+For a million keys the bound is a height of about 40 edges, against 19 for a complete tree and at most 27 for an AVL tree. That looser bound is the price of red-black trees' cheaper repairs. Actual height depends on the implementation and update history.
 
 Java TreeMap uses this red-black structure. Its documented logarithmic get, put and remove guarantees hold for insertion orders such as ascending IDs; ordered arrivals do not turn it into the unbalanced chain studied earlier.
 
 ## Key takeaways
 - NIL child positions count as black for the path invariant.
 - No consecutive red nodes and equal black-height imply logarithmic height.
-- Distinguish inclusive diagram counts from the proof’s exclusive black-height convention.
+- Red-black height is bounded by about twice the best possible; AVL is stricter but may rotate more on deletes.
 
 ## Further reading
 - [Red–black tree — Wikipedia](https://en.wikipedia.org/wiki/Red%E2%80%93black_tree)

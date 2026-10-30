@@ -3,27 +3,27 @@
     "id": "app-ntp-ssh-grpc-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A client's NTP requests reach the server in 4 ms, but responses take 24 ms to return because the client's downlink is congested. The client's clock is in fact correct. What offset will NTP compute?",
+    "prompt": "A client and an NTP server are both known to be correct (each is checked against its own GPS receiver). Yet a single NTP sample, with a 28 ms round-trip delay, computes an offset of about −10 ms: the client appears 10 ms ahead of the server. What best explains this?",
     "options": [
       {
-        "text": "About −10 ms (it will think the client is 10 ms ahead)",
-        "explanation": "Correct. The error is half the difference between the two directions: (4 − 24) / 2 = −10 ms."
+        "text": "The return path from server to client is about 20 ms slower than the request path",
+        "explanation": "Correct. Unequal paths bias the offset by half their difference. A slow return makes the reply look late, so the client seems ahead: (4 − 24) / 2 = −10 ms for 4 ms out and 24 ms back."
       },
       {
-        "text": "0 ms, because NTP corrects for delay",
-        "explanation": "NTP corrects for *total* delay but assumes it is split evenly. It cannot see the asymmetry."
+        "text": "The request path from client to server is about 20 ms slower than the return path",
+        "explanation": "That asymmetry has the opposite sign: a slow outbound trip makes the server's receive time look late, so the client would appear behind, giving a positive offset."
       },
       {
-        "text": "About +20 ms",
-        "explanation": "That is the full difference; the formula halves it."
+        "text": "The server took 10 ms to process the request, and NTP does not subtract processing time",
+        "explanation": "NTP records when the server received and sent, so processing time is removed from the delay and cancels out of the offset."
       },
       {
-        "text": "About −14 ms, half the round trip",
-        "explanation": "Half the round trip (14 ms) is the maximum *possible* error bound, not the error here."
+        "text": "Nothing is wrong: a single sample can be off by any amount, so −10 ms tells you nothing",
+        "explanation": "The error from path asymmetry is bounded by half the round trip, here 14 ms. A −10 ms bias fits within that bound and has a specific cause worth diagnosing."
       }
     ],
     "answer": 0,
-    "workedExample": "Let the true clocks agree, with zero server processing time and the request sent at time 0.\n\n```formula\nθ = ((t_2 − t_1) + (t_3 − t_4)) / 2\nθ = ((0.004 s − 0 s)\n  + (0.004 s − 0.028 s)) / 2\nθ = (0.004 s − 0.024 s) / 2\nθ = −0.010 s\nwhere\nθ: theta, the offset NTP computes (server minus client), in seconds (s)\nt_1: client send time, 0 s\nt_2: server receive time, 0.004 s (4 ms outbound)\nt_3: server send time, also 0.004 s (no processing)\nt_4: client receive time, 0.028 s (24 ms return)\ns: seconds\nIn words: the slow return path makes NTP believe the client is 10 ms ahead, although both clocks are correct.\n```\n\nThis sample falsely suggests a −10 ms correction. A disciplined client filters samples and applies policy before changing its clock. That is why NTP prefers the lowest-delay samples and multiple servers.",
+    "workedExample": "1. Both clocks are known to be right, so the true offset is 0. The computed −10 ms must come from the measurement.\n2. Server processing cancels out of the offset, so the likely cause is unequal one-way delays.\n3. The bias is half of (outbound time − return time). A −10 ms bias means the return trip was about 20 ms longer than the outbound trip.\n4. With a 28 ms round trip, that fits 4 ms out and 24 ms back, for example a congested downlink.\n5. The bias can be at most half the round trip, 14 ms, so this sample is within the possible range.\n\nThe four timestamps alone cannot tell this apart from a real clock error. That is why NTP prefers the lowest-delay samples, compares several servers and filters before adjusting the clock.",
     "link": {
       "title": "RFC 5905: Network Time Protocol Version 4 — IETF",
       "url": "https://www.rfc-editor.org/rfc/rfc5905"

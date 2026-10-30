@@ -42,20 +42,16 @@ print(len(ct))           # 10 + 16-byte tag
 print(aead.decrypt(nonce, ct, aad))
 ```
 
-This prints `26` and then `b'pay Bob 10'`. GCM adds no padding, so the output length is simple:
-
-```formula
-L_out = L_in + 16
-L_out = 10 + 16 = 26 bytes
-where
-L_out: the length of what encrypt() returns (ciphertext with the tag appended), in bytes
-L_in: the length of the plaintext, in bytes (`pay Bob 10` is 10)
-16: the tag length: 128 bits = 16 bytes
-bytes: the unit; one byte is 8 bits
-In words: the ciphertext is exactly as long as the plaintext, plus a 16-byte authentication tag on the end; the 12-byte nonce is stored separately.
-```
+This prints `26` and then `b'pay Bob 10'`. GCM adds no padding: the output is the 10-byte ciphertext with a 16-byte (128-bit) tag appended. The 12-byte nonce is not part of that output.
 
 An invalid tag makes `decrypt` raise `InvalidTag` instead of returning plaintext. Altering `ct`, the nonce or `aad` is intended to fail authentication under the scheme’s forgery bounds; the probability of an accepted forgery is small, not mathematically zero. You store or send the nonce alongside the ciphertext; it doesn't need to be secret, only unique.
+
+> [!analogy] Real-world analogy: A parcel with tamper-evident tape over the label
+> A courier parcel is sealed with tamper-evident tape that also runs over the address label. Anyone can read the label, but if the contents or the label are disturbed the tape shows it, and the recipient refuses the parcel unopened.
+>
+> **How it maps:** The sealed contents are the ciphertext; the readable label under the tape is the associated data, authenticated but not secret; the tape is the authentication tag. A safe AEAD API is the recipient who refuses the parcel: `decrypt` raises `InvalidTag` and hands back nothing.
+>
+> **Where it stops:** A skilled forger can sometimes reseal a parcel; an AEAD forgery has a tiny, bounded probability instead. And there is no parcel equivalent of the nonce rule: reusing a nonce under one key can quietly destroy both secrecy and the tag's protection.
 
 Python `cryptography`'s **Fernet** manages a random IV and token format for authenticated encryption, but has no associated-data interface. Libsodium's low-level `secretbox` requires the caller to supply a nonce; some wrappers manage it. Check the specific API rather than assuming automatic nonce generation.
 

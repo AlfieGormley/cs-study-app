@@ -30,9 +30,16 @@ SSH (RFCs 4251 to 4254) runs over **TCP port 22** and is really three protocols 
 
 1. Both sides send a **version string** in plaintext, such as `SSH-2.0-OpenSSH_9.6`.
 2. Both send **KEXINIT** listing supported algorithms in preference order: key exchange, host key types, ciphers, message authentication codes, compression. Negotiation generally follows client preference among mutually supported choices, subject to compatibility rules between key-exchange and host-key algorithms.
-3. **Key exchange**: an ephemeral Diffie-Hellman exchange, these days `curve25519-sha256` or a post-quantum hybrid. OpenSSH 9.0 made `sntrup761x25519-sha512@openssh.com` the default, and OpenSSH 10.0 switched to `mlkem768x25519-sha256`.
+3. **Key exchange**: an ephemeral Diffie-Hellman exchange, these days `curve25519-sha256` or a post-quantum hybrid. OpenSSH 9.0 (April 2022) made `sntrup761x25519-sha512@openssh.com` the default, and OpenSSH 10.0 (April 2025) switched to `mlkem768x25519-sha256`.
 4. The server **signs** the exchange hash with its **host key**. The client checks that key against `~/.ssh/known_hosts`. Without a preconfigured trusted host key or host-certificate authority, a first connection can prompt for **trust on first use** (TOFU). Independently checking the fingerprint avoids blindly trusting that first peer.
 5. Session keys are derived from the shared secret and the exchange hash. The first exchange hash becomes the permanent **SSH session ID**.
+
+> [!analogy] Real-world analogy: Remembering a regular courier's face
+> The first time a courier arrives claiming to be from your usual firm, you have little to go on, so you take their word and remember their face. On later visits you compare. A stranger claiming to be the same courier is noticed at once.
+>
+> **How it maps:** The face is the server's host key and your memory is `~/.ssh/known_hosts`. Accepting the first visit is trust on first use, and the "host key has changed" warning is spotting a stranger. Checking the fingerprint through another channel, or trusting a host-certificate authority, is like phoning the firm to confirm who they sent.
+>
+> **Where it stops:** If an impostor turns up on that very first visit, you memorise the impostor. And a host key proves the server holds a private key, not that the server is well run: a compromised genuine server still has the right "face".
 
 After the version strings, SSH already uses the **binary packet protocol**; initial key-exchange packets are unencrypted. `NEWKEYS` activates the negotiated protection. The base packet structure is:
 

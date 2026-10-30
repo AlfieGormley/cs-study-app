@@ -4,7 +4,7 @@ title: Sets, bags and SQL results
 level: basic
 minutes: 3
 sourceLesson: rel-th-relational-model
-summary: Sets, bags and SQL results, with explicit examples and the conditions that make the reasoning valid.
+summary: Why relations have no duplicates or order, where SQL tables differ, and the bugs those differences cause.
 ---
 
 ## Consequences of "a set of relational tuples"
@@ -12,7 +12,7 @@ summary: Sets, bags and SQL results, with explicit examples and the conditions t
 Because a relation is a mathematical set, three properties follow directly:
 
 1. **No duplicate relational tuples.** Stating the same fact twice adds nothing. A set cannot contain an element twice.
-2. **No relational tuple order.** Sets are unordered. "The first row" has no meaning; only `ORDER BY` imposes an order on a result.
+2. **No tuple order.** Sets are unordered. "The first row" has no meaning; only `ORDER BY` imposes an order on a result.
 3. **No attribute order.** The heading is a set too, so attributes are identified by name, not position.
 
 > [!warning] SQL tables are not quite relations

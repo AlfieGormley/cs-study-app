@@ -4,7 +4,7 @@ title: Relations as typed facts
 level: basic
 minutes: 4
 sourceLesson: rel-th-relational-model
-summary: Relations as typed facts, with explicit examples and the conditions that make the reasoning valid.
+summary: A relation is a set of typed facts: what headings, domains, degree and cardinality mean, and when a missing row means false.
 ---
 
 In 1970 Edgar F. Codd, a researcher at IBM, published *A Relational Model of Data for Large Shared Data Banks*. Many contemporary database interfaces were navigational: programs followed prescribed paths between records, coupling applications to access structures. Codd argued that applications should be insulated from representation changes.
@@ -32,15 +32,15 @@ The drawing names the relation Student; its attributes are student id `sid`, stu
 
 | Theory | SQL | Meaning |
 |---|---|---|
-| Relation | Table | A set of relational tuples |
+| Relation | Table | A set of tuples |
 | Tuple | Row | One fact |
 | Attribute | Column | A named role |
 | Domain | Type | Allowed values |
 
-- The **relation heading** assigns each attribute name a domain. For example, `year` draws values from the integers one through four. A relational tuple assigns exactly one value from the correct domain to every attribute; a student name cannot occupy the year attribute.
+- The **relation heading** assigns each attribute name a domain. For example, `year` draws values from the integers one through four. A tuple assigns exactly one value from the correct domain to every attribute; a student name cannot occupy the year attribute.
 - An **attribute domain** is the set of values an attribute may take. Codd required **atomic relational values**, indivisible from the database's point of view (more on that in the normal forms lesson).
 - The **relation degree** (or arity) is the number of attributes: 3 above.
-- The **cardinality** is the number of relational tuples: 3 above. It changes as rows are inserted; the degree does not.
+- The **cardinality** is the number of tuples: 3 above. It changes as rows are inserted; the degree does not.
 
 ### Each relational tuple is a true statement
 
@@ -48,11 +48,20 @@ The most useful way to read a relation is as a **relational predicate** with bla
 
 > Student *sid* is called *name* and is in year *year*.
 
-Every relational tuple fills in the blanks to make a true proposition. The relational tuple `(2, Ben, 1)` asserts "Student 2 is called Ben and is in year 1."
+Every relational tuple fills in the blanks to make a true proposition. The tuple `(2, Ben, 1)` asserts "Student 2 is called Ben and is in year 1."
 
-Under the **closed-world assumption**, the stored relation contains every true instance of its stated relational predicate. Only with that completeness assumption does an absent student relational tuple mean that the student does not exist in the population being modelled. SQL `NOT EXISTS` tests for returned rows regardless of whether the database is complete. A missing holiday booking can establish “no recorded holiday”; it cannot establish attendance, because illness and weekends are different facts.
+Under the **closed-world assumption**, the stored relation contains every true instance of its stated relational predicate. Only with that completeness assumption does an absent student tuple mean that the student does not exist in the population being modelled. SQL `NOT EXISTS` tests for returned rows regardless of whether the database is complete. A missing holiday booking can establish “no recorded holiday”; it cannot establish attendance, because illness and weekends are different facts.
 
-```formula
+> [!analogy] Real-world analogy: a guest list at the door
+> A door steward holds the guest list for a private party. If your name is on it, you are invited. If it is missing, the steward concludes you are not invited, because the host promised the list is complete.
+>
+> **How it maps:** The list is a relation, each name is a tuple asserting "this person is invited", and the host's promise of completeness is the closed-world assumption. Without that promise, a missing name would mean only "not recorded".
+>
+> **Where it stops:** A guest list has one column and no types. A relation has a heading of several named, typed attributes, and its predicate decides exactly which question an absence answers: the guest list says nothing about who actually turned up.
+
+The stored tuples must also be correctly typed. The card below states that rule precisely.
+
+```formula reference
 r ⊆ D_sid × D_name × D_year
 where
 r: the finite set of Student relational tuples, shown in sid, name, year order for this card
@@ -67,7 +76,7 @@ In words: The relation may contain only correctly typed combinations. Domains al
 ## Key takeaways
 
 - A relational tuple assigns one correctly typed value to each named attribute.
-- Degree counts attributes; cardinality counts relational tuples. Conclusions under the closed-world assumption require a complete relational predicate.
+- Degree counts attributes; cardinality counts tuples. Conclusions under the closed-world assumption require a complete relational predicate.
 
 ## Further reading
 

@@ -3,27 +3,27 @@
     "id": "app-http2-quic-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "In HPACK, the static table has `:method: GET` at index 2 and `:path: /` at index 4. What single byte encodes `:path: /` as an indexed header field?",
+    "prompt": "On one HTTP/2 connection, a browser's first request sends a 300-byte `cookie` field as a literal **with incremental indexing**, so both sides add it to their dynamic tables. The second request carries the identical cookie. Assume the entry has not been evicted and the encoder chooses to reference it. How is the field most likely sent the second time?",
     "options": [
       {
-        "text": "`0x84`",
-        "explanation": "Correct. Indexed fields are `1` followed by the index in 7 bits: `1 0000100` = 0x84."
+        "text": "As the full 300-byte literal again, because only static-table fields can be indexed",
+        "explanation": "Dynamic-table entries can be referenced exactly like static ones. Indexing the first copy is what makes the second copy cheap."
       },
       {
-        "text": "`0x04`",
-        "explanation": "Without the leading 1 bit, `0x04` begins with `0000`, which means a literal field without indexing, not an indexed field."
+        "text": "Not at all; the decoder assumes any field missing from a request is unchanged from the previous request",
+        "explanation": "HPACK has no 'same as last time' rule. Each field block lists its fields; the saving comes from referring to a table entry, not from omitting the field."
       },
       {
-        "text": "`0x44`",
-        "explanation": "`0x44` = `01 000100`: a literal with incremental indexing whose *name* is from index 4. The value would follow as a string."
+        "text": "As an indexed field: a short reference to the dynamic-table entry, a single byte here",
+        "explanation": "Correct. The entry sits at index 62 or above, so an indexed representation (top bit set, index in the remaining bits) replaces 300 bytes with about one byte while the index stays below 127."
       },
       {
-        "text": "`0x82`",
-        "explanation": "`0x82` is index 2, `:method: GET`."
+        "text": "As a Huffman-coded literal, since Huffman coding is HPACK's only compression",
+        "explanation": "Huffman coding shrinks literal strings, but the big saving for repeated fields comes from the static and dynamic tables."
       }
     ],
-    "answer": 0,
-    "workedExample": "1. Indexed header field representation: top bit 1, then a 7-bit-prefix integer index.\n2. Index 4 in 7 bits: `0000100`.\n3. Prepend the 1: `10000100` = **0x84**.\n\n```formula\nx = 128 + i\nx = 128 + 4 = 132 = 0x84\nwhere\nx: the single byte encoding the indexed field; the leading 1 bit is worth 128. In hexadecimal (base 16, prefix 0x), 132 is 8 × 16 + 4, written 0x84\ni: the static-table index of :path: /, which is 4\nIn words: an indexed field is 128 plus its index, so index 4 becomes the byte 0x84.\n```\n\nSo a typical GET for `/` costs three bytes for method, scheme and path: `82 87 84` (with https).",
+    "answer": 2,
+    "workedExample": "1. The first request used *literal with incremental indexing*, so encoder and decoder both stored the cookie in their dynamic tables, newest at index 62.\n2. On the second request the encoder can send an **indexed field**: one byte with the top bit set and the index in the other seven bits, while the index is below 127.\n3. The decoder looks the index up in its own identical table and reconstructs the full field.\n4. This only works while both tables agree. If the entry had been evicted, or the encoder chose a never-indexed form for a sensitive cookie, the field would go as a literal again.\n\nThis is why HPACK makes repeated headers, such as cookies and user-agent strings, cheap on long-lived connections.",
     "link": {
       "title": "RFC 7541: HPACK — IETF",
       "url": "https://www.rfc-editor.org/rfc/rfc7541"
@@ -33,7 +33,7 @@
     "id": "app-http2-quic-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "An HPACK encoder adds `user-agent: Mozilla/5.0 (X11)` (name 10 bytes, value 17 bytes) to a dynamic table that already holds 4,050 bytes. The table limit is 4,096. What happens?",
+    "prompt": "HPACK counts each dynamic-table entry as its name length plus its value length plus 32 bytes. An encoder adds `user-agent: Mozilla/5.0 (X11)` (name 10 bytes, value 17 bytes) to a dynamic table that already holds 4,050 bytes. The table limit is 4,096. What happens?",
     "options": [
       {
         "text": "The entry is rejected because it does not fit",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "```formula\nE = n + v + 32 B\nE = 10 B + 17 B + 32 B = 59 B\nU = 4,050 B + 59 B = 4,109 B\nU − M = 4,109 B − 4,096 B = 13 B\nwhere\nE: the size the new entry counts against the table, in bytes (B)\nn: the name length, 10 bytes\nv: the value length, 17 bytes\nU: the table usage if nothing were evicted\nM: the table size limit, 4,096 bytes\nB: bytes\nIn words: the entry costs 59 bytes including HPACK's 32-byte overhead, which would overshoot the limit by 13 bytes.\n```\n\n1. Entry size is **59** bytes.\n2. 4,109 > 4,096, so 13 bytes too many.\n3. Evict from the oldest end (highest index) until the sum fits. Even a small old entry (min 33 bytes) frees enough.\n4. Insert the new entry at index 62; everything else shifts up.\n\nBoth sides run the same algorithm, so the decoder's table stays identical without any explicit eviction messages.",
+    "workedExample": "1. Size the new entry with the stated rule: 10 + 17 + 32 = 59 bytes, not 27.\n2. 4,050 + 59 = 4,109 bytes would exceed the 4,096-byte limit by 13 bytes.\n3. HPACK evicts from the oldest end (the highest index) until the new entry fits. Every entry costs at least 32 bytes, so evicting the single oldest entry already frees enough.\n4. The new entry goes in at index 62; everything else shifts up.\n\nBoth sides run the same algorithm on the same field blocks, so the decoder's table stays identical without any explicit eviction messages. Only an entry larger than the whole table is not stored, and that case empties the table.",
     "link": {
       "title": "RFC 7541: HPACK — IETF",
       "url": "https://www.rfc-editor.org/rfc/rfc7541"

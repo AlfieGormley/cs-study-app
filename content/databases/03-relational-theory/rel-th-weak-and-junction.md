@@ -4,7 +4,7 @@ title: Weak entities and relationship keys
 level: advanced
 minutes: 2
 sourceLesson: rel-th-er-modelling
-summary: Weak entities and relationship keys, with explicit examples and the conditions that make the reasoning valid.
+summary: Weak entities, relationship attributes and choosing a junction-table key that matches the real rule.
 ---
 
 ## Weak entities
@@ -20,6 +20,13 @@ CREATE TABLE track (
   PRIMARY KEY (album_id, track_no)
 );
 ```
+
+> [!analogy] Real-world analogy: flat numbers
+> "Flat 3" is not an address on its own: every block on the street may have a flat 3. Only "Flat 3, 12 Mill Lane" identifies a home, and if the block is demolished, its flats go with it.
+>
+> **How it maps:** The block is the owner entity (album), the flat number is the partial key (track number), and the full address is the composite primary key (album id plus track number). Demolishing the block is `ON DELETE CASCADE`.
+>
+> **Where it stops:** When a council renumbers flats, residents simply start using the new number. Changing part of a primary key in a database must update every row that references it, which is one reason many teams add a surrogate id.
 
 `ON DELETE CASCADE` reflects existence dependency: if the album goes, its tracks go. Many teams give tracks a surrogate `track_id` anyway, for shorter foreign keys and URLs. That is fine, as long as `UNIQUE (album_id, track_no)` still enforces the real rule.
 

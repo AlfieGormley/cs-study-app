@@ -18,23 +18,19 @@ AES_k   AES_k   AES_k
 C1      C2      C3
 ```
 
-Written as a formula, each ciphertext block depends only on its own plaintext block and the key:
-
-```formula
-C_i = E_k(P_i)
-where
-C_i: the i-th ciphertext block, 16 bytes (128 bits)
-P_i: the i-th plaintext block, 16 bytes
-i: the block number: 1 for the first block, 2 for the second, and so on
-E_k: one AES block encryption under the secret key k (drawn as AES_k in the diagram)
-k: the secret key, 128, 192 or 256 bits long
-In words: ECB encrypts every 16-byte block on its own with the same key, so it has no memory of the blocks around it.
-```
+Each ciphertext block depends only on its own plaintext block and the key. Nothing carries over from one block to the next, and nothing changes between messages.
 
 The problem: **identical plaintext blocks give identical ciphertext blocks**. Repeated blocks therefore reveal equality directly to an observer. ECB is deterministic per block, so it leaks structure. The famous demonstration encrypts an uncompressed image of the Linux penguin: the "encrypted" image is still clearly a penguin, because every patch of the same colour encrypts to the same bytes.
 
 > [!example] ECB leaks equality
 > Encrypt `YELLOW SUBMARINE` twice in a row (32 bytes) with AES-ECB. The two 16-byte ciphertext blocks are byte-for-byte identical. An observer learns "these blocks are equal" without the key.
+
+> [!analogy] Real-world analogy: A phrasebook code
+> Imagine a secret code book that turns every common phrase into a fixed code word: "meet at noon" is always "PELICAN". Someone who cannot read the code book still notices when "PELICAN" turns up in three messages, and can copy a code word from one message into another.
+>
+> **How it maps:** The code book is AES under one key, each phrase is a 16-byte plaintext block, and each code word is a ciphertext block. ECB's name, Electronic Codebook, comes from exactly this idea: same input, same output, every time.
+>
+> **Where it stops:** ECB works on fixed 16-byte chunks rather than words, so a repeat is only visible when equal data lines up on the same block boundaries. Collecting known plaintext and ciphertext pairs lets an attacker recognise those exact blocks again, but not decrypt new ones: AES itself stays strong, and the leak is equality and rearrangement.
 
 It also lets an attacker cut and paste blocks between messages. If block 3 of one ciphertext encrypts `role=admin;.....`, it can be spliced into another message. Avoid ECB for directly encrypting structured application data; low-level block operations can also be components of correctly designed standard constructions.
 

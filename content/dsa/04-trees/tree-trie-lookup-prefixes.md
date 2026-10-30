@@ -7,23 +7,7 @@ sourceLesson: tree-tries
 summary: Shared prefixes share a root-to-node path.
 ---
 
-In this lesson L is the length of a key in characters and n is the number of keys stored. Hash-table lookup uses expected O(1) probes (a fixed number on average) under suitable hashing assumptions; hashing and equality on uncached strings can cost O(L), in proportion to the key's length. They cannot answer "which words **start with** `inte`?" without scanning every key. Balanced BSTs can, but each comparison is a string comparison:
-
-```formula
-C_BST ≈ L log_2(n)
-C_BST ≈ 10 log_2(10^6) ≈ 10 × 20 = 200
-C_trie ≈ L = 10
-where
-C_BST: the characters compared, in the worst case, to look up one string key in a balanced BST
-C_trie: the characters examined to look up the same key in a trie
-L: the length of the key, in characters; 10 in the example
-n: the number of keys stored; 10^6 (a million) in the example
-log_2(n): the base-2 logarithm of n, about the number of levels a balanced BST search passes; log_2(10^6) ≈ 19.93
-≈: approximately equal to
-In words: a balanced BST makes about log_2(n) string comparisons, each of which may read the whole key, while a trie reads each character of the key once.
-```
-
-So a BST lookup costs O(L log n), and the trie below brings that down to O(L). Real string comparisons often stop at the first differing character, so the BST figure is a worst case.
+In this lesson L is the length of a key in characters and n is the number of keys stored. Hash-table lookup uses expected O(1) probes (a fixed number on average) under suitable hashing assumptions; hashing and equality on uncached strings can cost O(L), in proportion to the key's length. They cannot answer "which words **start with** `inte`?" without scanning every key. Balanced BSTs can, but each step of the search is a whole string comparison: about 20 comparisons for a million keys, each of which may read the full key. So a BST lookup costs O(L log n) in the worst case, and the trie below brings that down to O(L): it reads each character of the key once. Real string comparisons often stop at the first differing character, so the BST figure is a worst case.
 
 A **trie** (from re*trie*val, usually pronounced "try") is built for prefix questions. Instead of storing whole keys in nodes, it stores **one character per edge**. A key is a path from the root, and every key that shares a prefix shares the path for that prefix.
 
@@ -49,6 +33,13 @@ Things to notice:
 - `car` and `card` share three nodes. Shared prefixes are stored once.
 - `do` is a word *and* a prefix of `dog`, so an end-of-word **flag** is needed; you cannot rely on "is it a leaf?".
 - Keys are never compared with each other. Lookup cost depends on the **length of the key**, not on how many keys are stored.
+
+> [!analogy] Real-world analogy: signposts that spell a word
+> Imagine a town where every road junction has signposts labelled with single letters. To reach "card" you take the C turning, then A, then R, then D. Some junctions also carry a plaque saying "a destination ends here".
+>
+> **How it maps:** junctions are trie nodes, each lettered turning is an edge, the route you drive is the key, and the plaque is the end-of-word flag. Everyone heading to a word starting "car" shares the same first three roads, which is how a trie stores shared prefixes once.
+>
+> **Where it stops:** a real junction has only a few turnings. A trie node may need room for every possible next character, which is why tries can use a lot of memory (the trie-memory unit).
 
 ## Insert, search and prefix queries
 

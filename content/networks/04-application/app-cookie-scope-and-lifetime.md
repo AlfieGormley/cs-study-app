@@ -9,7 +9,7 @@ summary: "Omitting Domain creates a host-only cookie; deleting a cookie must mat
 
 ## Cookies: state on a stateless protocol
 
-HTTP is a stateless protocol at the level of its semantics; applications and connections can still maintain state. **HTTP cookies** ([RFC 6265](https://www.rfc-editor.org/rfc/rfc6265), being revised as "6265bis") add state: the server sets a name/value pair, and the browser sends it back on later requests.
+HTTP is a stateless protocol at the level of its semantics; applications and connections can still maintain state. **HTTP cookies** ([RFC 6265](https://www.rfc-editor.org/rfc/rfc6265); its revision, "6265bis", was approved but still waiting in the RFC Editor queue in October 2026) add state: the server sets a name/value pair, and the browser sends it back on later requests.
 
 ```
 HTTP/1.1 200 OK
@@ -40,6 +40,13 @@ One quirk: combining repeated field lines is allowed only when the field definit
 **Lifetime.** `Max-Age` (seconds) takes precedence over `Expires` (a date) if both appear. With neither, the cookie is a *session cookie*, deleted when the browser session ends (though "restore tabs" features often keep them). To delete a cookie, set it again with `Max-Age=0` and matching name, domain/host-only scope and path, in the same partition if applicable.
 
 **Domain.** If you *omit* `Domain`, the cookie is **host-only**: set by `app.example.com`, it goes only to `app.example.com`. Setting `Domain=example.com` allows host matching for `example.com` *and its subdomains*, subject to path, security, SameSite and browser policy. The setting host must domain-match that Domain value. Counter-intuitively, omitting `Domain` is the stricter choice. Public-suffix rejection prevents a tenant from setting a parent-suffix cookie for other tenants. The algorithm has a host-only exception when the setting host itself equals the suffix; lists and browser policy matter.
+
+> [!analogy] Real-world analogy: A wristband for one venue or the whole festival
+> At a festival, a wristband stamped for one tent gets you into that tent only. A wristband stamped for the whole site gets you into every tent, including ones run by contractors you have never met.
+>
+> **How it maps:** A host-only cookie (no `Domain`) is the one-tent band: the browser sends it only to the exact host that set it. `Domain=example.com` is the whole-site band: every subdomain receives it, including a forgotten staging host.
+>
+> **Where it stops:** Browsers also apply path, `Secure`, `SameSite` and privacy rules before sending a cookie, and a sibling host can try to *set* a parent-domain cookie with the same name, which a wristband has no equivalent for. The `__Host-` prefix in the next unit addresses that.
 
 **Path** limits which URLs receive the cookie, but it is **not a security boundary**: same-origin script may access a matching-path document, subject to framing policy. Path does not isolate mutually distrustful applications on one origin; HttpOnly separately restricts script cookie access.
 

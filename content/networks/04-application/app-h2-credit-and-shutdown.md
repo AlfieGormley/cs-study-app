@@ -11,25 +11,21 @@ summary: "Stream and connection windows both limit DATA; credit feedback can con
 
 **HTTP/2 flow control** applies **per stream and per connection**, on top of TCP's receive credit. Before settings, each has a **65,535-byte** window. SETTINGS_INITIAL_WINDOW_SIZE adjusts stream windows; the connection window is enlarged with WINDOW_UPDATE. Sending DATA uses up window; the receiver returns credit with WINDOW_UPDATE. Only DATA payloads count, including their pad-length and padding bytes, but excluding the 9-byte frame header.
 
-This lets a proxy stop one slow download from filling its buffers without stalling the other streams. It also caps speed: the sender can have at most one window of data in flight before the receiver returns credit, and fresh credit takes a round trip to come back. In an ideal feedback model with prompt credit return, negligible transmission time and no other bottleneck:
+This lets a proxy stop one slow download from filling its buffers without stalling the other streams. It also caps speed. The sender can have at most one window of unacknowledged DATA outstanding, and fresh credit takes a round trip to come back, so in an ideal model with prompt credit return and no other bottleneck:
 
-```formula
+```formula essential
 T_max ≈ W / RTT
-T_max ≈ 65,535 B / 0.1 s = 655,350 B/s
-T_max ≈ 655,350 × 8 bit/s ≈ 5.24 Mbit/s
 where
-T_max: the highest sustained rate the window allows, in bytes per second (B/s) or megabits per second (Mbit/s)
-W: the flow-control window, in bytes (B); 65,535 B before SETTINGS changes it
-RTT: the round-trip time for data to reach the receiver and its WINDOW_UPDATE credit to come back, in seconds (s); here 100 ms = 0.1 s
+T_max: the highest sustained rate the window allows, in bytes per second (B/s)
+W: the flow-control window, in bytes (B); 65,535 B unless SETTINGS or WINDOW_UPDATE changes it
+RTT: the round-trip time for DATA to reach the receiver and its WINDOW_UPDATE credit to come back, in seconds (s)
 ≈: approximately equal to; this is an upper bound under ideal assumptions
 B: bytes
 s: seconds
-bit: one binary digit; 8 bits make a byte
-Mbit: megabit, one million bits
-In words: a 64 KiB window over a 100 ms round trip limits one stream to about 5 megabits per second, however fast the link is.
+In words: at most one window of data can be delivered per round trip, so the ceiling grows with a bigger window and shrinks with a longer round trip, regardless of link speed.
 ```
 
-Doubling the window or halving the RTT doubles this ceiling. Delayed credit and other bottlenecks lower it. The receiver can advertise more stream credit; connection credit must also suffice.
+With the default 64 KiB window and a 100 ms round trip, one stream tops out near 5 Mbit/s even on a gigabit link. Doubling the window or halving the RTT doubles the ceiling; delayed credit and other bottlenecks lower it. Because both windows apply, a receiver that wants faster transfers must raise the stream window (SETTINGS_INITIAL_WINDOW_SIZE or WINDOW_UPDATE on the stream) **and** give enough connection credit (WINDOW_UPDATE on stream 0). Opening more streams does not help when the shared connection window is the limit.
 
 ### GOAWAY, RST_STREAM and Rapid Reset
 

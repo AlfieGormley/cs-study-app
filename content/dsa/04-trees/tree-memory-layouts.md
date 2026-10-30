@@ -15,10 +15,7 @@ Use the rooted-tree vocabulary from the earlier unit. The linked examples below 
 
 The usual choice: each node is an object with a value and pointers to its children (and sometimes its parent). It handles any shape. Relinking a known subtree can change only a few pointers, but locating it, maintaining metadata or balancing, and reclaiming removed nodes can require additional work.
 
-The cost is memory and cache behaviour. Object size depends on the interpreter version, build and class layout. Separately allocated nodes can reduce locality, but do not imply a cache miss on every visit.
-
-> [!note] Evidence gap
-> The previous universal 56-byte node size and one-cache-miss-per-node claim are omitted because no pinned interpreter measurement or hardware trace was supplied.
+The cost is memory and cache behaviour. Every node carries its child pointers and, in languages like Python, an object header as well, so a tree of small values can use several times more memory than the values themselves. For example, on 64-bit CPython 3.14 each object of a plain node class with a value and two child fields takes about 100 bytes, not counting the value it refers to; exact sizes depend on the language, version and class layout. Nodes allocated separately can end up scattered in memory, which can make traversals slower than walking an array, although it does not mean a cache miss on every visit.
 
 ### Arrays (implicit trees)
 
@@ -37,12 +34,10 @@ A **complete binary tree** can be stored in a plain array with no pointers at al
 
 Arithmetic on the index then replaces the pointers:
 
-```formula
+```formula essential
 i_left = 2i + 1
 i_right = 2i + 2
 i_parent = ⌊(i − 1) / 2⌋
-i_left = 2 × 1 + 1 = 3
-i_parent = ⌊(5 − 1) / 2⌋ = 2
 where
 i: the index (0-based array position) of a node; i_parent applies only when i > 0, since the root at index 0 has no parent
 i_left: the index of that node's left child
@@ -54,27 +49,16 @@ In words: the children of slot i sit at 2i + 1 and 2i + 2, and you get back to t
 
 So B at index 1 has its left child D at index 3, and F at index 5 has its parent C at index 2. A child index that falls past the end of the array means that child is missing. In Python the same arithmetic is `2*i + 1`, `2*i + 2` and `(i - 1) // 2`, where `//` divides and rounds down.
 
-This is compact and cache-friendly, and it is exactly how binary heaps are implemented (the binary heap units). It wastes space badly for sparse, unbalanced trees, since a missing node still needs a slot. Follow a chain that only ever goes right:
+This is compact and cache-friendly, and it is exactly how binary heaps are implemented (the binary heap units). Because a complete tree has no gaps, every slot from 0 to n − 1 is used and nothing else is needed.
 
-```formula
-i_k = 2i_{k−1} + 2
-i_k = 2^(k+1) − 2
-A = i_h + 1 = 2^(h+1) − 1
-i_3 = 2^4 − 2 = 14
-A = 14 + 1 = 15
-where
-k: the depth of a node in the chain: 0 for the root, 1 for its child, and so on
-i_k: the array index of the chain node at depth k
-i_{k−1}: the array index of the node one level above
-i_h: the index of the deepest node in the chain
-i_3: the index of the chain node at depth 3 (the fourth node)
-h: the height of the chain, in edges
-A: the length the array must have (one more than the last index used)
-2^(k+1): k + 1 copies of 2 multiplied together
-In words: each step right roughly doubles the index, so a right-only chain of height h needs an array of 2^(h+1) − 1 slots although it holds only h + 1 nodes.
-```
+It wastes space badly for sparse, unbalanced trees, since a missing node still needs a slot. Follow a chain that only ever goes right: each step to a right child roughly doubles the index, so a 4-node chain sits at indices 0, 2, 6 and 14 and needs 15 slots to store 4 values. Every node added to the chain roughly doubles the array again, so the implicit layout is a poor fit for any shape that is not close to complete.
 
-A chain of 4 nodes (height 3) sits at indices 0, 2, 6 and 14, so it needs 15 slots to store 4 values.
+> [!analogy] Real-world analogy: numbered plots on a planned estate
+> Imagine an estate where plots are numbered by a fixed rule: plot 0 is at the entrance, the two plots that branch off it are 1 and 2, the two off plot 1 are 3 and 4, and so on. To find a neighbour you never need directions; you work the number out.
+>
+> **How it maps:** a plot number is an array index, the numbering rule is the child and parent arithmetic, and needing no directions is having no pointers. A plot with no house still keeps its number, just as a missing child still reserves an array slot.
+>
+> **Where it stops:** the arithmetic only stays cheap if the plots are filled in order with no gaps. Real estates, like linked trees, can grow anywhere; an implicit tree cannot add a node in the middle without moving others.
 
 ### Trees with many children
 

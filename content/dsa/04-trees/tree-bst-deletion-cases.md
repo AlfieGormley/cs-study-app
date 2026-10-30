@@ -61,7 +61,7 @@ Deleting 30 (two children) from the example: its successor is 35, the leftmost n
 Why does the successor work? It is larger than everything in the left subtree (it came from the right) and smaller than everything else in the right subtree (it was the minimum there). The **in-order predecessor** (maximum of the left subtree) works equally well.
 
 > [!warning] Copying keys is not always allowed
-> Copying the successor's key into the node is fine for a textbook, but in real code other objects may hold references to nodes (iterators, handles). Production implementations such as the Linux rbtree and C++ `std::map` instead **relink** the successor node into the deleted node's position, so a node never changes key.
+> Copying the successor's key into the node is fine for a textbook, but in real code other objects may hold references to nodes (iterators, handles). Production implementations such as the Linux rbtree and common C++ standard-library `std::map` implementations instead **relink** the successor node into the deleted node's position, so a node never changes key.
 
 Always using the successor (known as **Hibbard deletion**) is asymmetric: right subtrees keep losing their minimum, and after long random sequences of inserts and deletes the tree becomes visibly skewed to the left, and searches can degrade relative to the insertion-only random-tree model. Choosing between successor and predecessor does not establish a logarithmic-height guarantee. A self-balancing policy does.
 

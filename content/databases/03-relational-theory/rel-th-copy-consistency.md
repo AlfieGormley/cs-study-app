@@ -4,7 +4,7 @@ title: Copy consistency and correctness
 level: advanced
 minutes: 3
 sourceLesson: rel-th-denormalisation
-summary: Copy consistency and correctness, with explicit examples and the conditions that make the reasoning valid.
+summary: Keeping copies correct: same transaction, triggers, CDC and batch refresh, plus reconciliation and stock safety.
 ---
 
 ## Keeping copies consistent

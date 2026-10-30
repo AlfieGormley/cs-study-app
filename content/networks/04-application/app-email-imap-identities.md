@@ -35,7 +35,14 @@ Lines starting with `*` are **untagged responses**: data or notifications. Key i
 - **Flags** such as `\Seen`, `\Flagged`, `\Deleted` record state. Deleting is two steps: set `\Deleted`, then `EXPUNGE`.
 - **IDLE** lets the server send mailbox updates while the client waits. Connections can time out; the client terminates and reissues IDLE periodically and reconnects when needed.
 
-Applications can also use provider APIs or JMAP (RFC 8620), a JSON-based synchronisation framework over HTTP; JMAP Mail is specified separately in RFC 8621. Deployment prevalence is omitted because this review did not establish a reliable measurement.
+> [!analogy] Real-world analogy: Queue positions and cloakroom tickets
+> In a queue, "third in line" changes whenever someone ahead leaves. A cloakroom ticket number does not: ticket 4827 stays with your coat however many other coats are collected. If the cloakroom closes and reopens with a fresh roll of tickets, old ticket numbers mean nothing.
+>
+> **How it maps:** Queue positions are message sequence numbers, which shift when earlier messages are expunged. Ticket numbers are UIDs, which stay with one message. The fresh roll of tickets is a UIDVALIDITY change: the client must discard its cached UIDs and resynchronise.
+>
+> **Where it stops:** Cloakroom tickets usually run consecutively; IMAP only promises that each new message in the mailbox gets a higher UID than earlier ones, so gaps are normal. A ticket also says nothing about the coat's state, whereas IMAP flags such as `\Seen` change and must be synchronised separately.
+
+Applications can also use provider APIs or JMAP (RFC 8620), a JSON-based synchronisation framework over HTTP; JMAP Mail is specified separately in RFC 8621.
 
 ## Key takeaways
 - IMAP sequence numbers can move; a durable cached identity needs mailbox context, UIDVALIDITY and UID.

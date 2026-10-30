@@ -31,7 +31,7 @@
       2,
       4
     ],
-    "workedExample": "Go through each claim against how GCM is built (CTR encryption plus a GHASH tag):\n\n1. Nonce uniqueness: CTR keystream depends on key and nonce, so repeating it repeats the keystream. **True.**\n2. AAD: it feeds into the tag only. **False**: it's authenticated, not secret.\n3. Tampering: decryption recomputes the tag; any mismatch raises `InvalidTag`. **True.**\n4. Nonce secrecy: not required, it travels with the message. **False.**\n5. Length: the output is the plaintext length plus the tag (formula below). **True.**\n\n```formula\nL_out = L_in + 16\nL_out = 10 + 16 = 26 bytes\nwhere\nL_out: the length of the encrypt() output (ciphertext plus tag), in bytes\nL_in: the plaintext length, in bytes; `pay Bob 10` is 10\n16: the tag length: 128 bits = 16 bytes\nbytes: the unit of data; one byte is 8 bits\nIn words: GCM adds no padding, so the output is exactly the plaintext length plus a 16-byte tag.\n```",
+    "workedExample": "Go through each claim against how GCM is built (CTR encryption plus a GHASH tag):\n\n1. Nonce uniqueness: CTR keystream depends on key and nonce, so repeating it repeats the keystream. **True.**\n2. AAD: it feeds into the tag only. **False**: it's authenticated, not secret.\n3. Tampering: decryption recomputes the tag; any mismatch raises `InvalidTag`. **True.**\n4. Nonce secrecy: not required, it travels with the message. **False.**\n5. Length: GCM adds no padding, so `encrypt()` returns exactly the plaintext length plus the 16-byte tag (a 10-byte message gives 26 bytes). **True.**",
     "link": {
       "title": "NIST SP 800-38D: GCM and GMAC",
       "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
@@ -41,27 +41,27 @@
     "id": "crypto-symmetric-q7",
     "level": "intermediate",
     "type": "single",
-    "prompt": "What does this print?\n\n```python\nimport os\nfrom cryptography.hazmat.primitives\\\n  .ciphers.aead import AESGCM\n\nk = AESGCM.generate_key(\n    bit_length=128)\nn = os.urandom(12)\n# This scheme randomises encryption.\nct = AESGCM(k).encrypt(\n    n, b\"x\" * 100, None)\n# Count nonce, ciphertext and GCM tag.\nprint(len(n + ct))\n```",
+    "prompt": "A developer stores AES-GCM records like this, then reports that every decryption fails with `InvalidTag`:\n\n```python\ndef save(key, data):\n    n = os.urandom(12)\n    ct = AESGCM(key).encrypt(\n        n, data, None)\n    return ct  # stored in the DB\n\ndef load(key, ct):\n    n = os.urandom(12)\n    return AESGCM(key).decrypt(\n        n, ct, None)\n```\n\nWhat is wrong, and what is the fix?",
     "options": [
       {
-        "text": "`100`",
-        "explanation": "This ignores both the 16-byte tag and the 12-byte nonce being concatenated in front."
+        "text": "AES-GCM cannot decrypt data in a different process; keep records in memory",
+        "explanation": "GCM works across processes and machines. The failure comes from the inputs given to decrypt, not where it runs."
       },
       {
-        "text": "`116`",
-        "explanation": "That's `len(ct)` alone (100 + 16-byte tag). The print also includes the 12-byte nonce."
+        "text": "The key is wrong; generate a new key in `load` as well",
+        "explanation": "A different key would also fail. Encryption and decryption must use the same key, and the same nonce."
       },
       {
-        "text": "`128`",
-        "explanation": "Correct. 12 bytes of nonce + 100 bytes of ciphertext + 16 bytes of tag = 128."
+        "text": "Decryption uses a fresh random nonce instead of the one used to encrypt; store the 12-byte nonce with each ciphertext (for example, prepended) and pass it back to decrypt",
+        "explanation": "Correct. The nonce must match. It is not secret, only unique per key, so storing it next to the ciphertext is standard practice."
       },
       {
-        "text": "`144`",
-        "explanation": "144 is incorrect. Even an imagined padding to 112 bytes plus a 16-byte tag and 12-byte nonce totals 140, not 144. AESGCM does not pad."
+        "text": "`InvalidTag` means the data was tampered with; restore the database from backup",
+        "explanation": "InvalidTag means verification failed, which tampering would cause, but here the code itself supplies the wrong nonce for every record."
       }
     ],
     "answer": 2,
-    "workedExample": "1. `n` is 12 bytes (the standard 96-bit GCM nonce).\n2. GCM is a stream-style mode, so the ciphertext is exactly as long as the plaintext: 100 bytes.\n3. `encrypt` appends a 16-byte tag: `len(ct) = 116`.\n4. The key size (128 vs 256 bits) doesn't change the output length.\n5. The print adds the 12-byte nonce in front:\n\n```formula\nL_total = L_nonce + L_pt + L_tag\nL_total = 12 + 100 + 16 = 128 bytes\nwhere\nL_total: the printed length, len(n + ct), in bytes\nL_nonce: the nonce length: 12 bytes (96 bits)\nL_pt: the plaintext length, 100 bytes; GCM ciphertext is the same length\nL_tag: the authentication tag length: 16 bytes (128 bits)\nbytes: the unit of data; one byte is 8 bits\nIn words: nonce plus ciphertext plus tag gives 128 bytes; the key size plays no part.\n```\n\nPrepending the nonce is a common way to store it, since it only has to be unique, not secret.",
+    "workedExample": "1. GCM derives its keystream and its tag mask from the key and the nonce. Decryption must use the same key, nonce and associated data that encryption used.\n2. `load` invents a new random nonce, so the recomputed tag can never match. The safe API raises `InvalidTag` rather than returning garbage plaintext, which is exactly what you want.\n3. The nonce does not need to be secret, only never reused under the same key. Store it with the record, for example `n + ct`, and split off the first 12 bytes in `load`.\n4. Do not \"fix\" this by using a fixed nonce for every record: that would make decryption work while reusing the nonce under one key, which breaks GCM's confidentiality and authentication.",
     "link": {
       "title": "Authenticated encryption (AEAD) — cryptography.io",
       "url": "https://cryptography.io/en/latest/hazmat/primitives/aead/"

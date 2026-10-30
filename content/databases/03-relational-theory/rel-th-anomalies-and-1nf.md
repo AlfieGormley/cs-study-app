@@ -4,14 +4,12 @@ title: Anomalies and first normal form
 level: intermediate
 minutes: 4
 sourceLesson: rel-th-normal-forms
-summary: Anomalies and first normal form, with explicit examples and the conditions that make the reasoning valid.
+summary: Update, insertion and deletion anomalies from mixing facts in one table, and what first normal form asks for.
 ---
 
 Normalisation is the process of splitting a badly structured relation into smaller ones so that **each fact is stored once**. When a fact is stored in many rows, the copies can disagree unless additional constraints or coordinated writes keep them consistent.
 
 Each normal form forbids one kind of redundancy, defined precisely with the functional dependencies (FDs) from the previous lesson. Kent’s informal summary says that non-key facts should depend on the key, its whole value, and no unrelated determinant. It is a mnemonic; the precise prime-attribute conditions in the following units handle cases the mnemonic misses.
-
-The formula below states the business rules. Every card defines its notation locally; an arrow expresses a rule across all legal states, rather than a coincidence in these three rows.
 
 ## The problem: anomalies
 
@@ -25,9 +23,9 @@ oid pid odate  cid cname pname  price qty
  11 P1  03-02  C9  Raj   Bolt   0.20  10
 ```
 
-The business rules, as FDs:
+The shop's business rules, written as FDs, hold in every legal state, not just in these three rows:
 
-```formula
+```formula reference
 oid → odate, cid
 cid → cname
 pid → pname, price
@@ -44,7 +42,7 @@ price: the product's current price (this shop sets one current price per product
 qty: the quantity of that product on that order
 , (on the right of →): both attributes are determined, so oid → odate, cid means oid → {odate, cid}
 { }: a set of attributes; {oid, pid} means "order and product together"
-In words: an order has one date and one customer; a customer has one name; a product has one name and price; and the quantity belongs to an order and product together.
+In words: an order fixes its date and customer; a customer fixes their name; a product fixes its name and current price; and the order and product together fix the quantity.
 ```
 
 The only candidate key is the pair of order id and product id. Three kinds of trouble follow.
@@ -54,6 +52,13 @@ The only candidate key is the pair of order id and product id. Three kinds of tr
 3. **Deletion anomaly.** Delete order 11, Raj's only order, and you lose the fact that customer C9 is called Raj.
 
 All three come from FDs whose left side is not a key: the table is storing facts about customers and products inside rows about order lines.
+
+> [!analogy] Real-world analogy: phone numbers on attendance sheets
+> A club secretary keeps no member list. Instead, every weekly attendance sheet records each attendee's name and phone number. When a member changes number, every old sheet still shows the old one. A new member cannot be recorded until they attend a meeting, and shredding the only sheet a member appears on loses their number entirely.
+>
+> **How it maps:** Each sheet line is an order line, the phone number is a customer fact stored on it, and the three troubles are the update, insertion and deletion anomalies. A separate member list, referenced by membership number, is the normalised Customer table.
+>
+> **Where it stops:** Old attendance sheets might rightly keep the number that was valid on the day, which is a historical fact, not a copy. In a database you must decide which you mean: a current fact belongs in one place, a fact as it was at the time belongs with the event.
 
 ## First normal form (1NF)
 

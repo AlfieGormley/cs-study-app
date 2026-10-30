@@ -1,6 +1,6 @@
 # Concept-first library review
 
-Status: **in progress**. 30/60 modules and 825/1845 active lessons have current independent editorial reviews.
+Status: **in progress**. 34/60 modules and 974/1845 active lessons have current independent editorial reviews.
 
 This report counts only active lesson IDs from module.json. Retired subjects (os, architecture, theory, languages; see `content/retired-subjects.json`) are excluded. Pending modules have not been certified by keyword scans or by renderer tests.
 
@@ -16,13 +16,13 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
 | [databases / SQL Fundamentals](../content/databases/01-sql-fundamentals/verification.json) | Reviewed | 40 | 74 | 18 → 4 | 0 / 4 | 13 → 0 | 270 | 118 | 10 |
 | [databases / Advanced SQL](../content/databases/02-advanced-sql/verification.json) | Reviewed | 41 | 71 | 30 → 3 | 0 / 3 | 22 → 0 | 149 | 135 | 10 |
-| databases / Relational Theory & Normalisation | Pending review | 35 | — | — | — | — | — | — | — |
+| [databases / Relational Theory & Normalisation](../content/databases/03-relational-theory/verification.json) | Reviewed | 35 | 72 | 55 → 34 | 5 / 29 | 96 → 2 | 192 | 160 | 7 |
 | databases / Query Processing & Optimisation | Pending review | 33 | — | — | — | — | — | — | — |
 | databases / PostgreSQL | Pending review | 13 | — | — | — | — | — | — | — |
 | [dsa / Complexity Analysis](../content/dsa/01-complexity/verification.json) | Reviewed | 35 | 81 | 79 → 17 | 13 / 4 | 211 → 14 | 150 | 181 | 24 |
 | [dsa / Arrays, Lists, Stacks & Queues](../content/dsa/02-linear/verification.json) | Reviewed | 32 | 67 | 23 → 15 | 2 / 13 | 31 → 0 | 293 | 181 | 8 |
 | [dsa / Hash Tables & Hashing](../content/dsa/03-hashing/verification.json) | Reviewed | 37 | 73 | 48 → 26 | 4 / 22 | 55 → 0 | 158 | 182 | 9 |
-| dsa / Trees & Heaps | Pending review | 35 | — | — | — | — | — | — | — |
+| [dsa / Trees & Heaps](../content/dsa/04-trees/verification.json) | Reviewed | 35 | 80 | 38 → 15 | 5 / 10 | 37 → 0 | 170 | 207 | 12 |
 | dsa / Sorting & Searching | Pending review | 46 | — | — | — | — | — | — | — |
 | dsa / Graphs | Pending review | 37 | — | — | — | — | — | — | — |
 | dsa / Recursion, Backtracking & Greedy | Pending review | 40 | — | — | — | — | — | — | — |
@@ -39,14 +39,14 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | [networks / Network Foundations & the Link Layer](../content/networks/01-foundations/verification.json) | Reviewed | 37 | 72 | 47 → 19 | 0 / 19 | 34 → 0 | 433 | 139 | 2 |
 | [networks / IP, Addressing & Routing](../content/networks/02-ip-routing/verification.json) | Reviewed | 38 | 84 | 28 → 7 | 2 / 5 | 26 → 0 | 438 | 158 | 16 |
 | [networks / Transport Layer: TCP & UDP in Depth](../content/networks/03-tcp/verification.json) | Reviewed | 43 | 81 | 50 → 17 | 4 / 13 | 39 → 1 | 323 | 195 | 15 |
-| networks / Application-Layer Protocols | Pending review | 42 | — | — | — | — | — | — | — |
+| [networks / Application-Layer Protocols](../content/networks/04-application/verification.json) | Reviewed | 42 | 69 | 41 → 8 | 4 / 4 | 24 → 0 | 633 | 180 | 8 |
 | networks / Network Security | Pending review | 36 | — | — | — | — | — | — | — |
 | networks / Wireless, Mobile & Modern Networks | Pending review | 37 | — | — | — | — | — | — | — |
 | [react / Components and JSX](../content/react/01-components/verification.json) | Reviewed | 8 | 24 | 0 → 0 | 0 / 0 | 0 → 0 | 70 | 102 | 4 |
 | [react / State and Interactive Forms](../content/react/02-state/verification.json) | Reviewed | 9 | 27 | 0 → 0 | 0 / 0 | 0 → 0 | 44 | 80 | 4 |
 | [react / Hooks, Effects and Shared Logic](../content/react/03-hooks/verification.json) | Reviewed | 9 | 27 | 0 → 0 | 0 / 0 | 0 → 0 | 52 | 94 | 3 |
 | [security / Security Fundamentals](../content/security/01-fundamentals/verification.json) | Reviewed | 27 | 66 | 9 → 5 | 3 / 2 | 4 → 0 | 416 | 135 | 8 |
-| security / Cryptography Basics | Pending review | 37 | — | — | — | — | — | — | — |
+| [security / Cryptography Basics](../content/security/02-crypto-basics/verification.json) | Reviewed | 37 | 72 | 55 → 25 | 9 / 16 | 66 → 3 | 251 | 243 | 8 |
 | security / Applied Cryptography & PKI | Pending review | 39 | — | — | — | — | — | — | — |
 | security / Web Application Security | Pending review | 14 | — | — | — | — | — | — | — |
 | security / Systems Security | Pending review | 15 | — | — | — | — | — | — | — |
@@ -146,6 +146,42 @@ None recorded in this editorial review.
 - medium confidence, asql-window-ranking: Dead-heat placing convention (shared place, next skipped). Sporting conventions vary; the analogy now says so. Teaching aid only, not a factual claim the questions rely on.
 - medium confidence, module-wide: Version thresholds for PostgreSQL < 18 (11 CTE fence, 12 inlining, 13 WITH TIES/hash_mem_multiplier, 14 SEARCH/CYCLE, 15 MERGE/run conditions/hash_mem 2.0, 16 optional subquery alias, 17 MERGE RETURNING) and SQLite < 3.51 (3.24 upsert, 3.25 windows, 3.28 GROUPS, 3.30 FILTER, 3.35 RETURNING/MATERIALIZED, 3.44 ordered aggregates, 3.45 JSONB, 3.47 CLI percentile). Each confirmed in the official release notes or version-specific manual; behaviour executed only on PG 18.6 and SQLite 3.51.0/3.53.0.
 - medium confidence, asql-subquery-plans: A hashed SubPlan must fit its size estimate within work_mem x hash_mem_multiplier. Defaults verified in docs; the switch to a plain SubPlan reproduced by lowering work_mem in PG 18.6; the exact estimate rule is in planner source rather than user documentation.
+
+
+## databases / Relational Theory & Normalisation
+
+41 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- C1 rel-th-bcnf-and-prime: 'can pass 3NF but fail BCNF only when it has overlapping composite candidate keys' left the condition vague and unattributed → now states the exact necessary condition (at least two candidate keys, both composite, sharing at least one attribute), says it is necessary but not sufficient, and attributes it to Vincent & Srinivasan (1993). Verifier proved the condition independently (evidence exec/3nf-bcnf-proof.txt) and found 0 counterexamples among 4,556 random 3NF-not-BCNF schemas.
+- C2 rel-th-dependency-sql: 'Optimisers use FDs to drop redundant grouping or sorting columns' → PostgreSQL drops GROUP BY columns determined by the primary key (9.6) or a unique index on NOT NULL columns (18), and uses unique keys to prove a join cannot multiply rows. EXPLAIN on 18.6 showed ORDER BY id, name keeps both sort keys, so the sorting claim was unsupported and removed; nullable unique index was not used.
+- C3 rel-th-functional-deps-q10: the question needed the 3NF prime-attribute rule four units before it is taught, and its option 3 depended on BCNF → prompt now states the 3NF rule in one sentence; option 3 replaced by a distractor that tests the same rule (D fixes A, A is prime); BCNF mentions labelled as a later topic.
+- C4 rel-th-functional-deps-q3: prompt claimed 'The options use functional-dependency notation' although all options are prose → sentence and the generic X → Y card removed.
+- C5 rel-th-algebra-q9: the formula card's In words line referred to '∅ in the options', which no option uses, and option 2's explanation used π notation in prose → prompt rewritten in words; explanation reworded.
+- C6 rel-th-anomalies-and-1nf: dangling sentence 'The formula below states the business rules. Every card defines its notation locally...' (placed before the section that contains the card) removed; lead-in now states the rules hold in every legal state.
+- C7 rel-th-decomposition-algorithms: attribution of the extra key relation in 3NF synthesis now names Biskup, Dayal and Bernstein (1979) (hedged as 'notably'; medium confidence).
+- Formula load (not counted as accuracy corrections): lesson essential cards 13 → 5 (8 demoted to reference where visible prose and the visible In words line carry the relationship: set-operators 'not enrolled', theta join, division, equivalent-plans expression, FD formal definition, shop FDs, 2NF partial dependencies, Teaching FDs); question formula cards 21 → 2 (19 removed from 19 questions; kept only algebra-q1 and algebra-q8, which test reading σ/π/ρ notation that rel-th-restrict-project-rename keeps essential).
+
+**Scope gaps and exclusions:**
+
+- Full prime-attribute NP-completeness proof was not retrieved; primary publisher abstract checked.
+- Flat 1NF and atomicity are explicitly chosen modeling conventions; no universal SQL array prohibition is asserted.
+- Finite native and mathematical cases corroborate examples, while general algebra, normal-form and inference theorems rely on primary definitions and proofs.
+- Workload latency and ratio examples are illustrative calculations rather than measured performance promises. Higher-normal-form unit introduces predicates and counterexamples, not a full chase implementation.
+- No new topics added; as before, the module does not cover temporal/bitemporal modelling, domain-key normal form beyond a mention, or a worked 5NF decomposition.
+- glossary-coverage still lists bold step labels, single-letter attribute names and emphasis words; not converted (consistent with earlier records).
+- Original papers for Vincent & Srinivasan (1993), Biskup/Dayal/Bernstein (1979), Bernstein (1976) and Lucchesi/Osborn (1978) could not be read (paywalled or scanned without OCR); see lowConfidence.
+- Further-reading lists in the denormalisation units still repeat shared module links (pre-existing).
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, rel-th-enumerate-keys: Prime-attribute decision is NP-complete for a schema with an FD basis. Primary Lucchesi/Osborn publisher abstract explicitly states the theorem. Full proof was not retrieved; numerical key enumeration was independently checked.
+- medium confidence, rel-th-anomalies-and-1nf: Atomicity and 1NF under the explicitly chosen classical flat convention. Textbook-author source supports flat domains; relational domain conventions vary. The lesson and array question explicitly declare their flat convention.
+- medium confidence, rel-th-bcnf-and-prime: Attribution of the 3NF-not-BCNF overlapping-composite-keys condition to Vincent & Srinivasan (1993), IPL 48(6):281–283. The mathematical condition is high confidence (verifier's own proof plus exhaustive random check); the paper itself is paywalled and its zbMATH summary is withheld, so the attribution rests on Crossref metadata and Wikipedia's citation of it. Zaniolo (1982) is not cited in the lesson; it concerns elementary-key normal form.
+- medium confidence, rel-th-decomposition-algorithms: The extra candidate-key relation in 3NF synthesis comes from later refinements of Bernstein (1976), notably Biskup, Dayal & Bernstein (1979). Bernstein 1976 PDF available only as scanned images; Biskup et al. 1979 abstract elided by the publisher. Bibliographic records (Semantic Scholar, bibtex.github.io) and an R implementation citing Bernstein's synthesis with an optional key relation support the wording, which is hedged.
+- medium confidence, rel-th-enumerate-keys: Lucchesi and Osborn (1978) showed that deciding whether an attribute is prime is NP-complete. Original paper paywalled; confirmed by the abstract of Demetrovics & Thi (Acta Cybernetica 11(3), 1994), which states the result and cites Lucchesi & Osborn, plus Crossref metadata for the 1978 JCSS paper.
+- medium confidence, rel-th-precomputed-results: Oracle fast-refresh materialised views and SQL Server indexed views maintain results incrementally, with query-shape restrictions. Carried from the earlier verified text; not re-fetched in this pass (vendor docs listed in the top-level sources).
 
 
 ## dsa / Complexity Analysis
@@ -329,6 +365,65 @@ None recorded in this editorial review.
 - medium confidence, hash-prob-bloom-limits: RocksDB ~10 bits/key ≈ 1%; Cassandra bloom_filter_fp_chance; Akamai one-hit wonders. Verified against the RocksDB wiki, Cassandra docs and Maggs & Sitaraman (2015, an un-refereed CCR editorial note); product docs are time-sensitive.
 - medium confidence, hash-prob-count-min: Caffeine's W-TinyLFU uses a 4-bit Count-Min sketch. Verified in FrequencySketch.java on Caffeine master; implementation detail of a third-party library that could change.
 - medium confidence, hash-collision-swiss-designs: Go 1.24 maps use Swiss tables with eight-slot groups; Abseil SSE2 compares 16 control bytes and allows 7/8 load. Verified in the Go blog/release notes and Abseil raw_hash_set.h; implementation details of evolving libraries.
+
+
+## dsa / Trees & Heaps
+
+37 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- tree-null-serialisation: the author's analogy edit had absorbed two visible facts ('Level-order with nulls … works too'; JSON/Protocol Buffers schemas) into the collapsed 'Where it stops' paragraph → restored as visible prose before the analogy.
+- tree-red-black-invariants analogy: 'no route … can be more than about twice as long as the shortest one' implied distance → the red-black bound is on node counts: 'twice as many stops as the route with the fewest'; mapping line now 'how many more nodes one path can have'.
+- tree-morris-threads analogy: the arrow was chalked on arrival at a dead end, but Morris creates the thread from the current node before descending and removes it on the return visit → arrow placed at the passage's last dead end (the in-order predecessor) before entering, rubbed out on return; mapping names the junction as the current node.
+- tree-binary-counts analogy limit: 'every round happens for everyone at once' was not the real difference (rounds also equal height) → the phone tree must reach everyone, a lookup follows one path; real calls are sequential.
+- tree-heap-order-layout analogy: 'a junior officer in one unit may outrank a senior one elsewhere' was self-contradictory → 'someone low down in one unit may hold a higher rank than someone near the top of another'.
+- tree-heap-merging analogy: 'each step costs only about ten comparisons' with 1,000 piles undercounts (a pop compares two children per level) → 'walks only about ten levels of the heap'.
+- tree-lca-single-query analogy limit: said the general-tree algorithm works by 'checking both routes upward' → it searches down from the root; reworded.
+- tree-lca-preprocessing reference card: the visible In words line relied on the hidden symbol k (2^k) → standalone wording (each stored jump is two half-size jumps from the previous level).
+- tree-depth-height: 'call stack is as deep as the longest root-to-leaf path, plus one' was off by one under the module's edge convention → one frame per node on the longest path plus one for the empty-child call (h + 2 frames).
+- tree-basics-q5 option C explanation was incoherent ('uses 9 // 2 = 4 … but then reads index 3') → explains that 20 is the parent of indices 7 and 8 and 40 is index 1's right child.
+- Height convention: tree-balanced-q8 option D 'at most 19 levels' and tree-heaps-q11 'a heap of 1,024 items has about … 10 levels' counted levels where the module counts edges → 'height at most 19' and 'height 10'.
+- tree-bst-q8: prompt did not exclude the lesson's recursive insert, which raises RecursionError on a 10,000-key chain → 'using an iterative insert'; worked example '14 to 17' nodes → '13 to 17' (log₂ 10,000 ≈ 13.3).
+
+**Scope gaps and exclusions:**
+
+- All 35 active units and all 80 prompts, options, explanations and worked examples reviewed; inherited topics, examples and diagrams preserved across coherent ordered groups. Question keys/types/levels/option counts and all 14 archive files match the fixed baseline.
+- All 32 lesson and 10 quiz Python fragments executed with explicit earlier prerequisites; actual C free-tree fragment compiled with warnings-as-errors. Tests cover 626 binary shapes, all 5040 seven-key AVL insertion permutations, 100 BST successor/deletion fixtures and 250 heap streams. Finite fixtures supplement the general arguments rather than proving all possible inputs.
+- No pinned CPython object-size/cache-miss/corpus-memory, AVL/red-black speed or sortedcontainers benchmark. The visible inherited evidence-gap notes remain.
+- Red-black insertion remains a clearly labelled conventional outline; no full red-black or AVL deletion implementation. No Java/C++/Go/kernel/routing/Redis/Ethereum integration execution.
+- Morris original-paper full text not obtained: publisher metadata confirms the 1979 attribution, and actual traversal/restoration is independently executed. Aho–Corasick original 1975 paper was obtained and read; current GNU grep application is sourced to the GNU manual.
+- Primary source families checked targeted factual claims and changed glossary definitions. Correct unchanged entries retain their existing confidence/hash provenance; this review does not claim fresh sentence-by-sentence primary corroboration of every unchanged background definition.
+- Root performs full-course build and mobile/PWA integration; this worker writes no shared/generated application files. Isolated actual glossary compiler and app lookup were executed to check current subject meanings.
+- Rendering checked with the app's markdown renderer (22 analogies become closed <details>, no literal callout tags or stray Markdown); not checked in a browser at 390 px or offline — left to the orchestrator.
+- The Haeupler–Sen–Tarjan 'Rank-balanced trees' PDF was fetched but its text could not be extracted locally; AVL deletion's multi-level rebalancing rests on Wikipedia's retracing description plus the verifier's own experiments (Fibonacci trees: up to h/2 rotations per delete; random trees: rebalancing at adjacent levels), not a quoted primary sentence. CLRS/Knuth were not available online.
+- Lesson minutes were left as baseline (frontmatter unchanged); most added words are in collapsed analogies.
+- Scope unchanged: no B-tree/B+-tree, segment-tree or Fenwick-tree lessons in this module (pointed to System Design and the advanced module).
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, tree-morris-threads: 1979 Morris attribution and full original-paper discussion Publisher search metadata retrieved, direct full-page fetch blocked; algorithm and restoration checked by independent native fixtures.
+- medium confidence, tree-balanced-workloads: Library/kernel implementation details and historical/current CFS/EEVDF uses Current primary docs/source checked; facts can change and no live integration benchmark is claimed.
+- medium confidence, tree-python-top-k: Python heapq API/version and algorithm-selection details Current official docs and CPython3.14 implementation checked; growth bounds are models, not latency guarantees.
+- medium confidence, tree-heap-merging: Merge work scale and alternative priority-queue speed Abstract list/heap-level scale intentionally omits implementation constants; concrete speed requires measurements.
+- medium confidence, tree-radix-variants: Routing, Redis, Ethereum and Linux production uses Current official docs/implementations checked; version-sensitive and not run as integrations.
+- medium confidence, tree-avl-height-bound: Leading AVL height coefficient versus finite exact heights Leading approximation qualified; exact 27/28 finite recurrence recomputed. No measured runtime conclusion follows.
+- medium confidence, glossary: glossary term vruntime Weight-adjusted and hierarchical run-queue semantics checked in kernel docs/source; simplified teaching definition and version-sensitive scheduler context.
+- medium confidence, glossary: glossary term cpp-std-map Current C++ draft contracts and common implementation source checked; concrete library representations remain implementation-dependent.
+- medium confidence, glossary: glossary term write-heavy General workload label; inherited confidence remains medium and no benchmark advantage is asserted.
+- medium confidence, glossary: glossary term heapreplace Current Python min/max API contracts checked; implementation and practical speed depend on version and workload.
+- medium confidence, glossary: glossary term heapify-max Exact Python3.14 version note is now confirmed in fresh official docs; original medium confidence retained as requested.
+- medium confidence, glossary: glossary term go-container-heap Current Go API interface checked, but production implementation/API facts are version-sensitive.
+- medium confidence, glossary: glossary term ethereum Current official state-trie documentation fetched; production details can evolve and no integration run is claimed.
+- medium confidence, glossary: glossary term merkle-patricia-trie Official Ethereum encoding exception checked; implementation summary is deliberately simplified and version-sensitive.
+- medium confidence, glossary: glossary term xarray Current kernel official docs support its API and radix-tree relationship, but definition remains a simplified implementation summary.
+- medium confidence, glossary: glossary term fgrep Current GNU fixed-pattern algorithm documented; earlier historical attribution replaced because original implementation history was not independently corroborated.
+- medium confidence, tree-memory-layouts: About 100 bytes per plain three-field node object on 64-bit CPython 3.14. Measured with tracemalloc on CPython 3.14.4 (Homebrew, macOS arm64): 96–100 B per object excluding values. Object layout varies with version, build and class definition; the lesson says so.
+- medium confidence, tree-avl-insertion-repair: An AVL delete may need O(log n) rotations, up to one rebalancing step per level. Supported by Wikipedia retracing analysis and own experiments (multi-level and adjacent-level rebalancing observed); Knuth/primary paper text not obtained. The per-level phrasing is an upper bound.
+- medium confidence, tree-red-black-insertion / tree-balanced-workloads: Conventional bottom-up red-black insertion uses at most two rotations, deletion at most three. Wikipedia's case analysis states it explicitly (citing standard texts); CLRS not fetched. The lesson scopes it to conventional bottom-up algorithms.
+- medium confidence, tree-balanced-workloads: CFS history, cached leftmost pointer, EEVDF transition from 6.6, epoll/rbtree uses. Kernel docs fetched and match (EEVDF doc: transition began in 6.6); kernel facts are time-sensitive.
+- medium confidence, tree-bst-deletion-cases: Common std::map implementations relink the successor rather than copy keys. Verified in libstdc++ and libc++ source and Linux rbtree; MSVC not checked; the standard implies it only through iterator-invalidation rules. Wording is hedged.
+- medium confidence, tree-morris-threads: Joseph M. Morris, 1979. Wikipedia's text and citation give 1979 (its reference spells the initial 'H.'); the original paper was not fetched.
 
 
 ## dsp / Samples, Signals and Levels
@@ -643,6 +738,75 @@ None recorded in this editorial review.
 - high confidence, multiple: 25 analogies (mapping and limit). Each reviewed against the lesson's primary sources; five corrected. They remain teaching aids, not evidence.
 
 
+## networks / Application-Layer Protocols
+
+27 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- app-quic-streams-and-recovery q8 (app-http2-quic-q8): link cited RFC 9000 section 2.2 for per-stream head-of-line blocking, but that text is in section 13 -> link now https://www.rfc-editor.org/rfc/rfc9000#section-13.
+- app-dns-poisoning-defences: 'a NAT that rewrites ports sequentially can undo it' overstated RFC 5452 -> 'RFC 5452 warns that a NAT which assigns outgoing ports sequentially, or from a small range, can dramatically reduce it'.
+- app-ssh-channels-and-sftp reference formula: 'T <= kb / RTT' read like kilobits -> 'T <= (k x b) / RTT'.
+- app-quic-packet-protection-q1 workedExample: 'certificate compression avoid it' -> 'certificate compression (RFC 8879) can avoid it' (compression reduces size but does not guarantee fitting 3,600 bytes).
+- Glossary dmarc-test-mode: removed alias 'test mode', which as a multi-word cross-subject fallback would have linked synth 'Diode test mode' and Stripe 'test mode' (system-design) to DMARC.
+- Glossary dns-negative-caching: removed aliases 'negative answer' (captured DSA Bloom-filter and SQL window-function text) and 'negatively cached' (captured a URL-shortener 404 cache in system-design/10).
+- Glossary h264-access-unit: term 'Access unit' -> 'Access unit (video)' with aliases 'video access unit(s)', 'H.264 access unit', 'access units'; the bare term captured 'zero trust access unit' in networks/05. q9 workedExample now says 'video access unit'.
+- Wrong-sense links in text changed by this pass reworded: 'transaction ID(s)' -> 'DNS transaction ID(s)' (DHCP/PostgreSQL entries) in app-dns-poisoning-defences (lesson and reference card) and app-dns-wire-q5; STUN IPv6 sentence reworded; 'one-time code' (OTP entry) in the QUIC migration analogy; 'code word' (coding-theory codeword) in the WebRTC analogy; 'audio sample rate' (synth sample entry) in app-rtp-header-and-clocks; 'an empty string' (React entry) in app-dns-wire-q11; 'Strict mode'/'strict mode' (React Strict Mode) in app-email-dmarc-alignment and app-email-q4.
+
+**Scope gaps and exclusions:**
+
+- Cookie revision is a live draft; browser enforcement, partitioning/eviction and restore behaviour remain implementation/policy dependent.
+- No production HTTP parser or current browser cookie matrix is claimed.
+- HTTP/2 and SFTP throughput examples are ideal feedback models, not measured benchmarks.
+- No live QUIC migration/load-balancer or HTTP/2 reset-exhaustion experiment; research attack rate is attributed historical reporting.
+- No resolver or DNSSEC validator interoperability lab; the ASCII encoder is explicitly restricted.
+- No present-day resolver entropy, DNSSEC prevalence, KeyTrap CPU duration or browser/device policy matrix.
+- Kademlia PDF required visual reading separately; SAD DNS text was extracted through native PDFKit and its rate-limit passages read.
+- Local STARTTLS SMTP exercises certificate/hostname checking, AUTH and actual message/envelope serialisation, but no external provider delivery is claimed.
+- Provider bulk policies and RFC 9989 deployment compatibility are time-sensitive; no rollout duration or inbox-delivery guarantee.
+- No clock-accuracy measurement, NTS exchange or SSH/SFTP interoperability session; wire dialogues are labelled abbreviated protocol fixtures.
+- OpenSSH defaults are release-specific, PTP accuracy requires engineered deployment, and gRPC library defaults/propagation/receive limits differ.
+- Kademlia original PDF has broken text extraction; native PDFKit rendered pages 2–6 and those images were read for metric, state, uptake assumptions and lookup. No every-page read is claimed.
+- No torrent swarm, DHT convergence, NAT traversal or WebRTC media benchmark; finite consistency checks are not live protocol proofs.
+- No current DHT population/typical rounds/TURN share or universal interactive-latency limit.
+- Receiver DMARC pass and RFC 9989 Domain Owner full-participation requirements are now distinguished; existing deployments based on RFC 7489 can differ.
+- Secondary glossary references are retained for background concepts; their entries are scored medium rather than presented as fresh deployment measurements.
+- No lessons on HTTP caching semantics (RFC 9111) or page-load round-trip budgets in this module; identity rules prevented adding lessons (author gap, confirmed).
+- No browser render at 390 px; renderer checks only via the build.
+- SMTP code tested only against local fake servers on loopback, not a real provider.
+- No measurement of receiver t= support, Android's current DoH3 behaviour, or NAT port-allocation prevalence; these are date-hedged or attributed.
+- Pre-existing wrong-sense links in unchanged text remain and are recorded as integration dependencies (e.g. bare 'transaction ID' -> DHCP entry in networks/02, 'padding' -> Ethernet frame padding).
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, app-cookie-scope-and-lifetime: Source-specific operational, product or deployment details Cookie revision and browser storage behaviour are draft/policy dependent.
+- medium confidence, app-cookie-cross-site-and-cost: Source-specific operational, product or deployment details Cookie draft, prefixes, implementation policies and encoder choices can change.
+- medium confidence, app-h2-credit-and-shutdown: Source-specific operational, product or deployment details Rapid Reset and Chrome removal are attributed historical/product claims; throughput is an ideal feedback model.
+- medium confidence, app-quic-migration-and-discovery: Source-specific operational, product or deployment details Actual migration, routing and fallback require coordinated deployment; no live migration lab.
+- medium confidence, app-dns-poisoning-defences: Source-specific operational, product or deployment details Case preservation and side-channel feasibility are implementation-specific; historical research is attributed.
+- medium confidence, app-dnssec-validation-chain: Source-specific operational, product or deployment details Standards checked; KeyTrap behaviour and operational rollover failures depend on implementation and state.
+- medium confidence, app-dns-encrypted-transports: Source-specific operational, product or deployment details Browser/device encrypted-DNS policies are version- and configuration-dependent.
+- medium confidence, app-email-dmarc-alignment: Source-specific operational, product or deployment details New May 2026 RFC conformance requirements checked; deployment compatibility and provider policy remain time-sensitive.
+- medium confidence, app-email-framing-and-tls-policy: Source-specific operational, product or deployment details Smuggling outcome depends on the vulnerable parser pair and policy; no external relay experiment.
+- medium confidence, app-ntp-asymmetry-and-clocks: Source-specific operational, product or deployment details Clock discipline, chrony/ntpd options and future UTC policy are source-specific.
+- medium confidence, app-ntp-wire-and-authentication: Source-specific operational, product or deployment details Wire fields verified; no clock-accuracy, NTS or PTP interoperability measurement.
+- medium confidence, app-ssh-transport-and-authentication: Source-specific operational, product or deployment details Release-specific OpenSSH defaults and affected Terrapin modes are source-specific; no SSH interoperability session.
+- medium confidence, app-ssh-channels-and-sftp: Source-specific operational, product or deployment details OpenSSH request defaults and SFTP draft are version-specific; throughput is an ideal model.
+- medium confidence, app-grpc-status-and-operations: Source-specific operational, product or deployment details Library defaults, propagation/cancellation and balancing depend on implementation/configuration.
+- medium confidence, app-kademlia-distance-and-buckets: Source-specific operational, product or deployment details Historical uptime rationale and distribution assumptions are not present-day population guarantees.
+- medium confidence, app-kademlia-lookup-and-threats: Source-specific operational, product or deployment details Logarithmic progress relies on maintained routing and identifier assumptions; no convergence/latency lab.
+- medium confidence, app-webrtc-signalling-and-ice: Source-specific operational, product or deployment details Actual candidate reachability and traversal depend on NAT/filtering/network policy.
+- medium confidence, app-webrtc-security-and-groups: Source-specific operational, product or deployment details Group topologies and key access depend on deployment; no browser/media interoperability benchmark.
+- medium confidence, app-rtcp-feedback-and-timing: Source-specific operational, product or deployment details RFC timing checked; GCC/transport feedback references are drafts and implementation-specific.
+- medium confidence, app-cookie-scope-and-lifetime: RFC 6265bis approved but still waiting in the RFC Editor queue in October 2026. Verified on the datatracker on 2026-10-30 (IESG 'RFC Ed Queue', RFC Editor 'blocked: Final Approval Pending', rev 22) but it can be published at any time; the lesson and glossary are date-hedged.
+- medium confidence, app-email-dmarc-alignment: Google requires SPF, DKIM and DMARC for senders of more than 5,000 messages a day to personal Gmail accounts, unchanged since February 2024. Provider policy; page re-fetched 2026-10-30 and dated in the text, but it can change without notice.
+- medium confidence, app-email-dmarc-alignment: RFC 9989 t=y test mode and removal of pct=. Wording verified against RFC 9989 (May 2026), but receiver support for t= and continued handling of legacy pct= records is not measured; the text warns that RFC 7489-era guides can be out of date.
+- medium confidence, app-dns-encrypted-transports: Android 11+ devices use DoH over HTTP/3 instead of DoT for well-known resolvers that support it. Verified against Google's July 2022 announcement; current Android behaviour can change with system updates. The text is dated to the announcement.
+- medium confidence, app-dns-poisoning-defences: Sequential or small-range NAT port assignment can dramatically reduce source-port randomisation. Now paraphrases RFC 5452 directly; real-world prevalence of such NATs is not measured.
+- medium confidence, app-quic-packet-protection: A large certificate chain can cost an extra round trip under QUIC's 3x limit; certificate compression can avoid it. Mechanism verified (RFC 9000 s8, RFC 8879); whether a given chain exceeds 3,600 bytes depends on the chain and on what else the server sends.
+- medium confidence, app-dns-header-and-labels: q2: the NXDOMAIN clears at about 10:10. Follows RFC 2308 under the prompt's stated assumption; resolvers can impose their own maximum (BIND 3 h, Unbound 1 h by default) and, if configured, a minimum negative TTL that could lengthen it.
+
+
 ## react / Components and JSX
 
 0 question objects changed. Every changed question has a specific independent-review reason in the linked record.
@@ -771,6 +935,76 @@ None recorded in this editorial review.
 - medium confidence, secf-attack-vocabulary: ATT&CK v20 Enterprise lists 15 tactics including Stealth and Defense Impairment. Verified on the live page (October 2026), but tactic names and counts change between ATT&CK versions; the lesson dates the claim.
 - medium confidence, secf-least-privilege-design: Valet-key analogy: some valet keys start the car but cannot open the boot or glovebox. Supported by a secondary source (Wikipedia car-key article); behaviour varies by manufacturer and the text says "Some cars".
 - medium confidence, secf-factors-password-failures: Skimmer limit: a tampered card reader can capture card data and PIN together. Supported by a secondary source (Wikipedia credit card fraud, Skimming section); an FBI page was blocked to automated fetch.
+
+
+## security / Cryptography Basics
+
+47 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- crypto-public-key-transition.md and crypto-asymmetric-q11: 'found tens of thousands of RSA keys sharing a prime factor' / 'factored tens of thousands of real keys' → 'more than 16,000 distinct RSA public keys that shared a prime factor … exposing the private keys of about 64,000 TLS hosts' (Heninger et al. 2012: 16,717 distinct keys, 64,081 TLS hosts).
+- crypto-hash-uses-encoding.md: undated 'Git … now hardened against SHAttered-style collisions and gradually moving to SHA-256' → dated status from the Git 2.56 docs: SHA-1 remains the default with a hardened implementation, SHA-256 repositories are supported, and Git plans to make SHA-256 the default for new repositories in Git 3.0 (no release date).
+- crypto-gcm-nonce-limits.md: added that the 2^32/2^-32 figures come from the 2007 SP 800-38D and that NIST's revision has so far issued only pre-draft calls for comments (January 2025, June 2026; proposing to drop tags under 96 bits), no draft.
+- crypto-x25519-derived-keys.md: unqualified 'Python's cryptography raises ValueError' → 'Python's cryptography library (checked with version 50) raises ValueError' (behaviour comes from its OpenSSL backend and is not in the API docs).
+- crypto-dh-agreement.md: the discrete-logarithm hardness (what Eve would need) was stated only inside the collapsed paint analogy after the diagram conversion → added a visible sentence after the toy check.
+- crypto-ecc-scalar-security.questions.json crypto-asymmetric-q10: prompt formula card defined × as scalar multiplication while using it for ordinary multiplication in '2 × x' → toy data restated in prose (card removed).
+- crypto-elliptic-curve-points-q1: link title 'Primary specification' → 'SEC 1: Elliptic Curve Cryptography, version 2.0'.
+- glossary block-size-crypto: definition covered only cipher/hash blocks, but the entry now captures security/01's 'r the block size' (scrypt) → added scrypt's block-size parameter r (128 × r-byte blocks, RFC 7914).
+- Wrong-sense links introduced by new text: crypto-hash-uses-encoding 'dictionary recovery' (→ incident recovery) reworded; till-receipt analogy 'running total' (→ DSA prefix sum) → 'total so far'/'printed total'; bracket analogy title 'knockout tournament' (→ DSA selection method) → 'sports tournament'; crypto-symmetric-q10 workedExample 'enable recovery and forgery' → 'pin down H and forge tags'.
+- Formula load (editorial, not counted as accuracy errors): removed essential P′ = (C ⊕ D) ⊕ K = P ⊕ D (crypto-ciphertext-malleability) and essential g^a ≡ A (mod p) (crypto-dh-groups-assumptions), replacing both with visible prose; removed the reference Euler-theorem derivation (crypto-rsa-roundtrip); demoted to reference the length-extension card (crypto-hash-constructions), textbook-RSA malleability card (crypto-textbook-rsa-failures) and ECDH card (crypto-x25519-derived-keys), rewriting their In words lines and surrounding prose so no hidden symbol is needed. Essentials 14 → 9; reference 14 → 16; question cards 4 → 3.
+
+**Scope gaps and exclusions:**
+
+- Formal HMAC security reductions and complete asymptotic attack proofs are not taught; constructions and assumptions are checked against standards and original-author cryptography references.
+- No hardware throughput benchmarks, resource-backed quantum attack estimate or proof that a toy implementation is secure is supplied. Hypothetical rates and generic work models are explicitly conditional.
+- Demonstrations omit complete production authentication, provisioning, replay protection, storage, rotation and operational error handling. Library boundaries and per-protocol requirements remain necessary.
+- Original 2004 MD5 collision paper endpoints returned HTTP 403 in this environment. The historical date is supported by later original research and retained at medium confidence; no direct access to that original paper is claimed.
+- Generic mathematical definitions use original-author Handbook of Applied Cryptography chapters as authoritative references, supplemented by native checks and standards; not every basic definition has a separate first-publication source.
+- This is a subdivision of existing material, not a complete course in modern cryptographic protocol proofs or post-quantum migration.
+- No dedicated signature lesson (ECDSA/EdDSA nonce generation appears only through the PS3 incident); signatures are covered in later modules (author gap, confirmed).
+- AES-GCM-SIV and XChaCha20-Poly1305 are named with their key property but not explained in depth.
+- SP 800-90A DRBG internals are not taught (only 'use the OS CSPRNG').
+- Browser rendering at 390 px and offline checks were not run in this module pass; delegated to the root integration pass.
+- Unchanged question crypto-passwords-kdfs-q12 still links bare 'recovery' (key recovery) to security/06 incident recovery; not reworded here to avoid churning an unchanged question (integration dependency).
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, crypto-aes-keys: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-cbc-padding: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-aead-api: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-gcm-nonce-limits: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-hash-security-goals: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-hash-birthday: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-hash-constructions: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-hash-algorithm-choices: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-hash-uses-encoding: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-mac-goals: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-hmac-construction: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-mac-deployments: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-encryption-mac-order: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-rsa-public-keys: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-rsa-oaep-hybrid: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-ecc-scalar-security: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-public-key-transition: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-dh-groups-assumptions: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-dh-authentication: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-dh-parameter-validation: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-x25519-derived-keys: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-forward-secrecy: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-randomness-sources: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-hkdf-purpose-labels: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-password-salts-cost: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-password-algorithms: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-argon2-login-migration: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-password-peppers: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- medium confidence, crypto-x25519-derived-keys: Python's cryptography raises ValueError from X25519 exchange when the shared secret would be all zero (low-order peer point). Executed with cryptography 50.0.2/OpenSSL 4.0.3 and confirmed in the pyca Rust backend and Wycheproof test, but the public API docs do not document it; behaviour depends on the backend and could change. Text says 'checked with version 50'.
+- medium confidence, crypto-gcm-nonce-limits: SP 800-38D: at most 2^-32 chance of a repeated IV per key and at most 2^32 invocations with random IVs. Verified in the current 2007 final; NIST is revising SP 800-38D (pre-draft calls January 2025 and June 2026, no draft yet). Time-sensitive; the lesson now says so.
+- medium confidence, crypto-hash-algorithm-choices / crypto-rsa-oaep-hybrid / crypto-public-key-transition: NIST IR 8547 (final, 27 October 2026): deprecate quantum-vulnerable public-key algorithms after 2030, disallow after 2035; replaces the 1 January 2031 projection for 112-bit schemes; SHA-1 disallowed in FIPS-validated modules after 2030; HQC FIPS under development; earlier deadlines under EO 14412/OMB M-26-15. Verified against the freshly fetched final PDF; policy is time-sensitive and application-specific guidance may set earlier dates.
+- medium confidence, crypto-hash-uses-encoding: Git defaults to (hardened) SHA-1, supports SHA-256 repositories and plans SHA-256 as the default in Git 3.0. From the Git 2.56 documentation fetched 2026-10-30; release-dependent and dated in the text.
+- medium confidence, crypto-password-algorithms / crypto-password-salts-cost: OWASP minimums: Argon2id 19 MiB/2/1; scrypt 2^17/8/1; bcrypt ≥10 with 72-byte limit; PBKDF2-HMAC-SHA-256 600,000. Fetched 2026-10-30 and matched; guidance is periodically revised.
+- medium confidence, crypto-randomness-sources: Debian OpenSSL keys had to be regenerated after the fix. Versions from NVD; regeneration requirement from Ubuntu USN-612-1 ('keys … must be considered untrustworthy … even after the update'); the Debian advisory DSA-1571 and its mailing-list copy are behind a JavaScript challenge and were not read.
+- medium confidence, crypto-password-salts-cost (q6): Salted SHA-256 versus Argon2id at OWASP's minimum differ by 'many orders of magnitude' per guess. Qualitative and hardware-dependent; no benchmark was run and the text deliberately gives no figure.
 
 
 ## software-engineering / Design Principles & Clean Code

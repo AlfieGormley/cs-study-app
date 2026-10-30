@@ -9,9 +9,9 @@ summary: HMAC applies different inner and outer key-derived prefixes to defeat c
 
 ## HMAC
 
-**HMAC** (RFC 2104, 1997) wraps the hash twice with two derived keys:
+**HMAC** (RFC 2104, 1997) wraps the hash twice, each time with a different version of the key. The inner hash processes the key-derived inner prefix and the message. The outer hash then hashes that inner result under a second key-derived prefix. An attacker who extends the inner hash still cannot produce the outer one, so length extension is defeated.
 
-```formula
+```formula reference
 HMAC(K, m) = H((K′ ⊕ opad) ‖
              H((K′ ⊕ ipad) ‖ m))
 where
@@ -28,25 +28,11 @@ opad: the outer padding constant: the byte 0x5c repeated B times
 In words: hash the message under one version of the key, then hash that result again under a second, different version of the key.
 ```
 
-RFC 2104 just fixes the two constants without explaining the choice. They provide distinct inner and outer prefixes. This description does not claim that distinct constants alone prove HMAC secure: the proof also needs precise assumptions about the underlying hash construction. The fixed padding bytes differ in four of their eight bit positions:
-
-```formula
-0x36 ⊕ 0x5c = 0x6a
-where
-⊕: bitwise exclusive or
-0x36, 0x5c: the specified inner and outer padding bytes, in hexadecimal
-0x6a: their XOR, binary 01101010, which has four set bits
-In words: applying the same key byte to these two masks leaves four differing bits between the derived prefix bytes.
-```
+RFC 2104 just fixes the two padding constants (bytes 0x36 and 0x5c, which differ in four of their eight bit positions) without explaining the choice. They provide distinct inner and outer prefixes. This description does not claim that distinct constants alone prove HMAC secure: the proof also needs precise assumptions about the underlying hash construction.
 
 For example, HMAC-SHA256 with key `key` and message `The quick brown fox jumps over the lazy dog` pads the 3-byte key with 61 zero bytes, hashes 64 + 43 bytes on the inside and 64 + 32 bytes on the outside, and gives `f7bc83f4…2d1a3cd8`.
 
-The inner hash processes the message. The outer hash then hashes that result under a different key-derived prefix. An attacker who extends the inner hash still can't produce the outer one, so length extension is defeated.
-
 A collision attack on the unkeyed hash does not automatically forge HMAC. RFC 2104 discusses why HMAC's requirements differ from ordinary collision resistance. Use **HMAC-SHA256** for new work.
-
-> [!note] Content gap: formal HMAC proof
-> The full proof paper could not be retrieved reliably during this review (official/archive retrieval failed). Its exact reduction assumptions and bounds are omitted rather than compressed into an unverified one-line theorem.
 
 Some details worth knowing:
 
@@ -54,20 +40,17 @@ Some details worth knowing:
 - Tags can be truncated: 128 bits retains 16 bytes from HMAC-SHA256. Choose the length from the protocol, forgery budget and verification limits; 64 bits is not a universal safe minimum.
 - Use a specified keyed construction. BLAKE2 has a built-in key parameter, and KMAC is standardised in NIST SP 800-185. Absence of length extension alone does not prove an arbitrary keyed hash construction is a secure MAC.
 
-Why tag length matters: against an ideal MAC, an attacker without the key can only guess, and each guess has the same tiny chance of being right:
+Why tag length matters: against an ideal MAC, an attacker without the key can only guess, and each guess has the same tiny chance of being right. Every extra tag bit halves that chance, and every verification attempt the system allows is another chance. So the safe length depends on how many guesses the verifier will ever check under one key, not on a fixed minimum. A full 128-bit or 256-bit tag leaves an enormous margin; a 32-bit tag on an endpoint with no rate limit and no expiry can fall to blind guessing: at a thousand guesses per second, trying every possible tag takes about seven weeks, and a hit comes after about half that on average.
 
-```formula
+```formula reference
 p_forge ≤ q / 2^L
-p_forge ≤ 2^20 / 2^64 = 2^−44
 where
 p_forge: the probability that at least one forged message is accepted
-q: the number of forgery attempts the verifier checks under one key; here 2^20, about a million
-L: the tag length in bits; here 64, a truncated tag
+q: the number of forgery attempts the verifier checks under one key
+L: the tag length in bits
 ≤: is at most; this is an upper bound
-In words: each extra tag bit halves the attacker's odds, so the safe length depends on how many guesses the verifier will ever check.
+In words: the forgery chance is at most the number of attempts divided by the number of possible tags, so a million guesses against a 64-bit tag succeed with probability at most about 1 in 18 trillion, while against a 32-bit tag the same bound is about 1 in 4,300.
 ```
-
-With a full 128-bit tag the same million guesses give at most 2^−108. A 64-bit tag gives about 5.7 × 10^−14 here, but a system that lets attackers make 2^40 attempts shrinks that margin to 2^−24, which is why the forgery budget, not a fixed minimum, decides the length.
 
 ## Key takeaways
 - HMAC applies different inner and outer key-derived prefixes to defeat classic length extension.

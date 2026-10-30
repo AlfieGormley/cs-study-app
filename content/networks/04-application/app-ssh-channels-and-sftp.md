@@ -36,23 +36,20 @@ S: SSH_FXP_DATA id=3 ...
 C: SSH_FXP_CLOSE id=9 h
 ```
 
-(Simplified; the real messages are binary.) File-operation requests carry an **SFTP request ID** (the INIT/VERSION negotiation is an exception), so a client can have many READs outstanding at once. That **pipelining** is what makes SFTP fast: OpenSSH's client keeps up to 64 requests in flight by default. A naive client that issues one 32 KiB read and waits for the reply gets at most one block per round trip:
+(Simplified; the real messages are binary.) File-operation requests carry an **SFTP request ID** (the INIT/VERSION negotiation is an exception), so a client can have many READs outstanding at once. That **pipelining** is what makes SFTP fast: OpenSSH's client keeps up to 64 requests in flight by default. A naive client that issues one 32 KiB read and waits for the reply gets at most one block per round trip. Over a 100 ms round trip that is about 2.6 Mbit/s, however fast the link; keeping 64 reads outstanding raises the ceiling 64-fold, until bandwidth, channel windows or the server become the limit. It is the same one-window-per-round-trip ceiling as HTTP/2 flow control:
 
-```formula
-T = (kb) / RTT
-T = 1 × 32,768 B / 0.1 s = 327,680 B/s
-T = 327,680 × 8 bit/s ≈ 2.6 Mbit/s
+```formula reference
+T ≤ (k × b) / RTT
 where
-T: the best possible transfer rate, in bytes per second (B/s) or megabits per second (Mbit/s)
-k: the number of read requests kept outstanding at once; 1 for the naive client, up to 64 for OpenSSH
-b: the size of each read; 32 KiB = 32 × 1,024 = 32,768 bytes
-RTT: the round-trip time, in seconds (s); here 100 ms = 0.1 s
+T: the best possible transfer rate, in bytes per second (B/s)
+k: the number of read requests kept outstanding at once; 1 for a naive client, up to 64 for OpenSSH's sftp by default
+b: the size of each read, in bytes (B); 32 KiB = 32,768 B is common
+RTT: the round-trip time, in seconds (s)
+≤: is at most
 B: bytes
+KiB: kibibyte, 1,024 bytes
 s: seconds
-bit: one binary digit; 8 bits make a byte
-Mbit: megabit, one million bits
-≈: approximately equal to
-In words: one 32 KiB read per 100 ms round trip limits the client to about 2.6 megabits per second; keeping 64 reads outstanding raises that ceiling 64-fold.
+In words: a client can receive at most the data it has asked for in each round trip, so more outstanding reads or bigger reads raise the ceiling, and a longer round trip lowers it.
 ```
 
 ## Key takeaways

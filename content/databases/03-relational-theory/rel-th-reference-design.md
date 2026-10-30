@@ -4,7 +4,7 @@ title: References, evolving models and keys
 level: advanced
 minutes: 2
 sourceLesson: rel-th-er-modelling
-summary: References, evolving models and keys, with explicit examples and the conditions that make the reasoning valid.
+summary: Polymorphic references, EAV, surrogate versus natural keys and changing a relationship after launch.
 ---
 
 ## The polymorphic-association trap

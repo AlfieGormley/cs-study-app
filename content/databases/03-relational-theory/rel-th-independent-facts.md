@@ -4,14 +4,14 @@ title: Independent facts, 4NF and 5NF
 level: intermediate
 minutes: 3
 sourceLesson: rel-th-normal-forms
-summary: Independent facts, 4NF and 5NF, with explicit examples and the conditions that make the reasoning valid.
+summary: Independent lists in one table, multivalued dependencies, 4NF and the join dependencies behind 5NF.
 ---
 
 ## Beyond BCNF, briefly
 
 BCNF removes redundancy caused by FDs, but not all redundancy. If an employee has a set of skills and, independently, a set of languages, storing `(emp, skill, language)` forces every skill to be paired with every language. That is a **multivalued dependency**: an employee determines a whole *set* of skills, independently of the other attributes.
 
-```formula
+```formula reference
 emp ↠ skill
 emp ↠ language
 where
@@ -37,6 +37,13 @@ emp skill  language
 ```
 
 There are four combinations. Recording only SQL/English and Python/French would say that the pairs are linked, not independent, and would violate the claimed multivalued dependency. Splitting the independent lists saves repetition while recovering those four rows by a natural join.
+
+> [!analogy] Real-world analogy: a café's breakfast deal
+> A café offers any hot drink with any pastry. Printing the offer as one list of every drink–pastry pair means adding a new pastry adds a line for every drink. Printing two short lists, drinks and pastries, says the same thing, because the choices are independent.
+>
+> **How it maps:** The café is the employee, drinks and pastries are the skill and language lists, and "any with any" is the multivalued dependency. The long combined list is the table that is not in 4NF; the two short lists are the 4NF decomposition, and pairing them back up is the natural join.
+>
+> **Where it stops:** If some pastries come only with certain drinks, the choices are not independent and two lists would offer combinations that do not exist. Likewise, splitting a table is only safe when the business guarantees independence for every legal state, not just today's rows.
 
 A multivalued dependency is trivial if its right attributes are already contained in the determinant, or the two sides together cover the whole heading. Fourth normal form requires a superkey determinant for every non-trivial multivalued dependency. Every FD implies an MVD, so this requirement also implies BCNF.
 

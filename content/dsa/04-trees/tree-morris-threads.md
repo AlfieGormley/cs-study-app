@@ -48,6 +48,13 @@ def morris_inorder(root):
     return out
 ```
 
+> [!analogy] Real-world analogy: chalk marks in a maze
+> Exploring a maze without a notebook, before you enter a side passage you find the last dead end you will reach in it and chalk an arrow there pointing back to the junction you are leaving. You then explore the passage. When you reach the arrow you follow it back to the junction, rub it out and carry on. You never need to remember the whole route, and the walls end up clean.
+>
+> **How it maps:** the junction is the current node, the last dead end in the side passage is its in-order predecessor (the rightmost node of its left subtree), the chalk arrow is the temporary thread in that node's empty right pointer, following it back replaces popping a stack, and rubbing it out is restoring the pointer to empty.
+>
+> **Where it stops:** anyone else in the maze sees your arrows and may follow them. If you leave halfway, the arrows stay on the walls; in the tree, that leaves cycles behind unless the walk is finished or the threads are removed.
+
 Each edge is walked a constant number of times, so it is still **O(n) time** for n nodes. The catch is that the tree is temporarily rewired: it is unsafe if another thread is reading the tree concurrently, and if you stop early (say, on finding a key) you must still finish the walk or the threads stay in place. The O(1) bound excludes the output list: the shown function stores O(n) output. Exceptions or early exits also require cleanup of outstanding threads.
 
 ## Key takeaways

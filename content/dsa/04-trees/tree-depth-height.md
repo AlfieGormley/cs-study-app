@@ -32,28 +32,20 @@ These two are easy to mix up because they both count edges, but they look in opp
 > [!warning] Conventions vary
 > Some books count nodes rather than edges, so a single node has height 1 instead of 0. This module counts **edges**: a one-node tree has height 0 and an empty tree has height −1. Always check which convention a problem uses before you answer "what is the height?".
 
-Height has a neat recursive definition: the height of a node is one more than the taller of its children's heights, and an empty subtree has height −1 so that a leaf comes out as 0.
+> [!analogy] Real-world analogy: generations in a family tree
+> Pick one family's founding ancestor. Your generation number is how many generations you sit below that ancestor. Separately, ask how many generations of descendants you have below you: none if you have no children, three if you have a great-grandchild.
+>
+> **How it maps:** the founding ancestor is the root. Your generation number is your depth, counted from the top down to you. The number of generations below you, along your longest line of descendants, is your height. A childless person is a leaf, with height 0.
+>
+> **Where it stops:** real people have two parents, so a full ancestry chart is not a tree at all; this picture follows only one line of descent. Families also often number the founder as "generation 1", which is the node-counting convention this module avoids.
 
-```formula
-h(x) = 1 + max(h(x_L), h(x_R))
-h(∅) = −1
-h(E) = 1 + max(−1, −1) = 0
-h(F) = 1 + max(h(H), −1) = 1
-h(B) = 1 + max(h(E), h(F)) = 2
-where
-h(x): the height of node x: the number of edges on the longest path from x down to a leaf
-x: any node of the tree
-x_L: the left child of x (or, in a tree with more children, any one child: take the max over all of them)
-x_R: the right child of x
-∅: an empty subtree (a missing child, None in Python)
-max: the larger of the values listed
-E, F, H, B: the nodes with those labels in the tree-structure unit’s A–H diagram; E and H are leaves, so h(H) = 0
-In words: a node's height is one more than its tallest child's height, and starting empty subtrees at −1 makes every leaf height 0.
-```
+### Computing height recursively
 
-That gives B height 2, matching the count by eye. For a finite acyclic binary tree with no shared children, this is the canonical recursive tree function. It visits each of the n nodes once, so it takes O(n) time, and it needs O(h + 1) recursive frames, where h is the tree's height (the exact maximum for a nonempty tree is its edge-counted height plus two: one frame per path node and a final temporary empty-child call). Deep trees can hit the runtime's recursion limit.
+Height has a neat recursive definition: the height of a node is one more than the taller of its children's heights, and an empty subtree has height −1 so that a leaf comes out as 0. In the A–H tree, E is a leaf (height 0), F's only child H is a leaf, so F has height 1, and B is one more than the taller of E and F: height 2, matching the count by eye.
 
-The following binary Node stores each child reference explicitly. The sample builds a four-node tree; the height function below accepts this representation and returns two for that sample root. It does not implement general many-child height.
+The recursion has to know both children's heights before it can answer for their parent, so it naturally works bottom-up. It visits each of the n nodes once, so it takes O(n) time. Its call stack holds one frame for each node on the longest root-to-leaf path, plus one for the final call on an empty child. A balanced tree keeps that shallow, but a degenerate chain of thousands of nodes can hit the runtime's recursion limit (CPython's default limit is 1,000 frames).
+
+The following binary Node stores each child reference explicitly. The sample builds a four-node tree; the height function below accepts this representation and returns 2 for that sample root. For a node with any number of children, take the maximum over all of them instead of just two.
 
 ```python
 class Node:

@@ -41,20 +41,7 @@ message GetItemRequest {
 }
 ```
 
-Protobuf encodes each field as a **protobuf tag** followed by the value. The tag packs the field number and the wire type into one varint: shifting left by 3 bits (`<< 3` in code) multiplies by 8, leaving the low 3 bits for the wire type.
-
-```formula
-g = 8f + w
-g_1 = 1 × 8 + 0 = 8 = 0x08
-g_2 = 2 × 8 + 2 = 18 = 0x12
-where
-g: the tag integer value, itself encoded as a varint; the two small tags here each fit in one byte
-f: the field number from the .proto definition; id is 1, name is 2
-w: the wire type: 0 for a varint, 2 for length-delimited data such as a string
-g_1: the tag for field 1 (id, a varint)
-g_2: the tag for field 2 (name, a string); 18 is written 0x12 in hexadecimal (1 × 16 + 2)
-In words: multiply the field number by 8 and add the wire type to get the tag integer, then varint-encode it; these two tags each need one byte.
-```
+Protobuf encodes each field as a **protobuf tag** followed by the value. The tag packs the field number and the wire type into one varint: the field number is shifted left by 3 bits (`<< 3` in code, the same as multiplying by 8), leaving the low 3 bits for the wire type. So field 1 as a varint (wire type 0) has tag `08`, and field 2 as a length-delimited string (wire type 2) has tag `12`, hexadecimal for 18.
 
 ```python
 import struct
@@ -86,20 +73,9 @@ print(frame.hex(" "))
 # 00 00 00 00 07 08 96 01 12 02 68 69
 ```
 
-- `08` = field 1, varint. `96 01` = 150. Each varint byte carries 7 bits of the number, least significant group first, and its top bit (worth 128) means "more bytes follow" (see the formula below).
+- `08` = field 1, varint. `96 01` = 150. Each varint byte carries 7 bits of the number, least significant group first, and its top bit means "more bytes follow". `96` has that bit set and carries 22; `01` is the last byte and carries 1 lot of 128. 22 + 128 = 150.
 - `12` = field 2, length-delimited. `02` = 2 bytes. `68 69` = "hi".
 - The 5-byte prefix `00 00 00 00 07`: not compressed, 7 bytes.
-
-```formula
-v = (b_1 − 128) + 128 b_2
-v = (150 − 128) + 1 × 128
-v = 22 + 128 = 150
-where
-v: the decoded varint value
-b_1: the first byte, 0x96 = 150 in decimal; subtracting 128 removes its continuation bit, leaving the low 7 bits, 22 (0x16)
-b_2: the second byte, 0x01 = 1, which has no continuation bit, so it is the last; it is worth 128 times its value because it holds the next 7 bits
-In words: strip the continuation bit from each byte, then add the groups with each later group worth 128 times more.
-```
 
 This helper demonstrates nonnegative values; signed `int32` negatives use sign-extended varints, while `sint32` uses ZigZag encoding.
 

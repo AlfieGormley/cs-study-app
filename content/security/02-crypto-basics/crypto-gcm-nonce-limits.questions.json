@@ -3,7 +3,7 @@
     "id": "crypto-symmetric-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "A telemetry pipeline encrypts about 20 million small messages per day per key with AES-GCM, using a random 96-bit nonce each time. It never rotates keys. A reviewer flags a problem. What is it, and what is the best fix?",
+    "prompt": "A telemetry pipeline encrypts about 20 million small messages per day per key with AES-GCM, using a random 96-bit nonce each time. It never rotates keys. NIST SP 800-38D caps random-nonce GCM at about 4.3 billion (2^32) encryptions per key, across every instance using that key. A reviewer flags a problem. What is it, and what is the best fix?",
     "options": [
       {
         "text": "96-bit nonces are too short to be random, so each one must be a timestamp",
@@ -11,7 +11,7 @@
       },
       {
         "text": "After roughly 215 days it exceeds the random-IV invocation limit; rotate keys and manage nonce uniqueness across the deployment",
-        "explanation": "Correct. Divide the limit of 4,294,967,296 encryptions by twenty million per day to get about 215 days. Risk grows continuously; the limit is not a sudden failure threshold. A deterministic counter needs coordinated uniqueness and still has other usage limits."
+        "explanation": "Correct. 4.3 billion encryptions at twenty million a day is reached after roughly 215 days. Collision risk grows continuously with the message count; the cap is where NIST's risk budget runs out, not a cliff edge. A deterministic counter needs coordinated uniqueness and still has other usage limits."
       },
       {
         "text": "GCM can't encrypt small messages securely; use CBC instead",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Two numbers matter: how likely a random-nonce collision is, and how long until the key reaches NIST's limit.\n\n1. With random 96-bit nonces, collision risk grows with the number of message pairs. The square-root scale is far above the permitted random-IV invocation limit.\n2. NIST SP 800-38D caps the RBG-based construction at 4,294,967,296 invocations per key across all instances. At that cap, the estimate is:\n\n```formula\np_coll ≈ q^2 / 2^(b+1)\np_coll ≈ (2^32)^2 / 2^97 = 2^−33\nwhere\np_coll: the probability that at least two messages share a nonce, from 0 to 1\nq: the number of messages under one key, here NIST's cap of 2^32\nb: the nonce length in bits, 96\n≈: approximately equal to (good while p_coll is small)\nIn words: the collision chance grows with the square of the message count; at 2^32 messages it is about 2^−33, one in 8.6 billion.\n```\n\n3. Now the time to reach the cap:\n\n```formula\nt_limit = 2^32 / r\nt_limit ≈ 4.29 × 10^9 / (2 × 10^7)\nt_limit ≈ 215 days\nwhere\nt_limit: the time until the key has encrypted 2^32 messages, in days\n2^32: NIST's cap on random-nonce GCM messages per key, about 4.29 × 10^9\nr: the encryption rate under this key: 2 × 10^7 (20 million) messages per day\ndays: the unit of time used here\n≈: approximately equal to\nIn words: at 20 million messages a day, one key passes the 2^32-message limit after about seven months.\n```\n\n4. A repeated nonce leaks the overlapping plaintext XOR and may enable GHASH-key recovery and forgeries.\n5. Fixes: rotate keys well before the limit, use a coordinated per-key counter that cannot repeat across restarts or workers, or use XChaCha20-Poly1305 (192-bit random nonces, still no nonce reuse) or AES-GCM-SIV (nonce-misuse resistant).",
+    "workedExample": "1. Random 96-bit nonces can collide by chance, and the risk grows with the square of the number of messages under one key. NIST keeps that risk tiny by capping random-nonce GCM at 2^32 (about 4.3 billion) encryptions per key, counted across every server or device sharing the key.\n2. At 20 million messages a day, 4.3 billion is reached in about 215 days, roughly seven months. A key that is never rotated will pass the cap, and the collision risk keeps climbing afterwards.\n3. A single repeated nonce leaks the XOR of the two plaintexts and may let an attacker recover the GHASH key and forge messages.\n4. Fixes: rotate keys well before the cap; or use a coordinated per-key counter that cannot repeat across restarts or workers; or use XChaCha20-Poly1305 (192-bit random nonces, still never reuse one) or AES-GCM-SIV (more tolerant of accidental repeats, with its own limits).",
     "link": {
       "title": "NIST SP 800-38D: GCM and GMAC",
       "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
@@ -60,7 +60,7 @@
       0,
       1
     ],
-    "workedExample": "GCM encrypts with CTR mode, so a repeated nonce means a repeated keystream K:\n\n```formula\nC_1 ⊕ C_2 = (P_1 ⊕ K) ⊕ (P_2 ⊕ K)\nC_1 ⊕ C_2 = P_1 ⊕ P_2\nwhere\nC_1, C_2: the two ciphertexts encrypted under the same key and nonce\nP_1, P_2: the two plaintexts\nK: the shared keystream\n⊕: XOR (exclusive or): each output bit is 1 where the two inputs differ and 0 where they match\nIn words: the keystream appears twice and cancels, leaving the XOR of the two plaintexts for anyone who sees both ciphertexts.\n```\n\n1. This reveals a relationship over the overlapping length, not necessarily both plaintexts.\n2. With full tags, XORing repeated-nonce tag equations cancels their common mask and gives an equation in H, the GHASH authentication key (derived from the AES key). It may have multiple candidates; identical authenticated inputs add no new equation.\n3. Suitable observations can enable recovery and forgery. Knowing H and one valid record also exposes that nonce's tag mask.\n4. This does not directly recover the AES key or decrypt records under other nonces.\n5. Replace the compromised key and fix nonce allocation; using AES-GCM-SIV still requires observing its limits.",
+    "workedExample": "GCM encrypts with CTR mode, so a repeated nonce means a repeated keystream. XORing the two ciphertexts cancels it and leaves the XOR of the two plaintexts for anyone who sees both.\n\n1. This reveals a relationship over the overlapping length, not necessarily both plaintexts.\n2. With full tags, XORing repeated-nonce tag equations cancels their common mask and gives an equation in H, the GHASH authentication key (derived from the AES key). It may have multiple candidates; identical authenticated inputs add no new equation.\n3. Suitable observations can let the attacker pin down H and forge tags. Knowing H and one valid record also exposes that nonce's tag mask.\n4. This does not directly recover the AES key or decrypt records under other nonces.\n5. Replace the compromised key and fix nonce allocation; using AES-GCM-SIV still requires observing its limits.",
     "link": {
       "title": "NIST SP 800-38D: GCM and GMAC",
       "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
@@ -90,7 +90,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. A deterministic hash cannot add secret entropy to its password input.\n2. Password uncertainty depends on how it was chosen; no universal entropy estimate applies.\n3. Given nonce, ciphertext and tag, an attacker can hash a candidate and attempt AESGCM decryption offline.\n4. This costs both derivation and verification. No reproducible hardware or end-to-end guess-rate record was supplied, so the former billions-per-second estimate is omitted.\n5. A salted Argon2id or scrypt derivation increases each guess's cost; store its salt and parameters. A random key managed separately can avoid password-derived-key weaknesses.",
+    "workedExample": "1. Hashing is deterministic, so it cannot add any secrecy that the password did not have: the key is exactly as guessable as the password.\n2. How guessable that is depends on how the password was chosen; human-chosen passwords are often in attackers' candidate lists.\n3. Anyone holding a nonce, ciphertext and tag can test a candidate offline: hash it, try AESGCM decryption, and see whether the tag verifies. No rate limit applies offline.\n4. Plain SHA-256 is designed to be fast, so each of those offline guesses is cheap; attackers can test enormous candidate lists on their own hardware.\n5. Fix: derive the key with a salted, deliberately slow, memory-hard password KDF such as Argon2id or scrypt, storing the salt and parameters, or better, use a random key held in a key-management service.",
     "link": {
       "title": "Cryptographic Right Answers — Latacora",
       "url": "https://www.latacora.com/blog/2018/04/03/cryptographic-right-answers/"

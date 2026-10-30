@@ -38,23 +38,16 @@ Each side sends its candidates to the other (with **trickle ICE**, as they're fo
 
 Why this works through NATs: when A sends a check to B's srflx address, A's NAT creates an outbound mapping. When B's check arrives at A's srflx address, the relevant mapping and filtering state may permit it. Success depends on both NATs' mapping and filtering behaviour; a STUN-observed mapping is not guaranteed to apply to every destination. This is **UDP hole punching**.
 
-STUN messages are tiny: a 20-byte header with the **magic cookie** `0x2112A442` and a 96-bit transaction ID, plus attributes. The server reports your address in **XOR-MAPPED-ADDRESS**, with the port XORed against the cookie's high 16 bits and IPv4 address against the cookie:
+> [!analogy] Real-world analogy: Two gated estates arranging a visit
+> Two friends live on gated estates whose guards only let in visitors a resident has asked for. They swap notes through a mutual friend: "my gate is on Elm Road, and here is the password my guard will ask for". Each asks a passer-by outside "which gate do you see me at?", and both tell their guards to expect the other at the same time. If the guards still refuse, they meet at a café in town instead.
+>
+> **How it maps:** The mutual friend is the signalling server carrying SDP. The passer-by is a STUN server revealing your server-reflexive address, and telling the guards to expect the other is the outbound check that opens a NAT mapping, which is hole punching. The guard's password is the ICE username and password that authenticate checks. The café is a TURN relay.
+>
+> **Where it stops:** Guards are people; NATs are rules about addresses and ports, and some create a different outside mapping for each destination, so the address the passer-by saw may not work for your friend. ICE does not guess: it tests candidate pairs and uses one that actually works.
 
-```formula
-X_port = p ⊕ 0x2112
-X_addr = A ⊕ 0x2112A442
-where
-X_port: the port value as it appears in the attribute
-p: your actual mapped port
-X_addr: the IPv4 address value as it appears in the attribute
-A: your actual mapped IPv4 address, read as one 32-bit number
-⊕: XOR (exclusive or), applied bit by bit; applying the same XOR again restores the original
-In words: the server scrambles the address with the fixed magic cookie, and the client unscrambles it with the same XOR, so the real address never appears literally in the packet.
-```
+STUN messages are tiny: a 20-byte header with the **magic cookie** `0x2112A442` and a 96-bit transaction ID, plus attributes. The server reports your address in **XOR-MAPPED-ADDRESS**: it XORs the port with the cookie's top 16 bits and an IPv4 address with the whole cookie, and the client applies the same XOR again to recover them. The point is that the real address never appears literally in the packet, because some NATs "helpfully" rewrote IP addresses they spotted inside packet payloads. For an IPv6 address, the XOR key also includes the message's 96-bit transaction identifier.
 
-IPv6 additionally uses the STUN transaction ID, because some NATs "helpfully" rewrote IP addresses they spotted inside packet payloads.
-
-Endpoint-dependent NAT mappings (often called **symmetric NAT**) and restrictive filtering can defeat direct UDP hole punching, but NAT labels alone do not prove that every direct path fails. TURN provides a relay path when one is reachable and permitted. A 1 Mbit/s stream relayed once accounts for about 1 Mbit/s ingress and 1 Mbit/s egress, excluding overhead; provider charging varies. Client-to-TURN transport can use TCP or TLS, including a configured port 443, but this does not guarantee firewall traversal. A universal percentage of calls requiring TURN is absent because no reliable representative measurement was established.
+Endpoint-dependent NAT mappings (often called **symmetric NAT**) and restrictive filtering can defeat direct UDP hole punching, but NAT labels alone do not prove that every direct path fails. TURN provides a relay path when one is reachable and permitted. A 1 Mbit/s stream relayed once accounts for about 1 Mbit/s ingress and 1 Mbit/s egress, excluding overhead; provider charging varies. Client-to-TURN transport can use TCP or TLS, including a configured port 443, but this does not guarantee firewall traversal. How often calls need TURN depends heavily on the networks involved.
 
 ## Key takeaways
 - WebRTC leaves signalling transport to the application while ICE tests candidate-pair reachability.

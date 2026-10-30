@@ -3,27 +3,27 @@
     "id": "app-http-wire-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "A chunked response body arrives as:\n\n```\n4\\r\\nWiki\\r\\n\n6\\r\\npedia \\r\\n\nE\\r\\nin \\r\\n\\r\\nchunks.\\r\\n\n0\\r\\n\\r\\n\n```\n\nHow many bytes long is the decoded body?",
+    "prompt": "A chunked response body arrives as:\n\n```\n4\\r\\nWiki\\r\\n\n6\\r\\npedia \\r\\n\nE\\r\\nin \\r\\n\\r\\nchunks.\\r\\n\n0\\r\\n\\r\\n\n```\n\nA colleague's decoder splits the body on every `\\r\\n` and treats the pieces as alternating size lines and data. It decodes the first two chunks correctly. What goes wrong at the third chunk (`E`, which is hexadecimal for 14)?",
     "options": [
       {
-        "text": "14",
-        "explanation": "That treats `E` as 14 correctly but forgets to add the first two chunks. The body is the concatenation of every chunk."
+        "text": "Nothing; CRLF always separates a size line from its data, so splitting on it is safe",
+        "explanation": "CRLF bytes can also appear *inside* chunk data. The third chunk's 14 bytes include `\\r\\n\\r\\n`, so splitting on CRLF breaks that chunk into pieces."
       },
       {
-        "text": "24",
-        "explanation": "Correct. 4 + 6 + 14 = 24. The chunk size `E` is hexadecimal for 14, and the CRLFs after each chunk's data are framing, not content (but the CRLF *inside* the third chunk's data is content)."
+        "text": "It reads `E` as a decimal number and rejects the size line",
+        "explanation": "The described bug is splitting on line breaks, not parsing the size. Even with the hex size read correctly, a line-splitting decoder ignores the announced length."
       },
       {
-        "text": "20",
-        "explanation": "This misreads `E` as decimal-ish or drops the embedded CRLF. Chunk sizes are hex: `E` = 14, and the third chunk's 14 bytes include the `\\r\\n` in its data."
+        "text": "It takes only `in ` as the chunk's data, then treats the following pieces (an empty line, `chunks.`) as size lines and loses its place",
+        "explanation": "Correct. The 14 announced bytes are `in `, CRLF, CRLF and `chunks.`. Splitting on CRLF ends the data after 3 bytes, and the decoder then tries to read later pieces as hexadecimal sizes, so it rejects the message or desynchronises."
       },
       {
-        "text": "34",
-        "explanation": "Chunk-size lines and delimiting CRLFs are excluded from the decoded body. Sum the declared data lengths: 4 + 6 + 14."
+        "text": "It adds the size lines `4`, `6` and `E` to the decoded body",
+        "explanation": "The colleague's decoder recognises size lines; the failure comes from treating every CRLF as a boundary, including CRLFs that are part of the data."
       }
     ],
-    "answer": 1,
-    "workedExample": "1. Read each size line as **hex**:\n   - `4` = 4 bytes: `Wiki`\n   - `6` = 6 bytes: `pedia ` (with trailing space)\n   - `E` = 14 bytes: `in \\r\\n\\r\\nchunks.`\n2. Check the third chunk: `in ` (3) + `\\r\\n\\r\\n` (4) + `chunks.` (7) = 14. The CRLFs here are *data*.\n3. `0` ends the body.\n4. Total: 4 + 6 + 14 = **24 bytes**.\n\n```formula\nS_3 = 0xE = 14 B\nL = S_1 + S_2 + S_3\nL = 4 B + 6 B + 14 B = 24 B\nwhere\nS_1, S_2, S_3: the three chunk sizes, read from the size lines as hexadecimal (base 16, digits 0 to 9 then A to F for 10 to 15; the prefix 0x marks a hex number)\nL: the decoded body length\nB: bytes\nIn words: the hex size E is 14, and the three chunks' data add up to a 24-byte body; size lines and framing CRLFs are not counted.\n```\n\nThe decoder never confuses data CRLFs with framing because it reads exactly `size` bytes, then expects one CRLF.",
+    "answer": 2,
+    "workedExample": "1. A chunked decoder must read each size line as **hexadecimal**: `4`, `6` and `E` (14).\n2. It must then read exactly that many bytes, whatever they contain, and expect one CRLF after them.\n3. The third chunk's 14 bytes are `in ` (3), `\\r\\n\\r\\n` (4) and `chunks.` (7). Those CRLFs are **data**.\n4. A decoder that splits on CRLF stops the third chunk after `in `, then meets an empty piece and `chunks.` where it expects size lines. It either rejects the message or misframes everything after it.\n5. A size-driven decoder gets the 24-byte body `Wikipedia in \\r\\n\\r\\nchunks.` and is never confused by data CRLFs.\n\nThe lesson rule in one line: chunk boundaries come from the announced sizes, not from line breaks.",
     "link": {
       "title": "Transfer-Encoding — MDN",
       "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Transfer-Encoding"

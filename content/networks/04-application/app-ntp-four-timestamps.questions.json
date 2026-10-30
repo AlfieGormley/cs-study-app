@@ -1,29 +1,29 @@
 [
   {
     "id": "app-ntp-ssh-grpc-q1",
-    "level": "basic",
+    "level": "intermediate",
     "type": "single",
-    "prompt": "An NTP exchange records these four timestamps:\n\n```formula\nt_1 = 100.000 s\nt_2 = 100.580 s\nt_3 = 100.581 s\nt_4 = 100.041 s\nwhere\nt_1: when the client sent the request, by the client's clock\nt_2: when the server received it, by the server's clock\nt_3: when the server sent its reply, by the server's clock\nt_4: when the client received the reply, by the client's clock\ns: seconds\nIn words: the request left at client time 100.000 s and the reply came back 41 ms later by the client's clock; the server held it for 1 ms.\n```\n\nAssuming ideal timestamps and clocks that each run at a steady rate, what are the estimated offset and round-trip delay?",
+    "prompt": "An NTP server becomes overloaded and now holds each request for 200 ms before replying, instead of 1 ms. Network paths are unchanged and symmetric, and the timestamps are accurate. What happens to the client's computed offset and round-trip delay?",
     "options": [
       {
-        "text": "Offset +0.580 s, delay 0.041 s",
-        "explanation": "This uses only the outbound difference (server receive time minus client send time) for the offset, and ignores the server's processing time in the delay. NTP averages both directions and subtracts the time the server held the request."
+        "text": "The delay rises by about 200 ms, but the offset is unchanged",
+        "explanation": "The delay calculation subtracts the server's own receive-to-send interval, so time spent inside the server is not counted as network delay."
       },
       {
-        "text": "Offset +0.560 s, delay 0.040 s",
-        "explanation": "Correct. The offset is the average of 0.580 s and 0.540 s, which is 0.560 s. The delay is the 0.041 s exchange minus the server's 0.001 s, which is 0.040 s."
+        "text": "The offset is wrong by about 100 ms, because the holding time is split between the two directions",
+        "explanation": "The extra hold raises the server's send time and the client's receive time by the same amount, so the return-direction difference is unchanged and nothing is split into the offset."
       },
       {
-        "text": "Offset −0.560 s, delay 0.040 s",
-        "explanation": "The sign is wrong. A positive estimate means the client is behind the server under the timing model; filtering and clock policy determine any correction."
+        "text": "Neither changes much: the server timestamps both when it received and when it sent, so its holding time is removed from the delay and cancels out of the offset",
+        "explanation": "Correct. Both server timestamps move apart by the extra hold, and the client's receive time moves by the same amount. The delay subtracts that interval, and the offset's return-direction difference is unaffected."
       },
       {
-        "text": "Offset +0.020 s, delay 1.121 s",
-        "explanation": "This adds where it should subtract. The delay can't exceed the whole exchange time measured by the client, 41 ms."
+        "text": "The exchange fails, because NTP rejects any sample with server processing over 100 ms",
+        "explanation": "NTP has no such fixed rule. It filters samples and prefers low-delay ones, but slow server processing is measured and removed rather than treated as an error."
       }
     ],
-    "answer": 1,
-    "workedExample": "```formula\nθ = ((t_2 − t_1) + (t_3 − t_4)) / 2\nθ = (0.580 s + 0.540 s) / 2\nθ = 0.560 s\nδ = (t_4 − t_1) − (t_3 − t_2)\nδ = 0.041 s − 0.001 s = 0.040 s\nwhere\nθ: theta, the estimated clock offset: server time minus client time; positive means the client is behind\nδ: delta, the round-trip network delay\nt_1: client send time, 100.000 s by the client's clock\nt_2: server receive time, 100.580 s by the server's clock\nt_3: server send time, 100.581 s by the server's clock\nt_4: client receive time, 100.041 s by the client's clock\ns: seconds\nIn words: averaging the two directions puts the client 560 ms behind the server, and the network took 40 ms for the round trip.\n```\n\nThe symmetric-path estimate puts the client 560 ms behind. Whether to step or slew depends on the clock implementation, its state and configuration.",
+    "answer": 2,
+    "workedExample": "1. The server records two timestamps: when the request arrived and when its reply left. The gap between them is its holding time.\n2. Delay is the whole exchange measured by the client minus that holding time. Adding 199 ms of holding lengthens the whole exchange by 199 ms and the subtracted interval by the same 199 ms, so the delay is unchanged.\n3. The offset averages two apparent clock differences. The outbound one (server receive minus client send) does not involve the hold at all. The return one (server send minus client receive) moves both times later by the same 199 ms, so it is unchanged too.\n4. So a busy server does not, by itself, distort the estimates. What does distort them is a difference between the two network directions, covered in the next unit.\n\nThis is why NTP needs four timestamps rather than two.",
     "link": {
       "title": "Network Time Protocol — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Network_Time_Protocol"

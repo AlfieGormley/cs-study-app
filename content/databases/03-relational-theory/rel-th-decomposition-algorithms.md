@@ -4,15 +4,16 @@ title: BCNF decomposition and 3NF synthesis
 level: intermediate
 minutes: 5
 sourceLesson: rel-th-normal-forms
-summary: BCNF decomposition and 3NF synthesis, with explicit examples and the conditions that make the reasoning valid.
+summary: What BCNF decomposition and 3NF synthesis guarantee, and how to choose when they conflict.
 ---
 
 ## The BCNF decomposition algorithm
 
-1. Find a non-trivial dependency whose determinant is not a superkey of the current schema. The card calls that determinant X and the current heading S. Replace the current schema with the two parts shown.
-2. Repeat until every relation is in BCNF.
+1. Find a non-trivial dependency, holding within the current table, whose left side is not a superkey of that table.
+2. Split the table in two: the left side together with everything it determines (within the table), and the left side together with all the remaining attributes.
+3. Repeat on each part until every part is in BCNF.
 
-```formula
+```formula reference
 S_1 = X⁺ ∩ S
 S_2 = X ∪ (S − X⁺)
 S_1 ∩ S_2 = X
@@ -25,25 +26,16 @@ X⁺: the attribute closure of X under the dependencies projected onto the curre
 −: difference: attributes of S that X does not determine
 S_1: X plus everything in S that X determines
 S_2: X plus everything else in S
-In words: put X with what it determines in one part, and X with the rest in the other.
+In words: put the offending left side with everything it determines in one part, and the same left side with everything else in the other; the two parts share exactly that left side.
 ```
 
-Each split shares exactly X, and X determines the whole first part, so every step gives a lossless join. In the five-attribute example below, A fixes B, B fixes C, and C together with D fixes E. Its only candidate key is the pair A and D:
+Each split shares exactly the offending left side, and that left side determines the whole first part, so by the two-part test every step gives a lossless join.
 
-```formula
-A⁺ = {A, B, C}
-A⁺ ∩ ABCDE = ABC
-A ∪ (ABCDE − A⁺) = ADE
-B⁺ ∩ ABC = BC
-B ∪ (ABC − B⁺) = AB
-where
-A, B, C, D, E: the attributes of R; R itself is the set ABCDE
-ABCDE, ABC, ADE, BC, AB: sets of attributes written as letters side by side, e.g. ABC = {A, B, C}
-A⁺, B⁺: attribute closures under F = {A → B, B → C, CD → E}; B⁺ = {B, C}
-{ }: a set
-∩, ∪, −: intersection, union and difference of attribute sets
-In words: A → B breaks BCNF (A is not a key), so ABCDE splits into ABC and ADE. Inside ABC, B → C breaks it (B is not a key), so ABC splits into BC and AB. ADE only has AD → E, and AD is its key.
-```
+Take a five-attribute relation where A fixes B, B fixes C, and C together with D fixes E. Its only candidate key is A with D.
+
+1. A fixes B, but A is not a key. Split into the A part (A with what it determines: A, B, C) and the rest (A, D, E).
+2. Inside the A, B, C part, B fixes C but B is not a key there (A is). Split into (B, C) and (A, B).
+3. The A, D, E part has key A with D, and its only non-trivial rule is that A with D fixes E. It is already in BCNF.
 
 The same split sequence as a schema sketch, with names grouping attributes:
 
@@ -57,37 +49,20 @@ Full heading
   +-- A D E
 ```
 
-
-All three are in BCNF and the decomposition is lossless-join, but the original rule that C and D together fix E is lost. The combined projected FDs cannot derive it: starting from C and D adds nothing in the local dependency union, so E is not reached.
+All three parts, (B, C), (A, B) and (A, D, E), are in BCNF and the decomposition is lossless-join, but the original rule that C and D together fix E is lost. No part contains C, D and E together, and the rules that hold within the parts (A fixes B, B fixes C, A with D fixes E) cannot derive it: starting from C and D, nothing fires. To enforce that rule now, you would have to check a join.
 
 ## The 3NF synthesis algorithm
 
-3NF can always be reached **losslessly while preserving every FD**. The synthesis algorithm (Bernstein, 1976):
+3NF can always be reached **losslessly while preserving every FD**. The synthesis algorithm builds on Bernstein (1976); the extra key relation in step 3, which guarantees the lossless join, comes from later refinements of his method, notably Biskup, Dayal and Bernstein (1979):
 
-1. Compute a minimal FD cover of F.
-2. Make one relation for each left side X, containing X and everything it determines in the cover.
-3. If no relation contains a candidate key of R, add one that is just a key.
-4. Drop any relation that is a subset of another.
+1. Compute a minimal FD cover of the given dependencies.
+2. Make one relation for each left side in the cover, containing that left side and everything the cover says it determines.
+3. If no relation contains a candidate key of the original relation, add one relation that is just such a key.
+4. Drop any relation whose attributes are a subset of another's.
 
-The original three dependencies are already a singleton-right-side minimal FD cover. Use that cover for the same five-attribute example:
+On the same five-attribute example, the three rules are already a minimal cover. One relation per rule gives (A, B), (B, C) and (C, D, E). None of them contains the key A with D, so step 3 adds a fourth relation, (A, D), to tie the parts together.
 
-```formula
-A → B gives R_1 = AB
-B → C gives R_2 = BC
-CD → E gives R_3 = CDE
-{A, D}⁺ = ABCDE gives R_4 = AD
-where
-A, B, C, D, E: the attributes of R
-→: functionally determines
-CD: the set {C, D}
-R_1, R_2, R_3: one relation per FD of the minimal FD cover
-AB, BC, CDE, AD, ABCDE: sets of attributes, letters side by side
-{A, D}⁺: the attribute closure of {A, D}; it is everything, so AD is a candidate key
-R_4: the extra relation holding just the key, added because AD is in none of R_1 to R_3
-In words: one table per dependency, plus a table holding a key to tie them together.
-```
-
-Result: AB, BC, CDE, AD. Every FD lives in one relation, the key relation AD makes the decomposition lossless-join, and here each part happens to be in BCNF too.
+Result: (A, B), (B, C), (C, D, E) and (A, D). Every original rule lives inside one relation, so each can be enforced by that relation's own key; the key relation makes the decomposition lossless-join; and here each part happens to be in BCNF too. Compare the BCNF result above, which lost the rule that C with D fixes E.
 
 ## Choosing between 3NF and BCNF
 
@@ -100,7 +75,7 @@ Result: AB, BC, CDE, AD. Every FD lives in one relation, the key relation AD mak
 Check the actual dependencies rather than assuming a frequency of overlapping keys. Many ordinary schemas can reach BCNF while preserving the required FDs; when those goals clash, the choices are:
 
 - Stay in 3NF and accept some redundancy, enforcing the dependencies locally; keys alone may not express every local FD.
-- Go to BCNF and enforce the lost FD another way, such as a trigger, a carefully synchronised trigger or application protocol that checks the joined rule. PostgreSQL ordinary views do not provide general declarative cross-table assertions; a naive check-then-write can race with another transaction.
+- Go to BCNF and enforce the lost FD another way: a trigger or application protocol that checks the joined rule, with locking or a serialisable transaction so two transactions running at the same time cannot both pass the check. PostgreSQL has no general declarative cross-table assertions, and a naive check-then-write can race with another transaction.
 
 ## Key takeaways
 

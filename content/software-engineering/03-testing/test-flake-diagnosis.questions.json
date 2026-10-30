@@ -3,27 +3,27 @@
     "id": "test-flaky-coverage-mutation-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "What makes a test **flaky**?",
+    "prompt": "Here are four CI histories. Which one shows a **flaky** test?",
     "options": [
       {
-        "text": "It fails because the code has a bug",
-        "explanation": "A test that reliably fails on buggy code is doing its job."
+        "text": "`test_rounding` failed straight after a commit that changed the rounding rule, and has failed on every run since",
+        "explanation": "A test that reliably fails after a behaviour change is doing its job. That is a real failure, not flakiness."
       },
       {
-        "text": "It takes a long time to run",
-        "explanation": "Slow tests are a problem, but slowness alone isn't flakiness."
+        "text": "`test_report` takes 40 seconds on every run and always passes",
+        "explanation": "Slow tests are a problem, but a consistent result is not flaky."
       },
       {
-        "text": "It can pass and fail on the same code, without any change",
-        "explanation": "Correct. Same code, different outcomes: the result depends on something other than the code under test."
+        "text": "`test_export` passed, then failed, then passed on re-runs of the same commit with the same configuration",
+        "explanation": "Correct. Same code, different outcomes: the result depends on something the test does not control, or on a real intermittent bug."
       },
       {
-        "text": "It has no assertions",
-        "explanation": "An assertion-free test may be weak, but flakiness depends on outcomes: called code can still raise intermittently."
+        "text": "`test_register` has no assertions and has always passed",
+        "explanation": "An assertion-free test is weak, but consistent. Flakiness is about outcomes changing without a code change."
       }
     ],
     "answer": 2,
-    "workedExample": "Google's definition: a flaky result is one where a test shows both a passing and a failing result with the same code. The cause is some input the test doesn't control, such as timing, order, the clock, randomness or a shared resource.",
+    "workedExample": "Google's definition: a flaky result is a test showing both a passing and a failing result with the same code.\n\n- Rounding: fails consistently after a change. Real failure.\n- Report: consistent and slow. Not flaky.\n- Export: both outcomes on one commit. **Flaky.**\n- Register: consistent but weak. Not flaky.\n\nCalling a test flaky is the start of an investigation, not a verdict that it is harmless. The cause may be timing, order, the clock, randomness, a shared resource, or a genuine race in the product.",
     "link": {
       "title": "Flaky Tests at Google and How We Mitigate Them — Google Testing Blog",
       "url": "https://testing.googleblog.com/2016/05/flaky-tests-at-google-and-how-we.html"
@@ -33,27 +33,27 @@
     "id": "test-flaky-coverage-mutation-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A suite has 200 tests. Each one independently fails for an unrelated test reason 0.5% of the time. Roughly what fraction of full runs are completely green on correct code?",
+    "prompt": "A suite has 200 tests, each failing spuriously on about 0.5 % of runs, independently of the others. Only about 37 % of full runs come up green. The team plans to double the suite with 200 more tests of the same quality. What should they expect?",
     "options": [
       {
-        "text": "About 99.5%",
-        "explanation": "That is the per-test pass rate. Across 200 tests the probabilities multiply."
+        "text": "Clean runs stay at about 37 %, because each test's flake rate is unchanged",
+        "explanation": "The per-test rate is unchanged, but a clean run needs every test to pass, so each extra test is another chance to go red."
       },
       {
-        "text": "About 37%",
-        "explanation": "Correct. 0.995 raised to the power 200 is about 0.367, so nearly two thirds of runs show at least one spurious test failure."
+        "text": "Clean runs fall to roughly 13 %: the new 200 tests are green together only about 37 % of the time too, and both halves must be green",
+        "explanation": "Correct. With independent flakes, clean-run chances multiply: 37 % of 37 % is about 13 %, so seven runs in eight go red with nothing wrong."
       },
       {
-        "text": "About 90%",
-        "explanation": "Too high: 0.995 raised to the 200th power is far lower."
+        "text": "Clean runs fall to about 18 %, half of 37 %",
+        "explanation": "Doubling the suite does not halve the chance; it multiplies it by another factor of about 37 %."
       },
       {
-        "text": "About 0.5%",
-        "explanation": "That confuses the per-test failure rate with the chance of a clean run."
+        "text": "Clean runs fall to zero, because 400 tests at 0.5 % adds up to 200 %",
+        "explanation": "Probabilities of separate tests failing do not add up like that; the chance of a clean run shrinks but never reaches exactly zero."
       }
     ],
     "answer": 1,
-    "workedExample": "A run is clean only if every test passes:\n\n```formula\nP_clean = (1 − p)^n\nP_clean = 0.995^200\nln(P_clean) = 200 × ln(0.995)\nln(P_clean) ≈ 200 × (−0.00501254)\nln(P_clean) ≈ −1.002508\nP_clean ≈ e^{−1.002508} ≈ 0.367\nwhere\nP_clean: the probability that a full run has no spurious test failure, from 0 to 1\np: the chance one test fails spuriously on a run, 0.5 % = 0.005, so 1 − p = 0.995\nn: the number of tests, 200\n^: raise to a power: 0.995^200 is 200 copies of 0.995 multiplied together\nln: the natural logarithm, the inverse of raising e to a power; it turns a power into a multiplication, ln(a^n) = n × ln(a)\na: any positive number, used only to state the logarithm rule\ne: Euler's number, about 2.71828, the base of the natural logarithm\n≈: approximately equal to (rounded)\nIn words: the chance that all 200 tests pass is 0.995 raised to the power 200, about 0.367.\n```\n\nSo about 37% of runs are green and 63% are red with nothing wrong. This is why tiny per-test flake rates make large suites untrustworthy.",
+    "workedExample": "A run is clean only if every test passes, so with independent flakes the chances multiply:\n\n1. The existing 200 tests are all green on about 37 % of runs (given).\n2. The new 200 tests, of the same quality, are all green on about 37 % of runs too.\n3. Both groups must be green, so clean runs drop to about 37 % of 37 %, roughly 13 %.\n\nIn practice flakes often share causes and cluster, but the lesson holds: tiny per-test flake rates make large suites mostly red. Fix or quarantine the flaky tests before growing the suite, or people will learn to re-run red builds by reflex.",
     "link": {
       "title": "Flaky Tests at Google and How We Mitigate Them — Google Testing Blog",
       "url": "https://testing.googleblog.com/2016/05/flaky-tests-at-google-and-how-we.html"

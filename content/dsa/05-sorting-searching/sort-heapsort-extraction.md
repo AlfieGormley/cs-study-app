@@ -17,20 +17,19 @@ Then we will ask a deeper question: could some cleverer algorithm do better than
 
 Heapsort is selection sort with a better data structure. Selection sort spends O(n) finding the maximum each round. A **binary max-heap** (covered in the trees module) finds and removes the maximum in O(log n).
 
-Recall the array layout. The heap is a tree stored level by level in the array, with no pointers; the position of a node's children is computed from its own index:
+Recall the array layout. The heap is a tree stored level by level in the array, with no pointers; the position of a node's children is computed from its own index (the code below uses `2*i + 1` and `2*i + 2`). The node at index 1, for example, has children at indices 3 and 4.
 
-```formula
+```formula reference
 c_L(i) = 2i + 1
 c_R(i) = 2i + 2
 p(i) = ⌊(i − 1) / 2⌋
-c_L(1) = 3,  c_R(1) = 4,  p(1) = 0
 where
-i: the index (position, counting from 0) of a node in the array; the last line uses i = 1
+i: the index (position, counting from 0) of a node in the array
 c_L: function giving the left-child index from the parent index i
 c_R: function giving the right-child index from the parent index i
 p: function giving the parent index from the child index i (for any node except the root, which is at index 0)
 ⌊ ⌋: the floor: round down to a whole number
-In words: the children of the node at position i sit at 2i + 1 and 2i + 2, so the tree needs no pointers.
+In words: a node's two children sit just after twice its index, and its parent is found by reversing that step, so the tree needs no pointers.
 ```
 
 Every parent is at least as large as its children (the **heap property**). So the maximum is always at index 0.
@@ -80,17 +79,7 @@ def heapsort(a):
 
 Input `[4, 10, 3, 5, 1]`.
 
-**Phase 1.** Start at the last node that has a child; every node after it is a leaf, which is already a valid one-element heap:
-
-```formula
-i_last = ⌊n / 2⌋ − 1
-i_last = ⌊5 / 2⌋ − 1 = 2 − 1 = 1
-where
-i_last: the index of the last parent in the array, where the bottom-up build starts
-n: the number of elements in the heap; here 5
-⌊ ⌋: the floor: round down to a whole number (Python's // does this)
-In words: the second half of the array is all leaves, so building starts just before the halfway point and works back to index 0.
-```
+**Phase 1.** Start at the last node that has a child; every node after it is a leaf, which is already a valid one-element heap. The second half of the array is all leaves, so the loop starts just before the halfway point (`n // 2 - 1`, index 1 for these 5 items) and works back to index 0.
 
 
 ```

@@ -20,22 +20,16 @@ The tool makes many small changes to your code, called **mutants**, one at a tim
 - a constant `18` becomes `19` or `17`
 - `return x` becomes `return None`; a condition becomes `True`
 
-If some test fails, the mutant is **killed**: your tests noticed the change. If all tests pass, the mutant **survived**: the suite did not detect that change; it may be a meaningful missed fault, an equivalent change or outside the required behaviour. The **mutation score** summarises a run as the share of mutants your tests killed, leaving out mutants that no test could ever kill (equivalent mutants, examined in the next unit):
+If some test fails, the mutant is **killed**: your tests noticed the change. If all tests pass, the mutant **survived**: the suite did not detect that change; it may be a meaningful missed fault, an equivalent change or outside the required behaviour.
 
-```formula
-M = K / (T − E) × 100 %
-where
-M: the mutation score, as a percentage; 100 % means every killable mutant was killed
-K: the number of killed mutants (at least one test failed)
-T: the total number of mutants the tool generated
-E: the number of those mutants judged equivalent: they behave exactly like the original, so no test can kill them
-%: per cent, parts per hundred
-In words: the mutation score is killed mutants divided by the killable (non-equivalent) mutants.
-```
+The **mutation score** summarises a run as the share of mutants your tests killed. Conceptually it leaves out **equivalent mutants**, which behave exactly like the original so no test could ever kill them (examined in the next unit). Tools cannot generally tell which mutants are equivalent, so until a human marks them, a reported score may count them as survivors and read lower than the suite deserves. Tools also differ in what they count, for example mutants on lines no test runs. Treat the score as a pointer to survivors worth reading, not as a grade.
 
-The fraction requires at least one non-equivalent mutant; otherwise there is no killable population to divide by.
-
-Tools cannot generally tell which mutants are equivalent, so until a human marks them, a reported score may divide by all generated mutants and read lower than the true value.
+> [!analogy] Real-world analogy: planting typos to test a proofreader
+> To check how careful a proofreader is, an editor quietly plants a few typos in a manuscript and counts how many come back marked.
+>
+> **How it maps:** The planted typos are mutants, the proofreader is the test suite, a marked typo is a killed mutant and an unmarked one has survived. Each surviving typo shows a kind of mistake the reader does not notice, just as a surviving `age > 18` shows the suite never checks age 18.
+>
+> **Where it stops:** A mutation tool plants one small mechanical change at a time and re-runs the relevant tests for each, which is why it is expensive. And some "typos" are acceptable alternative spellings: an equivalent mutant changes the code but not its behaviour, so no test should fail.
 
 ### A surviving mutant
 
@@ -72,17 +66,7 @@ def test_boundary():
 
 `age > 18` fails on 18, `age >= 19` fails on 18, `age >= 17` fails on 17. This is the boundary-testing advice from the earlier boundary-testing unit, discovered mechanically.
 
-Counting only the five mutants in the table, none of which is equivalent, the boundary test moves the mutation score from 40 % to 100 %:
-
-```formula
-M_before = 2 / (5 − 0) × 100 % = 40 %
-M_after = 5 / (5 − 0) × 100 % = 100 %
-where
-M_before: the mutation score with only test_adult and test_child, as a percentage
-M_after: the mutation score once test_boundary is added
-%: per cent, parts per hundred
-In words: before, 2 of the 5 mutants were killed (40 %); after adding the boundary test, all 5 are (100 %), while line coverage was 100 % both times.
-```
+Counting only the five mutants in the table, none of which is equivalent, the suite killed 2 of 5 before the boundary test and all 5 after it, while line coverage was 100 % both times. That gap is exactly what mutation testing adds to coverage.
 
 ## Key takeaways
 - Mutation testing asks whether tests distinguish deliberate code changes.

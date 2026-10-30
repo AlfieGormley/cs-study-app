@@ -526,7 +526,7 @@
     "aliases": [
       "idle in transaction"
     ],
-    "definition": "A session state in which a transaction is open but no statement is running, often because the application forgot to commit. It holds locks and, if it has an old snapshot, stops vacuum removing dead rows.",
+    "definition": "A session state in which a transaction is open but no statement is running, often because the application forgot to commit. It may hold locks. If it keeps a snapshot (as a Repeatable Read transaction does) or has written and so holds a transaction ID, it also stops vacuum removing rows that died after it began; an idle Read Committed transaction that has only read holds neither.",
     "example": "pg_stat_activity shows state = 'idle in transaction' with a long xact_start age.",
     "source": "https://www.postgresql.org/docs/18/monitoring-stats.html"
   },
@@ -994,5 +994,217 @@
     "definition": "A PostgreSQL role without the SUPERUSER attribute. It is subject to normal privilege checks, but its granted privileges and other role attributes still determine its powers; lacking SUPERUSER alone does not make it least-privileged.",
     "example": "An application role should lack SUPERUSER and receive only the database, schema, table and sequence privileges its operations require.",
     "source": "https://www.postgresql.org/docs/18/role-attributes.html"
+  },
+  {
+    "id": "pg-read-committed",
+    "term": "Read Committed",
+    "aliases": [
+      "Read Committed isolation"
+    ],
+    "definition": "PostgreSQL's default isolation level. Each statement sees a fresh snapshot of data committed before it began, so two reads in one transaction can see different values; a statement waiting on a row another transaction updated rechecks its condition against the newly committed version.",
+    "example": "Two SELECTs in one Read Committed transaction can return different seat counts if another booking commits between them.",
+    "source": "https://www.postgresql.org/docs/18/transaction-iso.html"
+  },
+  {
+    "id": "pg-cleanup-horizon",
+    "term": "Cleanup horizon",
+    "aliases": [
+      "cleanup horizons",
+      "xmin horizon",
+      "removable cutoff"
+    ],
+    "definition": "The oldest point in transaction history that some transaction, prepared transaction, replication slot or standby might still need to see. VACUUM can remove only row versions that died before it, so an old horizon makes dead versions pile up.",
+    "example": "VACUUM VERBOSE reports the horizon as its 'removable cutoff' and counts versions that are 'dead but not yet removable'.",
+    "source": "https://www.postgresql.org/docs/18/routine-vacuuming.html"
+  },
+  {
+    "id": "pg-prepared-transaction",
+    "term": "Prepared transaction",
+    "aliases": [
+      "prepared transactions",
+      "pg_prepared_xacts",
+      "PREPARE TRANSACTION"
+    ],
+    "definition": "A transaction that has been made ready to commit with PREPARE TRANSACTION, for two-phase commit, and then left waiting for a later COMMIT PREPARED or ROLLBACK PREPARED. It survives disconnects and restarts, so a forgotten one holds back vacuum indefinitely.",
+    "example": "pg_prepared_xacts lists prepared transactions; a row whose transaction is millions of IDs old needs committing or rolling back.",
+    "source": "https://www.postgresql.org/docs/18/sql-prepare-transaction.html"
+  },
+  {
+    "id": "pg-replication-slot",
+    "term": "Replication slot (PostgreSQL)",
+    "aliases": [
+      "replication slot",
+      "replication slots",
+      "pg_replication_slots"
+    ],
+    "definition": "A server-side record of how far a replica or change-data consumer has read, which makes the primary keep the WAL, and sometimes old row versions, that the consumer still needs. A slot whose consumer has disappeared keeps holding them.",
+    "example": "Dropping a slot for a replica that was decommissioned months ago lets vacuum and WAL cleanup advance again.",
+    "source": "https://www.postgresql.org/docs/18/view-pg-replication-slots.html"
+  },
+  {
+    "id": "pg-hot-standby-feedback",
+    "term": "hot_standby_feedback",
+    "aliases": [],
+    "definition": "A standby setting, off by default, that tells the primary which row versions the standby's running queries still need. It stops those queries being cancelled because the primary cleaned up rows they were reading, at the cost of possible bloat on the primary.",
+    "example": "A two-hour report on a standby with hot_standby_feedback on can hold back cleanup on the primary for two hours.",
+    "source": "https://www.postgresql.org/docs/18/runtime-config-replication.html"
+  },
+  {
+    "id": "pg-idle-in-transaction-timeout",
+    "term": "idle_in_transaction_session_timeout",
+    "aliases": [],
+    "definition": "A PostgreSQL setting that ends any session left idle inside an open transaction for longer than the given time. It is 0, meaning disabled, by default.",
+    "example": "Setting it to 5 minutes stops a forgotten BEGIN in an admin console holding locks and snapshots all afternoon.",
+    "source": "https://www.postgresql.org/docs/18/runtime-config-client.html"
+  },
+  {
+    "id": "pg-fillfactor",
+    "term": "Fillfactor",
+    "aliases": [
+      "fillfactor",
+      "lower fillfactor"
+    ],
+    "definition": "A table storage parameter giving the percentage of each page that inserts may fill, 100 by default for tables. Leaving free space lets updated row versions stay on the same page, which makes HOT updates more likely.",
+    "example": "ALTER TABLE events SET (fillfactor = 80) leaves about a fifth of each new page free for updates.",
+    "source": "https://www.postgresql.org/docs/18/sql-createtable.html"
+  },
+  {
+    "id": "pg-blocking-pids",
+    "term": "pg_blocking_pids",
+    "aliases": [
+      "pg_blocking_pids(pid)"
+    ],
+    "definition": "A PostgreSQL function that returns the process IDs of the sessions blocking a given session from obtaining a lock. It is a quick way to find who a waiting query is waiting for.",
+    "example": "pg_blocking_pids(550) returning {543} means session 543 holds the lock session 550 needs.",
+    "source": "https://www.postgresql.org/docs/18/functions-info.html"
+  },
+  {
+    "id": "pg-wait-event",
+    "term": "Wait event",
+    "aliases": [
+      "wait events",
+      "wait_event_type",
+      "wait_event"
+    ],
+    "definition": "What a PostgreSQL session is currently waiting for, shown in pg_stat_activity as a type (such as Lock, IO or Client) and a specific event name. A session waiting on type Lock is blocked by another session.",
+    "example": "wait_event_type = 'Lock' with wait_event = 'transactionid' means a session is waiting for another transaction to finish.",
+    "source": "https://www.postgresql.org/docs/18/monitoring-stats.html"
+  },
+  {
+    "id": "pg-fsync",
+    "term": "fsync (PostgreSQL setting)",
+    "aliases": [
+      "fsync = off"
+    ],
+    "definition": "A server setting, on by default, that makes PostgreSQL force its writes to durable storage. Turning it off can speed up writes but can leave the database corrupted beyond repair after an operating-system crash or power failure.",
+    "example": "Use fsync = off only for a cluster you could rebuild from scratch, such as a throwaway bulk load.",
+    "source": "https://www.postgresql.org/docs/18/runtime-config-wal.html"
+  },
+  {
+    "id": "pg-wal-writer-delay",
+    "term": "wal_writer_delay",
+    "aliases": [],
+    "definition": "How often PostgreSQL's background WAL writer flushes WAL that has not yet been flushed, 200 milliseconds by default. With asynchronous commit, up to about three times this delay of recent commits can be lost in a crash.",
+    "example": "At the default, an asynchronously committed transaction reaches disk within about 600 milliseconds even in the worst case.",
+    "source": "https://www.postgresql.org/docs/18/wal-async-commit.html"
+  },
+  {
+    "id": "pg-remote-apply",
+    "term": "remote_apply",
+    "aliases": [],
+    "definition": "A synchronous_commit level that makes a commit wait until the synchronous standby has replayed it, so the change is visible to queries there. It removes stale reads on that standby at the cost of slower commits.",
+    "example": "With remote_apply, a user who writes on the primary then reads from the synchronous standby sees their own change.",
+    "source": "https://www.postgresql.org/docs/18/runtime-config-wal.html"
+  },
+  {
+    "id": "pg-vacuum-cost-delay",
+    "term": "Cost-based vacuum delay",
+    "aliases": [
+      "cost-based delay",
+      "autovacuum_vacuum_cost_delay"
+    ],
+    "definition": "A throttle that makes vacuum pause briefly each time it has done a set amount of I/O work, so it does not swamp the disks. Autovacuum's delay is 2 milliseconds by default.",
+    "example": "Lowering the delay lets autovacuum finish a big table sooner but uses more I/O while it runs.",
+    "source": "https://www.postgresql.org/docs/18/runtime-config-vacuum.html"
+  },
+  {
+    "id": "pg-autovacuum-max-workers",
+    "term": "autovacuum_max_workers",
+    "aliases": [
+      "autovacuum worker limit"
+    ],
+    "definition": "The maximum number of autovacuum worker processes that can run at once, 3 by default. When several large tables need vacuuming together, other eligible tables wait for a free worker.",
+    "example": "With three workers busy on three huge tables, a small busy table can wait an hour for its turn.",
+    "source": "https://www.postgresql.org/docs/18/runtime-config-autovacuum.html"
+  },
+  {
+    "id": "pg-postmaster",
+    "term": "Postmaster",
+    "aliases": [
+      "supervisor process",
+      "postmaster process"
+    ],
+    "definition": "PostgreSQL's supervisor process. It listens for connections and starts a new backend process for each one. If any backend crashes, it ends every other session and reinitialises the server.",
+    "example": "Killing the postmaster stops new connections even though existing sessions may keep working.",
+    "source": "https://www.postgresql.org/docs/18/connect-estab.html"
+  },
+  {
+    "id": "pg-single-user-mode",
+    "term": "Single-user mode",
+    "aliases": [
+      "single-user"
+    ],
+    "definition": "A way of running the PostgreSQL server for one session with no other connections, used for some emergency repairs. Recent documentation advises against it for wraparound recovery because it disables safety checks.",
+    "example": "Older advice said to stop the server and vacuum in single-user mode near wraparound; PostgreSQL 18 docs prefer a normal database-wide VACUUM.",
+    "source": "https://www.postgresql.org/docs/18/routine-vacuuming.html"
+  },
+  {
+    "id": "pg-out-of-memory",
+    "term": "Out of memory (server)",
+    "aliases": [
+      "out-of-memory",
+      "out of memory"
+    ],
+    "definition": "The state in which a server's processes ask for more memory than the machine can provide. On Linux the kernel's out-of-memory killer may then kill a process; if it kills a PostgreSQL backend, PostgreSQL ends every session and reinitialises to recover.",
+    "example": "Raising work_mem globally on a busy server can push it out of memory during peak load.",
+    "source": "https://www.postgresql.org/docs/18/kernel-resources.html"
+  },
+  {
+    "id": "pg-current-xact-id",
+    "term": "pg_current_xact_id()",
+    "aliases": [
+      "pg_current_xact_id"
+    ],
+    "definition": "A PostgreSQL function returning the current transaction's full 64-bit transaction ID, assigning one if the transaction has none yet. Calling it in a read-only transaction therefore consumes an ID.",
+    "example": "SELECT pg_current_xact_id(); returns a value such as 846.",
+    "source": "https://www.postgresql.org/docs/18/functions-info.html"
+  },
+  {
+    "id": "pg-datfrozenxid",
+    "term": "datfrozenxid",
+    "aliases": [
+      "age(datfrozenxid)"
+    ],
+    "definition": "A column of pg_database recording the oldest unfrozen transaction ID that may remain in a database. age(datfrozenxid) shows how many IDs ago that was, the number to watch for wraparound risk.",
+    "example": "An age approaching or exceeding 200 million while it keeps climbing suggests something is blocking freezing.",
+    "source": "https://www.postgresql.org/docs/18/routine-vacuuming.html"
+  },
+  {
+    "id": "pg-set-local",
+    "term": "SET LOCAL",
+    "aliases": [],
+    "definition": "A PostgreSQL command that changes a setting only until the end of the current transaction. It lets one transaction use, for example, a larger work_mem without affecting other sessions.",
+    "example": "BEGIN; SET LOCAL work_mem = '64MB'; then the report query, then COMMIT.",
+    "source": "https://www.postgresql.org/docs/18/sql-set.html"
+  },
+  {
+    "id": "pg-insert-only-table",
+    "term": "Insert-only table",
+    "aliases": [
+      "insert-only tables"
+    ],
+    "definition": "A table that only ever receives new rows, such as an append-only log. It produces few or no dead versions, so PostgreSQL uses a separate insert threshold to vacuum it, freezing rows and updating its visibility map.",
+    "example": "An audit table receiving millions of inserts is vacuumed by the insert threshold even though nothing is ever deleted.",
+    "source": "https://www.postgresql.org/docs/18/routine-vacuuming.html"
   }
 ]

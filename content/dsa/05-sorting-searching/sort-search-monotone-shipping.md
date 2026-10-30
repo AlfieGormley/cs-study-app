@@ -19,20 +19,14 @@ ok?:      F  F  F  F  F  T  T ...
                          ^ find this
 ```
 
-Binary search finds the first true in about log₂ of the number of candidates evaluations of the predicate:
+Binary search finds the first true by evaluating the predicate only a logarithmic number of times: each evaluation halves the range of candidate answers, so 46 candidates need at most 6 checks, and a billion need about 30.
 
-```formula
-e ≤ ⌈log_2(H − L + 1)⌉
-e ≤ ⌈log_2(55 − 10 + 1)⌉ = ⌈5.52⌉ = 6
-where
-e: the number of times the predicate is evaluated
-L: the smallest candidate answer; 10 in the example below
-H: the largest candidate answer; 55 in the example below
-log_2: the base-2 logarithm
-⌈ ⌉: the ceiling: round up to the next whole number
-≤: less than or equal to
-In words: each evaluation halves the candidate range, so 46 candidates need at most 6 checks.
-```
+> [!analogy] Real-world analogy: choosing the smallest removal van
+> Moving house, you want the smallest van that fits everything. Van sizes form a ladder, and if a size fits, every bigger size fits too. So rather than trying every size in turn, you test the middle size: if it fits, look smaller; if not, look bigger. A handful of trial packings finds the answer.
+>
+> **How it maps:** van sizes are the candidate answers, "does everything fit?" is the monotone predicate, a trial packing is the feasibility check, and halving the ladder after each trial is binary search on the answer.
+>
+> **Where it stops:** real trial packings are slow and tiring; the trick only pays off in code when the check is cheap enough to run many times and is *exactly* monotone. If a bigger size could ever fail where a smaller one worked, binary search can return a wrong answer without warning.
 
 **Example.** Packages with weights `[1, 2, ..., 10]` must be shipped in order within 5 days. What is the minimum ship capacity that works?
 
@@ -87,7 +81,7 @@ answer: 15
 
 Five checks of O(n) each, instead of trying all 46 capacities. In general:
 
-```formula
+```formula essential
 T = O(n log(S))
 where
 T: the total running time of min_capacity
@@ -98,7 +92,9 @@ O: Big O: grows at most this fast, up to a constant factor
 In words: about log(S) feasibility checks, each costing one pass over the n packages.
 ```
 
-The same pattern handles largest minimum separation of routers when feasibility is monotone and efficiently checkable. A job-scheduling decision can be monotone yet computationally hard. **Content gap:** learning-rate divergence is omitted as an example because general training dynamics do not supply a reliably monotone predicate.
+Because S sits inside a logarithm, a much heavier load barely changes the work: multiplying the total weight by 1,000 adds only about 10 more checks. More packages, on the other hand, make every check longer.
+
+The same pattern handles largest minimum separation of routers when feasibility is monotone and efficiently checkable. It needs both properties: a job-scheduling decision can be monotone yet computationally hard to check, and a predicate that is not reliably monotone gives no guarantee at all.
 
 ## Key takeaways
 - Feasibility must be monotone and cheap enough to evaluate.

@@ -28,6 +28,13 @@ Broader tests often exercise more real components and can cost more time and eff
 
 That last row matters more than people expect. When a unit test fails, its name and traceback usually point at the bug. When an E2E checkout test fails, the cause could be the front end, the payments service, a slow database, an expired test card or the network. Someone has to go digging.
 
+> [!analogy] Real-world analogy: bench tests and a test drive
+> A mechanic can test a car's alternator on a bench, then take the whole car for a test drive. The bench test is quick and, if it fails, names the part. A failed test drive tells you only that something is wrong somewhere in the car.
+>
+> **How it maps:** Bench tests are unit tests (one part, in isolation); fitting the alternator and checking it charges the battery is an integration test (one part with a real neighbour); the test drive is an end-to-end test (the whole system used as a driver would). The drive is the only one that catches a loose connector between parts, which is why you still do a few.
+>
+> **Where it stops:** Software tests are automated and repeatable, so you can run thousands of "bench tests" on every change for almost nothing. An E2E test can also fail because of its test environment (a slow network, shared test data, another team's half-deployed service) when the product itself is fine, which is a much more common way for an automated test to go wrong than for a test drive.
+
 ## The test pyramid
 
 Mike Cohn popularised the **test pyramid** in *Succeeding with Agile* (2009). The idea: write lots of fast, focused unit tests, fewer integration tests, and a small number of end-to-end tests at the top.
@@ -44,23 +51,7 @@ Mike Cohn popularised the **test pyramid** in *Succeeding with Agile* (2009). Th
 
 The pyramid is a heuristic about cost, not a law. Google's testing blog suggested a 70/20/10 split (unit/integration/E2E) as a first guess in 2015, and *Software Engineering at Google* describes aiming for roughly 80/15/5 by test count. Treat these as rough starting points, not targets to hit.
 
-A split like 70/20/10 is a share of the total number of tests. To turn it into counts for a suite, multiply each share by the total:
-
-```formula
-N_unit = r_unit × N
-N_unit = 0.70 × 1,000 = 700
-N_int = 0.20 × 1,000 = 200
-N_e2e = 0.10 × 1,000 = 100
-where
-N: the total number of automated tests in the suite, here 1,000
-r_unit: the share of all tests that are unit tests, written as a fraction: 0.70 means 70 %
-N_unit: the number of unit tests
-N_int: the number of integration tests; 0.20 is the integration share (20 %)
-N_e2e: the number of end-to-end (E2E) tests; 0.10 is the E2E share (10 %)
-In words: in a 1,000-test suite, a 70/20/10 split means about 700 unit tests, 200 integration tests and 100 end-to-end tests.
-```
-
-With the 80/15/5 split instead, the same 1,000 tests become 800, 150 and 50. These shares count tests, not time: one E2E test can take as long as thousands of unit tests, so even 5 % of E2E tests can dominate how long the suite takes to run.
+These shares count tests, not time. In a 1,000-test suite, a 70/20/10 split means roughly 700 unit, 200 integration and 100 end-to-end tests, but one browser test can take as long as thousands of unit tests. So even a thin E2E layer can dominate how long the suite takes, which is why the top of the pyramid stays small.
 
 Two principles behind the shape are more useful than any ratio:
 

@@ -23,6 +23,13 @@ tens:  [802, 2, 24, 45, 66, 170, 75, 90]
 
 Look at the tens pass: 802 and 2 both have tens digit 0. The ones pass had already put 802 before 2, and because the sort is stable, they keep that order. Once a pass is done, ties on the current digit are broken by the lower digits, which were sorted earlier. **Without stability, LSD radix sort gives wrong answers.**
 
+> [!analogy] Real-world analogy: sorting a deck of cards in two deals
+> To put a shuffled deck in suit-then-rank order, first deal it into 13 piles by rank (ace to king) and gather the piles into one deck in rank order. Then deal that deck into 4 piles by suit, always placing each card on the bottom of its pile so the cards keep their order, and gather the suits. Every suit now comes out already in rank order, without ever comparing two cards directly.
+>
+> **How it maps:** rank is the less significant digit and suit the more significant one, so dealing by rank first is the ones pass and dealing by suit second is the tens pass. Keeping each pile in dealing order is stability: it preserves the rank order inside each suit.
+>
+> **Where it stops:** a careless deal that reverses a pile scrambles the ranks, and nothing later fixes it; that is the computer's "unstable pass" bug. A computer also does not need physical piles: a stable counting sort computes every card's final position with prefix sums.
+
 ```python
 def radix_sort(a, base=256):
     if type(base) is not int or base < 2:

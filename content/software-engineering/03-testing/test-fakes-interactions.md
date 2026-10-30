@@ -57,7 +57,9 @@ There are two ways to check a result:
 Martin Fowler's *Mocks Aren't Stubs* describes two schools that follow from this:
 
 - **Classicists** (Detroit school) use real objects where possible, doubles only for awkward collaborators, and prefer state verification.
-- **Mockists** (London school) isolate every class, mock all its collaborators, and verify interactions. This drives design outside-in.
+- **Mockists** (London school) use a mock for any collaborator with interesting behaviour and verify interactions. Fowler links this style to working outside-in, from the user interface inwards.
+
+The Detroit and London nicknames are informal: Fowler mentions them as alternative names, and notes that many mockist practitioners dislike the term and any wording that implies a separate style.
 
 Interaction checks are the right tool when the interaction *is* the behaviour: "an email was sent", "the payment adapter was invoked once in this scenario". A call-count assertion does not prove that a remote payment occurred exactly once; provider idempotency and failure-path integration tests address that separate concern. They are the wrong tool for internal plumbing, because they couple tests to implementation.
 
@@ -87,7 +89,7 @@ Mocking `requests.get` or the AWS SDK directly encodes *your guess* of how they 
 
 ### Mocking values
 
-Never mock simple data objects (`Money`, `Address`, a dataclass). Construct real ones. They are fast and deterministic, and mocks of them drift from reality.
+Don't mock simple data objects (`Money`, `Address`, a dataclass); construct real ones. They are fast and deterministic, and mocks of them drift from reality.
 
 ## Injection beats patching
 

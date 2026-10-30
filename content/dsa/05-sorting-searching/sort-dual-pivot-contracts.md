@@ -11,9 +11,9 @@ This unit builds on the preceding sorting units. Here n is the number of input e
 
 ## Variants in production
 
-- **Dual-pivot quicksort** (Yaroslavskiy, 2009) partitions into three parts using two pivots. Java has used it for `Arrays.sort` on primitive arrays since Java 7. For the analyzed unsampled algorithm on uniformly random distinct keys, the leading comparison count is slightly lower, while swaps increase (formula below). This model alone does not establish a runtime or cache-miss improvement for a modern Java implementation.
+- **Dual-pivot quicksort** (Yaroslavskiy, 2009) partitions into three parts using two pivots. Java has used it for `Arrays.sort` on primitive arrays since Java 7. For the analysed unsampled algorithm on uniformly random distinct keys, it makes about 5% fewer comparisons than classic quicksort but more swaps. That model alone does not establish a runtime or cache-miss improvement for a modern Java implementation. The current JDK implementation also tracks recursion depth and falls back to heapsort, and the Java documentation describes it as O(n log n) on all data sets.
 
-```formula
+```formula reference
 C_dual ≈ 1.9n ln(n)
 C_classic ≈ 2n ln(n)
 where
@@ -31,7 +31,7 @@ In words: dual-pivot quicksort makes about 5% fewer comparisons in this model.
 
 | | Quicksort |
 |---|---|
-| Average time | Θ(n log n), ~expected logarithmic-factor linear comparisons |
+| Average time | Θ(n log n) expected |
 | Worst time | Θ(n²) (introsort: n log n) |
 | Extra space | O(log n) stack with smaller-side recursion |
 | Stable | No |

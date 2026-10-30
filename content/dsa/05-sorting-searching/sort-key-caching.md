@@ -21,7 +21,14 @@ rows.sort(
     key=lambda r: (r.country, -r.score))
 ```
 
-This "decorate, sort, undecorate" pattern is known as the **Schwartzian transform** from Perl. Tuple keys give lexicographic multi-field order. When a field cannot be negated (strings in descending order), use `functools.cmp_to_key` or rely on stability.
+> [!analogy] Real-world analogy: weighing parcels once and writing it on a sticker
+> To line up a pile of parcels by weight, you could put two parcels on the scales every time you compare them, weighing the same parcel again and again. Or you could weigh each parcel once, write the weight on a sticker, and compare stickers.
+>
+> **How it maps:** weighing is the expensive key computation (lower-casing, parsing a date), the sticker is the cached key, and comparing stickers is the cheap comparison the sort repeats many times. Weighing in every comparison is the comparator approach.
+>
+> **Where it stops:** stickers take a little space, and the same is true in code: a key function stores one computed key per element, so it trades some memory for far fewer expensive calls.
+
+The saving costs some memory: CPython keeps the n computed keys in a separate array for the duration of the sort. This "decorate, sort, undecorate" pattern is known as the **Schwartzian transform** from Perl. Tuple keys give lexicographic multi-field order. When a field cannot be negated (strings in descending order), use `functools.cmp_to_key` or rely on stability.
 
 ## Key takeaways
 - A key function is evaluated once per element.

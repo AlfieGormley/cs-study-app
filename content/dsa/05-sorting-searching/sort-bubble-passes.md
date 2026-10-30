@@ -31,20 +31,9 @@ def bubble_sort(a):
             break   # no swaps: sorted
 ```
 
-Each pass compares neighbours across the unsorted part, which is one element shorter each time. Without an early exit, the comparisons add up to:
+Each pass compares neighbours across the unsorted part, which is one element shorter each time. Without an early exit, the first pass compares every adjacent pair, the next pass one pair fewer, and so on down to a single comparison. That shrinking series grows with the square of n: 45 comparisons for 10 elements, about 50 million for 10,000.
 
-```formula
-C = (n − 1) + (n − 2) + … + 1
-C = (n(n − 1)) / 2
-C = 10 × 9 / 2 = 45
-where
-C: the number of comparisons bubble sort makes when every pass runs
-n: the number of elements in the array; here 10
-…: "and so on": each term is one less than the one before, down to 1
-In words: the first pass makes n − 1 comparisons, the next one fewer, and the total of that shrinking series is n × (n − 1) / 2.
-```
-
-- Comparisons: up to that total, 45 for 10 elements. With the `swapped` flag, a sorted input finishes after one pass of one comparison per adjacent input pair (9 for 10 elements), so it is adaptive in the best case.
+- Comparisons: up to that quadratic total. With the `swapped` flag, a sorted input finishes after one pass of one comparison per adjacent input pair (9 for 10 elements), so it is adaptive in the best case.
 - Swaps: exactly the number of inversions.
 - Stable, because it only swaps when strictly greater (`>`). Change that to `>=` and equal elements leapfrog each other: no longer stable.
 

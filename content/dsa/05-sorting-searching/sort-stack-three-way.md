@@ -11,22 +11,20 @@ This unit builds on the preceding sorting units. Here n is the number of input e
 
 ## Recursion depth
 
-Even with good pivots, naive quicksort can recurse O(n) deep on bad luck. The fix is simple: **recurse into the smaller side and loop on the larger**. Each recursive call is on at most half the elements, so the size halves with every level of nesting:
+Even with good pivots, naive quicksort can recurse O(n) deep on bad luck. The fix is simple: **recurse into the smaller side and loop on the larger**. Each recursive call is on at most half the elements, so the size at least halves with every level of nesting. However bad the pivots, at most about 20 frames can be stacked up for a million elements.
 
-```formula
+```formula reference
 D ≤ ⌊log_2(n)⌋ + 1
-D ≤ ⌊log_2(10^6)⌋ + 1 = 20
 where
-D: number of simultaneous stack frames including the initial call, for a nonempty array
-⌊ ⌋: floor, round down to an integer
-n: the number of elements; here a million (10^6)
+D: the number of simultaneous stack frames including the initial call, for a nonempty array
+n: the number of elements
 log_2(n): the base-2 logarithm of n: how many times n can be halved before reaching 1
+⌊ ⌋: floor, round down to an integer
 ≤: less than or equal to
-≈: approximately equal to
-In words: if every nested call gets at most half the elements, there can be at most about log_2(n) of them stacked up.
+In words: if every nested call gets at most half the elements, there can be at most about as many of them stacked up as the number of times the input size can be halved: about 20 for a million.
 ```
 
-The larger side is handled by the loop, which uses no extra stack.
+The larger side is handled by the loop, which uses no extra stack. This bounds **space**, not time: bad pivots still cost quadratic time.
 
 ```python
 def quicksort(a, lo, hi):
@@ -79,6 +77,13 @@ def three_way(a, lo, hi):
          lt 2     gt 5
 recurse on [1, 2] and [6, 5] only
 ```
+
+> [!analogy] Real-world analogy: sorting coins around one denomination
+> You tip out a jar of coins and want them in order of value. Pick one coin, say a 20p, and push every smaller coin to the left, every larger coin to the right, and every other 20p into the middle. The middle group is finished at once: there is nothing left to sort among identical coins.
+>
+> **How it maps:** the chosen 20p is the pivot, the left, middle and right groups are the `< pivot`, `= pivot` and `> pivot` regions bounded by `lt` and `gt`, and only the outer groups are sorted further.
+>
+> **Where it stops:** a jar holds only a handful of denominations, which is the best case: every equal-value group is finished in one partition. With all-distinct keys the middle group is just the pivot, and 3-way partitioning behaves like ordinary quicksort with slightly more bookkeeping.
 
 With k distinct key values among the n elements, randomized 3-way quicksort has an expected O(n(1 + log k)) bound; exact work also depends on key frequencies; with all keys equal, it is a single O(n) pass. Sedgewick and Bentley showed this is optimal up to a constant for inputs with many duplicates.
 

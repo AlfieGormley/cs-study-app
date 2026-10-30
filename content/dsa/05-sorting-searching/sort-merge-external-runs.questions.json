@@ -3,27 +3,27 @@
     "id": "sort-merge-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "You must sort a 200 GB file using a 4 GB run-data budget plus additional working memory using external merge sort. Run generation makes 4 GB sorted runs, and the merge phase can merge all runs at once. How many runs are there, and how many times is each record read from disk in total?",
+    "prompt": "You must sort a 200 GB file with external merge sort. Run generation produces 50 sorted runs of 4 GB each, and there is enough memory for a buffer per run, so the merge phase merges all 50 runs at once with a min-heap. How many times is each record read from disk in total?",
     "options": [
       {
-        "text": "50 runs; each record is read twice",
-        "explanation": "Correct. 200 / 4 = 50 runs. Each record is read once to create its run and once more during the single 50-way merge (and written twice)."
+        "text": "Twice: once to build its run, once during the single 50-way merge",
+        "explanation": "Correct. Phase 1 reads every record once to sort it into a run; phase 2 reads every run once while merging them all together. Each record is also written twice."
       },
       {
-        "text": "50 runs; each record is read about log₂ 50 ≈ 6 times",
-        "explanation": "That would be a sequence of 2-way merges. A k-way merge with a heap handles all 50 runs in a single pass."
+        "text": "About six times, once per round of pairwise merges",
+        "explanation": "That would be repeated 2-way merges, halving 50 runs down to 1. A k-way merge with a heap combines all 50 runs in a single pass."
       },
       {
-        "text": "200 runs; each record is read once",
-        "explanation": "Runs are as big as memory (4 GB), not 1 GB. And every record must be read at least twice: once to make runs, once to merge."
+        "text": "Once, because each record is sorted as soon as it is read",
+        "explanation": "A record sorted into a 4 GB run is still out of order relative to the other 49 runs, so it must be read again during the merge."
       },
       {
-        "text": "1 run; each record is read once",
-        "explanation": "200 GB can't be sorted in 4 GB of memory in one go; that is why we need runs at all."
+        "text": "Fifty times, once for each run it is compared against",
+        "explanation": "Comparisons happen in memory between the runs' front elements. Each run is streamed from disk once during the merge, not once per other run."
       }
     ],
     "answer": 0,
-    "workedExample": "```formula\nr = D / M = 200 GB / 4 GB = 50\nB = r × 60 MB = 3000 MB = 3 GB\nwhere\nr: the number of sorted runs\nD: the size of the file, 200 gigabytes\nM: the run size, 4 gigabytes\nB: the total input-buffer memory for the 50-way merge, at 60 MB per run\nGB: gigabyte, 1,000,000,000 bytes\nMB: megabyte, 1,000,000 bytes\nIn words: 200 GB in 4 GB pieces is 50 runs, and 50 buffers of 60 MB use about 3 GB in the merge.\n```\n\n**Phase 1 (runs):** read 4 GB, sort in memory, write a sorted run. 200 / 4 = **50 runs**. Every record: 1 read, 1 write.\n\n**Phase 2 (merge):** open all 50 runs with a buffer each (for example 60 MB each, leaving room for an output buffer and overhead). A min-heap of size 50 picks the smallest front element, O(log 50) heap work per output record, with implementation-dependent constants. Every record: 1 read, 1 write.\n\nTotal: each record read **twice** and written twice, all sequentially. Sequential I/O is the point: random disk access would be orders of magnitude slower.",
+    "workedExample": "**Phase 1 (runs):** read 4 GB, sort it in memory, write a sorted run. Repeat until all 200 GB has become 50 runs. Every record: 1 read, 1 write.\n\n**Phase 2 (merge):** open all 50 runs, each with its own input buffer (for example 60 MB each, about 3 GB in total, leaving room for an output buffer and overhead). A min-heap of size 50 picks the smallest front element, a few comparisons per output record. Every record: 1 read, 1 write.\n\nTotal: each record read **twice** and written twice, all sequentially. If memory allowed only a few runs to be merged at once, extra merge passes would add another read and write per record each time. Sequential I/O is the point: random disk access would be orders of magnitude slower.",
     "link": {
       "title": "External sorting — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/External_sorting"

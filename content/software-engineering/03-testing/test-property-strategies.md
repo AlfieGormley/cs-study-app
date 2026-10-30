@@ -30,22 +30,40 @@ A **Hypothesis strategy** describes how to generate values:
 | Idempotence | Repeating the operation changes nothing |
 | Metamorphic | Add a restrictive filter: no new results |
 
-The first and fourth rows are mathematical statements about functions. Written as maths, they say what must hold for every generated input:
+Here are the round-trip and idempotence rows as Hypothesis tests. The strategy builds the JSON-native values Python's `json` module can represent faithfully:
 
-```formula
-decode(encode(x)) = x   for all x
-f(f(x)) = f(x)   for all x
-where
-x: any input the generator produces, for example a string or a list
-encode: a function that converts a value into another form, such as Python value to JSON text
-decode: the function that reverses encode, such as JSON text back to a Python value
-f: the function under test, for example one that trims spaces from both ends of a string
-In words: decoding what you encoded gives back the original, and applying an idempotent function a second time changes nothing.
+```python
+import json
+
+# JSON scalars: NaN and infinity are
+# excluded (NaN != NaN), and integers
+# kept to a 64-bit range.
+i64 = st.integers(-2**63, 2**63 - 1)
+finite = st.floats(allow_nan=False,
+                   allow_infinity=False)
+scalars = (st.none() | st.booleans()
+           | i64 | finite | st.text())
+# Nest them in lists and str-keyed dicts.
+values = st.recursive(
+    scalars,
+    lambda inner: st.lists(inner)
+    | st.dictionaries(st.text(), inner))
+
+@given(values)
+def test_json_round_trip(x):
+    # Decoding the encoding gives x back.
+    assert json.loads(json.dumps(x)) == x
+
+@given(st.text())
+def test_strip_is_idempotent(s):
+    # A second strip changes nothing.
+    once = s.strip()
+    assert once.strip() == once
 ```
 
-For example, trimming `"  hi "` gives `"hi"`, and trimming `"hi"` again still gives `"hi"`, so trimming is idempotent. Doubling a number is not: 3 becomes 6, then 12. The round-trip property rule holds only for inputs the encoder represents faithfully and that compare equal to themselves. The float `NaN` ("not a number") fails the second condition: it is not equal even to itself, so the decoded copy never compares equal to the original, and such inputs are usually excluded from the strategy.
+Both pass. Trimming `"  hi "` gives `"hi"`, and trimming `"hi"` again still gives `"hi"`, so trimming is idempotent. Doubling a number is not: 3 becomes 6, then 12.
 
-Python’s `json.dumps` returns JSON text as a `str`, and `json.loads` reads it back. Acyclic JSON-native values within recursion and memory bounds can recover the original value after encoding and decoding: string-keyed dictionaries, lists, strings, booleans, `None`, supported integers and finite floats. Tuples instead decode as lists, and non-string dictionary keys can change. With the unchanged default formatting, serialising a decoded serialisation is stable for this restricted domain.
+A round-trip property holds only for inputs the encoder represents faithfully and that compare equal to themselves. The float `NaN` ("not a number") fails the second condition: it is not equal even to itself, so the decoded copy never compares equal to the original, which is why the strategy excludes it. Tuples would also fail: `json` decodes them as lists. Choosing the input domain is part of writing the property. Over this domain, two further rules also hold: `json.dumps` always returns a `str`, and with the default formatting unchanged, encoding a decoded value again reproduces the same text (`dumps(loads(dumps(x))) == dumps(x)`).
 
 The **test oracle** pattern used for `merge` is particularly strong: a simple, obviously correct implementation (here `sorted`) checks a fast, clever one.
 
@@ -53,11 +71,28 @@ The **test oracle** pattern used for `merge` is particularly strong: a simple, o
 
 Generation is strategy-guided, not uniform random sampling, and can be deterministic under the CI profile or explicit settings. The default `max_examples=100` limits satisfying generated cases in a successful search, not necessarily all calls including rejected inputs and shrinking. Some bugs need rare inputs.
 
-A run-length encoder that writes `"aaab"` as `"3a1b"`, with a decoder that reads one digit then one character, breaks on any run of 10 or more (it treats `0` as the character for a one-character run, leaving `a` unmatched). The round-trip property is useful, but a generic text strategy is not a guarantee of reaching long repeated runs. Generate such runs deliberately and pin the known counterexample. No measured rate of finding a failure is asserted here.
+A run-length encoder that writes `"aaab"` as `"3a1b"`, with a decoder that reads one digit then one character, breaks on any run of 10 or more: `"10a"` is misread as one `"0"`, and the decoder then trips over a stray `a`. The round-trip property is the right rule, but a generic text strategy rarely produces ten identical characters in a row, so the test can pass run after run. Generate such runs deliberately and pin the known counterexample:
+
+```python
+# Build strings from runs of 1 to 15
+# repeated characters.
+runs = st.lists(st.tuples(
+    st.sampled_from("ab"),
+    st.integers(1, 15)))
+texts = runs.map(lambda rs: "".join(
+    ch * n for ch, n in rs))
+
+@example("a" * 10)
+@given(texts)
+def test_rle_round_trip(s):
+    assert decode(encode(s)) == s
+```
+
+Here `encode` and `decode` are the codec under test. A smaller alphabet alone helps less than you might expect: random two-letter text still seldom contains a run of ten.
 
 Remedies:
 
-- Design strategies that reach the interesting region (small alphabets, boundary values, long runs).
+- Design strategies that reach the interesting region (boundary values, duplicates, long runs).
 - Pin known-tricky cases with `@example("a" * 10)`, which runs in the explicit-example phase (enabled by default) before generated inputs.
 - Raise `max_examples` for important properties, perhaps in a nightly run.
 
@@ -74,5 +109,4 @@ Property tests also run slower than single examples and need more thought to wri
 ## Further reading
 - [Hypothesis documentation](https://hypothesis.readthedocs.io/en/latest/)
 - [What is property-based testing? — Hypothesis](https://hypothesis.works/articles/what-is-property-based-testing/)
-- [Useful property patterns — Hypothesis](https://hypothesis.works/articles/what-is-property-based-testing/)
 - [JSON encoding and decoding — Python docs](https://docs.python.org/3/library/json.html)

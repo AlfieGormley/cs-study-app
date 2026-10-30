@@ -3,7 +3,7 @@ id: test-pytest-cases
 sourceLesson: test-unit-testing
 title: Check exceptions, floats and parameter combinations
 level: basic
-minutes: 4
+minutes: 3
 summary: Match the error message when an exception type alone could pass for the wrong reason.
 ---
 
@@ -41,24 +41,7 @@ def test_float_approx():
     assert 0.1 + 0.2 == pytest.approx(0.3)
 ```
 
-`0.1 + 0.2` is `0.30000000000000004` in binary floating point. `approx` compares within a tolerance (by default a relative tolerance of one part in a million, with a tiny absolute floor). With the default settings, pytest treats the two numbers as equal when their gap is no bigger than the larger of two allowances:
-
-```formula
-|x − x_exp| ≤ max(r × |x_exp|, t_abs)
-r × |x_exp| = 10^{−6} × 0.3 = 3 × 10^{−7}
-|x − x_exp| ≈ 5.6 × 10^{−17}
-where
-x: the value the code actually produced, here 0.1 + 0.2 = 0.30000000000000004
-x_exp: the expected test result passed to approx, here 0.3
-|…|: absolute value: the size of a number with its sign dropped, so |−2| = 2
-r: the relative tolerance, the `rel` argument; default 10^{−6}, one part in a million
-t_abs: the absolute tolerance, the `abs` argument; default 10^{−12}, which matters only when the expected test result is very close to 0
-max: the larger of the two values in the brackets
-10^{−6}: ten to the power minus six, 0.000001
-≤: less than or equal to
-≈: approximately equal to (rounded)
-In words: the actual value may differ from the expected one by up to one millionth of the expected test result; here the gap is about 5.6 × 10^−17, far below the 3 × 10^−7 allowed, so the test passes.
-```
+`0.1 + 0.2` is `0.30000000000000004` in binary floating point, so exact `==` fails. `approx` instead accepts any value within a tolerance of the expected one. With the default settings, the allowed gap is the larger of two allowances: one millionth of the value you expected (the relative tolerance, `rel`) or 10⁻¹² (the absolute tolerance, `abs`). Here the gap is about 5.6 × 10⁻¹⁷, far inside one millionth of 0.3, so the test passes.
 
 The absolute floor exists because a relative tolerance shrinks to nothing as the expected test result approaches 0: `approx(0.0)` would otherwise demand an exact match. If you pass only `abs=`, the relative tolerance is not used. For money, prefer `decimal.Decimal` or integer pennies in the code itself.
 
@@ -75,19 +58,7 @@ def test_slugify(title, slug):
     assert slugify(title) == slug
 ```
 
-pytest generates three separate tests, each reported on its own, so one failing case does not hide the others. Stacking two `parametrize` decorators produces the **cross product of test parameters**: every value of one list paired with every value of the other.
-
-```formula
-N_tests = n_1 × n_2
-N_tests = 3 × 2 = 6
-where
-N_tests: the number of separate tests pytest generates from one test function
-n_1: the number of values in the first parametrize list, here 3
-n_2: the number of values in the second parametrize list, here 2
-In words: stacked parametrize decorators run every combination, so their list lengths multiply: 3 values × 2 values gives 6 tests.
-```
-
-The counts multiply with each extra decorator, so three stacked lists of 10 values each give 10 × 10 × 10 = 1,000 tests. That is thorough but can make a suite slow; keep stacked lists short.
+pytest generates three separate tests, each reported on its own, so one failing case does not hide the others. Stacking two `parametrize` decorators produces the **cross product of test parameters**: every value of one list paired with every value of the other. A list of 3 values stacked on a list of 2 gives 6 tests, and each extra decorator multiplies the count again: three stacked lists of 10 values give 1,000 tests. That is thorough but can make a suite slow, so keep stacked lists short and combine only the parameters that genuinely interact.
 
 ## Key takeaways
 - Match the error message when an exception type alone could pass for the wrong reason.

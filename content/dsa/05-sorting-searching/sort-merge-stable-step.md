@@ -39,20 +39,7 @@ def merge(left, right):
     return out
 ```
 
-Each comparison outputs one element, and once one list runs out the rest of the other is copied with no comparisons at all. That gives the cost of a merge:
-
-```formula
-C_max = a + b − 1
-C_min = min(a, b)
-C_max = 3 + 3 − 1 = 5
-where
-C_max: the most comparisons a merge can need, when both lists are nonempty (it is zero if either is empty)
-C_min: the fewest comparisons, reached when every element of the shorter list is smaller than every element of the longer one
-a: the number of elements in the left list; here 3
-b: the number of elements in the right list; here 3
-min: the smaller of its two inputs
-In words: a merge never needs more comparisons than one fewer than the total number of elements, and never fewer than the length of the shorter list.
-```
+Each comparison outputs one element, and once one list runs out the rest of the other is copied with no comparisons at all. So a merge of two nonempty lists needs **at most one comparison fewer than the total number of elements** (the last element is always copied for free), and **at least as many as the shorter list has elements** (when the shorter list's elements all come first). Either way the cost is linear in the total length.
 
 ```
 left  [2, 5, 9]     right [3, 4, 10]
@@ -64,7 +51,14 @@ left  [2, 5, 9]     right [3, 4, 10]
 left empty: append [10]
 ```
 
-Five comparisons for six elements: 3 + 3 − 1, the maximum.
+Five comparisons for six elements: one fewer than the total, the maximum.
+
+> [!analogy] Real-world analogy: two sorted piles of marked exam scripts
+> Two markers each hand you a pile of scripts already sorted by score, lowest on top. You build one sorted pile by repeatedly comparing the two top scripts and taking the lower one. When one pile runs out, you put the rest of the other pile on without looking. On a tie, you always take from the first marker's pile.
+>
+> **How it maps:** each pile is a sorted half, comparing the two top scripts is one comparison, moving the leftover pile is the free tail copy, and the "first marker wins ties" rule is the `<=` test that keeps equal keys in their original order.
+>
+> **Where it stops:** on a desk the new pile just grows beside the old ones. An array merge needs a separate output buffer as large as the two halves, which is the main extra memory merge sort needs.
 
 ### Why `<=` makes it stable
 

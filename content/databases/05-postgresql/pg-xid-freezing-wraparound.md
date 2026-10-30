@@ -4,36 +4,52 @@ title: Why transaction IDs need freezing
 level: intermediate
 minutes: 4
 sourceLesson: postgresql-in-practice
-summary: Normal XID comparisons have an approximately two-billion-ID horizon.
+summary: Transaction IDs wrap around after about two billion, so vacuum must freeze old rows before they look like the future.
 ---
 
-PostgreSQL assigns a normal **transaction ID** (XID) when a transaction needs one, commonly when it first writes. A read-only transaction can also request an XID explicitly. Row-version headers use a 32-bit XID; newer SQL functions can expose a 64-bit full ID that includes an XID epoch. MVCC compares XIDs to decide whether a row version was written in the past (possibly visible) or the future (invisible). An XID counter has a fixed number of values and the comparison is circular, so only half of them can count as "the past":
+PostgreSQL assigns a normal **transaction ID** (XID) when a transaction needs one, commonly when it first writes. A transaction that only reads never gets one unless it asks explicitly, for example by calling `pg_current_xact_id()`. Row-version headers record which XID inserted them and, if any, which deleted them. MVCC compares those XIDs with the current one to decide whether a version was written in the past (possibly visible) or the future (invisible).
 
-```formula
-N_xid = 2^32 = 4294967296 XIDs
-H = N_xid / 2 = 2^31 XIDs
-H = 2147483648 XIDs
-where
-N_xid: the total number of different values a 32-bit transaction ID can hold, about 4.3 billion
-2^32: 32 copies of 2 multiplied together; each of the 32 bits doubles the number of possible values
-H: the comparison horizon: for any XID, half the 32-bit XID representation’s possible values; the safe ordering window is approximately this large, with special reserved IDs and ordering-boundary exclusions
-2^31: 31 copies of 2 multiplied together, half of 2^32
-XIDs: transaction IDs, the unit counted here; normal transactions and subtransactions can consume them; allocation is not one XID for every SELECT
-In words: any transaction ID can only look about 2.1 billion IDs into the past; anything further back would appear to be in the future.
+## A counter that wraps around
+
+The XIDs in row headers are 32-bit numbers, so there are about 4.3 billion of them, and the counter wraps back to the start when it runs out. Comparison is therefore circular: from any XID, the roughly 2.1 billion values behind it count as the past and the roughly 2.1 billion ahead count as the future. Newer SQL functions can expose a 64-bit full ID that adds an XID epoch, but row headers still store the 32-bit value.
+
+If a row version kept its original XID while the counter moved more than about 2.1 billion transactions on, it would suddenly look as if it came from the future, and committed data would vanish from queries. This is **transaction ID wraparound**.
+
+VACUUM prevents it by **freezing** old row versions: marking their committed insertion as old enough to be visible to every current and future transaction, so that insertion XID no longer needs normal comparison. Freezing does not lock a row against change; a later update or deletion still follows the usual visibility rules. Even a table whose contents never change must be frozen, because the counter keeps advancing with every write elsewhere in the cluster.
+
+> [!analogy] Real-world analogy: times on a 12-hour clock
+> If a note says "3 o'clock" and it is now 5 o'clock, you assume the note means two hours ago. That only works if you know the note is less than half a day old: a note from yesterday's 3 o'clock would be read wrongly, and one from 10 hours ago looks like "in two hours". Archivists avoid this by stamping old notes "long ago" instead of keeping the clock time.
+>
+> **How it maps:** clock times are 32-bit XIDs, and half the dial is the roughly 2.1-billion-ID window treated as the past. Stamping a note "long ago" is freezing: the row is then treated as older than every transaction, whatever its original number.
+>
+> **Where it stops:** a clock goes round every 12 hours whether or not anything happens, but the XID counter advances only when transactions take IDs, so wraparound depends on write activity, not elapsed time.
+
+## Forced freezing and what blocks it
+
+Postgres forces an anti-wraparound vacuum on any table whose oldest unfrozen XID is more than `autovacuum_freeze_max_age` XIDs old: 200 million by default, about one tenth of the 2.1-billion window, leaving a wide safety margin. These limits count allocated IDs, not elapsed time. Anti-wraparound vacuums run even when autovacuum is disabled.
+
+Freezing can only advance past rows that no transaction might still need, so the same things that block ordinary cleanup also stop the oldest XID moving forward: long-running or idle-in-transaction sessions, forgotten prepared transactions and stale replication slots. If the age keeps climbing, the server starts warning when about 40 million IDs remain before wraparound. With fewer than about 3 million left, it refuses to start transactions that need new XIDs, so writes fail while queries that only read continue, until a vacuum catches up.
+
+Monitor the age of the oldest unfrozen XID in each database:
+
+```sql
+-- Compare with autovacuum_freeze_max_age.
+SELECT datname, age(datfrozenxid)
+FROM pg_database
+ORDER BY 2 DESC;
 ```
 
-If a row version kept its original XID while the counter moved more than about 2.1 billion transactions on, it would suddenly look as if it came from the future, and committed data would vanish from queries. This is **transaction ID wraparound**. VACUUM prevents it by **freezing** old row versions: marking their committed insertion as old enough to be visible to every current and future transaction, so that insertion XID no longer needs normal comparison. A later deletion or update still has its own visibility rules.
-
-Postgres forces an anti-wraparound vacuum on any table whose oldest unfrozen XID is more than `autovacuum_freeze_max_age` XIDs old: 200 million by default, about one tenth of the 2.1 billion horizon, leaving a wide safety margin. These limits count allocated IDs rather than elapsed time or a simple number of top-level commits. It launches these even when autovacuum is disabled. If something such as a long-open transaction stops freezing from advancing, the server warns as the limit approaches and eventually refuses to assign new XIDs until vacuum catches up.
+A steady climb towards and beyond 200 million, while anti-wraparound vacuums run, points at something blocking freezing. Find and end the blocker, then let vacuum run; the documentation advises against stopping the server or using single-user mode to recover.
 
 ## Key takeaways
 
-- Normal XID comparisons have an approximately two-billion-ID horizon.
-- Freezing preserves old committed row visibility across wraparound.
-- Anti-wraparound maintenance can run even when autovacuum is disabled.
+- 32-bit XID comparisons look about two billion IDs into the past and two billion into the future.
+- Freezing marks old committed insertions as visible to everyone, so wraparound cannot hide them.
+- Old transactions, prepared transactions and stale replication slots stop freezing advancing.
+- Near the limit, PostgreSQL refuses new XIDs, stopping writes, until vacuum catches up.
 
 ## Further reading
 
 - [PostgreSQL 18: routine vacuuming](https://www.postgresql.org/docs/18/routine-vacuuming.html)
-- [PostgreSQL 18: datatype oid](https://www.postgresql.org/docs/18/datatype-oid.html)
-- [PostgreSQL 18: functions info](https://www.postgresql.org/docs/18/functions-info.html)
+- [PostgreSQL 18: object identifier types](https://www.postgresql.org/docs/18/datatype-oid.html)
+- [PostgreSQL 18: system information functions](https://www.postgresql.org/docs/18/functions-info.html)

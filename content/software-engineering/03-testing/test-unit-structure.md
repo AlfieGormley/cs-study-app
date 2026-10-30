@@ -16,7 +16,7 @@ There is no single agreed definition. Martin Fowler distinguishes two styles:
 - **Solitary** unit tests isolate the code under test from all its collaborators, replacing them with test doubles (the later test-double units).
 - **Sociable** unit tests let the code use its real collaborators, as long as they are fast and in-process (no network, no real database).
 
-Both are fine. What every unit test should share is the set of properties often summarised as **FIRST**:
+Both are fine. What every unit test should share is the set of properties often summarised as **FIRST**, a mnemonic credited to Brett Schuchert and Tim Ottinger:
 
 | Letter | Meaning |
 |---|---|
@@ -24,15 +24,15 @@ Both are fine. What every unit test should share is the set of properties often 
 | Isolated | Failure points to one focused behaviour |
 | Repeatable | Controlled inputs and environment |
 | Self-validating | Passes or fails, no eyeballing |
-| Timely | Written with the code, not months later |
+| Timely | Written just before the code, not months later |
 
 Tests also need independent setup so their results do not depend on order.
 
-A useful working definition here: a unit test exercises one **behaviour** through a public interface and is small in Google’s sense (one thread in one process, no sleeping or external I/O, with its documented in-memory filesystem exception).
+A useful working definition here: a unit test exercises one **behaviour** through a public interface and is small in Google’s sense (a single process, often a single thread, with no sleeping, I/O or other blocking calls apart from a hermetic in-memory filesystem).
 
 ## Structure: arrange, act, assert
 
-Lay every test out in three visible steps.
+Lay every test out in three visible steps. (`Cart` here is a sketch of an application class.)
 
 ```python
 def test_cart_total_includes_vat():
@@ -61,8 +61,6 @@ A good pattern is *unit, scenario, expected result*: `test_withdraw_more_than_ba
 
 ## Plain assert, with rewriting
 
-The `Cart` example is a partial sketch using an application class; the two deliberately incorrect assertions below demonstrate failure modes.
-
 pytest rewrites `assert` statements at import time so that a failure shows the values involved:
 
 ```
@@ -73,17 +71,16 @@ E  AssertionError: assert 'a-b' == 'a_b'
 You do not need `assertEqual` and friends. One trap: never wrap an assert in brackets with a message.
 
 ```python
-# always passes: a non-empty tuple
-# is truthy
-# Demonstration: the tuple is truthy.
+# Bug: always passes, because a
+# non-empty tuple is truthy.
 assert (1 == 2, "should fail")
 
-# correct form
-# Demonstration: this assertion fails.
+# Correct form: this one fails, as
+# intended, with the message.
 assert 1 == 2, "should fail"
 ```
 
-pytest does warn about the first form ("assertion is always true"), but warnings are easy to miss in a long run.
+Python and pytest both warn about the first form ("assertion is always true, perhaps remove parentheses?"), but warnings are easy to miss in a long run.
 
 ## Key takeaways
 - FIRST describes useful test qualities rather than a precise definition of unit.

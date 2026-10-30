@@ -61,24 +61,30 @@ k == p: answer 6
 
 Check: sorted, the array is `[1, 2, 3, 4, 5, 6, 7, 8]` and index 5 is 6.
 
+> [!analogy] Real-world analogy: finding the 10th-cheapest flat
+> You want the 10th-cheapest flat from 200 listings. Pick one listing as a reference and split the rest into a cheaper pile and a pricier pile. If the cheaper pile holds 25 listings, the 10th-cheapest must be in it, so you never look at the pricier pile again. Repeat with a new reference inside the pile you kept.
+>
+> **How it maps:** the reference listing is the pivot, splitting into piles is the partition, and keeping only the pile that contains the wanted position is quickselect discarding one side. Nobody ever puts the piles in full price order, which is the saving over sorting.
+>
+> **Where it stops:** a person would pick a reference that looks typically priced. Quickselect picks blindly (at random), so an unlucky pick can be the cheapest or dearest listing and remove only itself; a long run of such picks is what makes the worst case quadratic.
+
 ### Why it is expected O(n)
 
 With a good pivot, each round discards a constant fraction. If every pivot split the array in half, the work would be a **geometric series** (each term a fixed fraction of the one before):
 
-```formula
+```formula essential
 W = n + n / 2 + n / 4 + … ≤ 2n
-W ≤ 2 × 10^6
 where
 W: the total number of elements partitioned over all rounds
-n: the number of elements; a million (10^6) in the second line
+n: the number of elements
 …: "and so on", each term half the one before
 ≤: less than or equal to
 In words: halving the work every round adds up to less than twice the first round's work, so the total is linear.
 ```
 
-So the total is linear. For distinct keys, with random pivots the splits are not exactly half, but the pivot lands in the middle 50% of the range with probability 1/2, and then at least a quarter is discarded. The expected cost is still a geometric series: **O(n)**. A more careful analysis gives the expected comparisons for finding the median, and fewer for k near the ends:
+So the total is linear. For distinct keys, with random pivots the splits are not exactly half, but the pivot lands in the middle 50% of the range with probability 1/2, and then at least a quarter is discarded. The expected cost is still a geometric series: **O(n)**. A more careful analysis puts the expected cost of finding the median at about 3.4 comparisons per element, and less for ranks near either end:
 
-```formula
+```formula reference
 C ≈ 2(1 + ln(2))n
 C ≈ 3.39n
 where
@@ -91,19 +97,7 @@ In words: finding the median with random pivots takes about 3.4 comparisons per 
 
 ### The worst case
 
-Bad pivots every round shrink the range by only one element, exactly like quicksort:
-
-```formula
-W = n + (n − 1) + … + 1 = n(n + 1) / 2
-W = O(n^2)
-where
-W: the total number of elements partitioned over all rounds
-n: the number of elements
-…: "and so on", down to 1
-O: Big O: grows at most this fast, up to a constant factor
-n^2: n squared, n × n
-In words: if each round throws away only one element, the rounds add up to a triangle, about n²/2, which is quadratic.
-```
+Bad pivots every round shrink the range by only one element, exactly like quicksort. The rounds then partition all n elements, then one fewer, then one fewer again, down to 1: a shrinking triangle of work that adds up to about half of n squared element visits, which is **O(n²)**.
 
 With a first- or last-element pivot, a sorted input does this. Random pivots make it vanishingly unlikely, but not impossible, and an adversary who can predict your random number generator can still force it.
 

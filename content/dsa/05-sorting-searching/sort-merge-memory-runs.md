@@ -11,7 +11,7 @@ This unit builds on the preceding sorting units. Here n is the number of input e
 
 ## Space: the real cost
 
-The array version needs an O(n) auxiliary buffer for merging. You can allocate it once and reuse it, rather than slicing like the teaching code above (which allocates a lot of small lists). The recursion stack adds O(log n).
+The array version needs an O(n) auxiliary buffer for merging. You can allocate it once and reuse it, rather than slicing like the teaching code in the earlier merge-sort unit (which allocates a lot of small lists). The recursion stack adds O(log n).
 
 In-place merge algorithms exist, but they are complicated and slower in practice. This is merge sort's main trade-off against quicksort with smaller-side recursion and heapsort, which need O(log n) and O(1) extra space respectively. Naive quicksort can use O(n) stack space.
 

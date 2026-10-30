@@ -35,7 +35,7 @@ For **real-valued** answers, use a suitable tolerance and an iteration limit, an
 
 - **`git bisect`** narrows commit ancestry using good/bad tests. On a linear, monotone history with no skipped commits, 1,000 candidates take about 10 tests; merge graphs, flaky tests and fixes/reintroductions complicate that model.
 - **B-tree pages** in databases (PostgreSQL, InnoDB) binary search the sorted keys inside each page.
-- **Timsort's galloping** (covered later in this module) is an exponential search: probe 1, 3, 7, 15 ... until overshooting, then binary search. That is the right tool when the answer is probably near the start or the range is unbounded.
+- **Timsort's galloping** (covered earlier in this module) is an exponential search: probe 1, 3, 7, 15 ... until overshooting, then binary search. That is the right tool when the answer is probably near the start or the range is unbounded.
 - **Standard libraries:** Python's `bisect`, C++'s `lower_bound`, `upper_bound` and `equal_range`, Java's `Arrays.binarySearch` (returns `-(insertion point) - 1` when absent), and Go's `sort.Search`, which is binary search on a predicate.
 
 ## Key takeaways

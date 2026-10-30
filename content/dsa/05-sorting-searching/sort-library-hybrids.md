@@ -11,13 +11,13 @@ This unit builds on the preceding sorting units. Here n is the number of input e
 
 ## pdqsort
 
-Orson Peters' **pattern-defeating quicksort** (2016, paper 2021) is the modern unstable sort. Go adopted it for `sort.Sort` in Go 1.19, and Rust used it for `sort_unstable` for years (Rust 1.81 replaced it with **ipnsort**, a successor by Peters and Bergdoll). It extends introsort with ideas that make common patterns fast:
+Orson Peters' **pattern-defeating quicksort** (2016, paper 2021) is the modern unstable sort. Go adopted it for `sort.Sort` in Go 1.19, and Rust used it for `sort_unstable` for years (Rust 1.81 replaced it with **ipnsort**, a newer design by Peters and Bergdoll). It extends introsort with ideas that make common patterns fast:
 
 - **Pivot selection**: median-of-three, or Tukey's ninther for larger arrays.
 - **Partial insertion sort**: if partitioning detects an already partitioned range (excluding pivot setup), try insertion sort with a small cap on moves. On sorted or nearly sorted input this finishes in O(n).
 - **Equal-element handling**: if the pivot equals the element just before the current sub-array, all elements equal to it are partitioned off in one pass. With k distinct keys the cost is O(nk), linear for few distinct values.
 - **Bad-partition detection**: an unbalanced split triggers a shuffle of a few elements to break adversarial patterns. After a logarithmic budget of bad partitions, it falls back to heapsort, guaranteeing O(n log n).
-- **Branchless block partitioning** (from BlockQuicksort) for cheap comparisons such as integers, avoiding branch mispredictions on random data.
+- **Branchless block partitioning** (from BlockQuicksort) for cheap comparisons such as integers, avoiding branch mispredictions on random data. Ports differ: Go's implementation notes that it leaves out the BlockQuicksort optimisations.
 
 The result: O(n log n) worst case, in place, and linear on sorted, reversed and all-equal inputs.
 
@@ -25,14 +25,14 @@ The result: O(n log n) worst case, in place, and linear on sorted, reversed and 
 
 | Language | Default | Stable? |
 |---|---|---|
-| Python `sorted`, `list.sort` | Timsort (powersort merges) | Yes |
+| Python `sorted`, `list.sort` | Timsort (powersort merge policy since 3.11) | Yes |
 | Java objects, `List.sort` | TimSort | Yes |
 | Java primitives | Dual-pivot quicksort | n/a |
 | JavaScript `Array.sort` | Timsort in V8 | Yes |
 | C++ `std::sort` | Typically introsort-family; implementation-specific | No |
 | C++ `std::stable_sort` | Typically merge-based; implementation-specific | Yes |
-| Rust `sort` / `sort_unstable` | driftsort / ipnsort | Yes / No |
-| Go `sort.Sort`, `slices.Sort` | pdqsort | No |
+| Rust `sort` / `sort_unstable` | driftsort / ipnsort (since 1.81) | Yes / No |
+| Go `sort.Sort`, `slices.Sort` | pdqsort (`sort` since Go 1.19; `slices` since it was added in Go 1.21) | No |
 
 Notes on the table:
 

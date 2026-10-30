@@ -11,7 +11,7 @@ Earlier tests chose inputs for existing code. Test-driven development reverses t
 
 ## Test-driven development
 
-TDD, as described by Kent Beck in *Test-Driven Development: By Example* (2002), is a short loop repeated many times an hour:
+TDD was developed by Kent Beck in the late 1990s as part of Extreme Programming and set out in his book *Test-Driven Development: By Example*. It is a short loop repeated many times an hour:
 
 ```
    +--------+    +---------+
@@ -98,7 +98,7 @@ def test_rejects_garbage(bad):
         parse_duration(bad)
 ```
 
-Against the cycle-2 code, `"1x"` fails with `KeyError: 'x'`, not `ValueError`, which is exactly the kind of sloppy error handling TDD drags into the open. The final version:
+Against the cycle-2 code, `"1x"` fails with `KeyError: 'x'`, not `ValueError`, which is exactly the kind of inconsistent failure behaviour TDD drags into the open. The final version:
 
 ```python
 import re
@@ -138,7 +138,7 @@ Limits and criticisms:
 
 - It fits well-understood logic (parsers, pricing rules, state machines). It fits less well for exploratory work, UI layout or spikes where you do not yet know what you want. Many practitioners write a throwaway spike, then TDD the real version.
 - It does not by itself produce good design or good tests. Tests written in tiny steps can still couple to implementation.
-- Research on productivity and quality has mixed findings across tasks and study designs. For example, industrial case studies reported defect reductions with extra initial development time, while a six-month study found no effect on quality or productivity. Neither establishes a universal effect.
+- Research on productivity and quality has mixed findings across tasks and study designs. Case studies of four industrial teams (three at Microsoft, one at IBM) reported 40–90 % lower defect density before release, with managers estimating 15–35 % more initial development time. A six-month study of 30 student developers found no effect on external quality or productivity, although the TDD group wrote more tests. Neither establishes a universal effect.
 
 > [!tip] Outside-in TDD
 > A popular variant starts with a failing acceptance test for a whole feature, then uses unit-level TDD to build the pieces until the outer test goes green. This is the "London school" style from the earlier interaction-verification unit, and it often uses mocks for collaborators not yet written.
@@ -152,5 +152,5 @@ Limits and criticisms:
 - [Test Driven Development — Martin Fowler](https://martinfowler.com/bliki/TestDrivenDevelopment.html)
 - [Self Testing Code — Martin Fowler](https://martinfowler.com/bliki/SelfTestingCode.html)
 - [Industrial TDD case studies — IBM Research](https://research.ibm.com/publications/realizing-quality-improvement-through-test-driven-development-results-and-experiences-of-four-industrial-teams)
-- [Six-month TDD study — original research](https://arxiv.org/abs/2105.03312)
+- [Studying TDD and its retainment over a six-month time span — Baldassarre et al.](https://arxiv.org/abs/2105.03312)
 - [Equality and triangulation — Kent Beck](https://www.informit.com/articles/article.aspx?p=30641)

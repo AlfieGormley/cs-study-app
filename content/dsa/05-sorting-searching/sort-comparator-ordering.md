@@ -11,9 +11,14 @@ This unit builds on the preceding sorting units. Here n is the number of input e
 
 ## Comparators: the contract
 
-A comparator must define a **strict weak ordering**. Written as rules about its "less than" answer:
+A comparator must define a **strict weak ordering**. In plain terms, its "comes before" answers must obey these rules:
 
-```formula
+1. **Consistent:** `cmp(a, b)` always gives the same answer for the same pair.
+2. **Irreflexive and asymmetric:** nothing comes before itself, and two elements cannot each come before the other.
+3. **Transitive:** if a comes before b and b before c, then a comes before c.
+4. **Transitive ties:** if a ties with b (neither comes before the other) and b ties with c, then a must tie with c.
+
+```formula reference
 ¬(a < a)
 a < b  ⇒  ¬(b < a)
 (a < b) ∧ (b < c)  ⇒  a < c
@@ -31,16 +36,17 @@ E: Boolean equivalence test: true when neither argument precedes the other accor
 In words: nothing comes before itself, two elements cannot each come before the other, and both ordering and comparator-equivalence chain transitively. If a ties b and b ties c, a must also tie c.
 ```
 
-In practice:
-
-1. Consistent: `cmp(a, b)` always gives the same answer for the same pair.
-2. Irreflexive and asymmetric: the first two rules above.
-3. Transitive: the third rule, and the same for "equal" (neither comes before the other).
+> [!analogy] Real-world analogy: ranking rock, paper and scissors
+> Try to line up rock, paper and scissors from weakest to strongest. Rock beats scissors, scissors beats paper, but paper beats rock, so whichever order you pick, some pair is in the "wrong" place. Asking different people to do the ranking gives different answers, depending on which pair each looks at first.
+>
+> **How it maps:** "beats" is a comparator that breaks transitivity. A sorting algorithm assumes the answers fit together into one consistent line; when they do not, its result depends on which pairs it happened to compare, or it detects the contradiction and fails.
+>
+> **Where it stops:** the game's cycle is obvious. Real comparator bugs are usually hidden: `a - b` is correct for most values and wrong only for extreme ones, and NaN breaks the rules only when one is present, so the failure appears rarely and often only in production.
 
 Break the contract and the consequences depend on the language:
 
 - **Java** TimSort may throw `IllegalArgumentException: Comparison method violates its general contract!`, often only on large or unlucky inputs, so it passes tests and fails in production.
-- **C++** `std::sort` has **undefined behaviour**. Real implementations can run past the end of the array (the unguarded insertion sort assumes a sentinel), causing crashes or memory corruption.
+- **C++** `std::sort` has **undefined behaviour**. Real implementations can run past the end of the array (the unguarded insertion loop assumes some earlier element will stop its scan), causing crashes or memory corruption.
 - **Rust** may panic since 1.81, but never causes memory unsafety.
 - **Python** may produce an order that does not satisfy the intended relation; user comparison code can also raise exceptions.
 
@@ -53,22 +59,7 @@ Common ways to break it (the Java block shows alternative comparator expressions
 (a, b) -> Integer.compare(a, b)
 ```
 
-Why it overflows: Java's `int` holds values only up to about 2.1 billion, so a true difference larger than that wraps round to a negative number.
-
-```formula
-d = a − b
-d = 2 × 10^9 − (−2 × 10^9) = 4 × 10^9
-d_max = 2^31 − 1 ≈ 2.147 × 10^9
-where
-d: the difference the comparator returns; its sign is meant to say which is larger
-a: the first value compared; here 2,000,000,000
-b: the second value compared; here −2,000,000,000
-d_max: the largest value a 32-bit signed Java int can hold, 2,147,483,647
-2^31: 31 copies of 2 multiplied together
-10^9: ten to the power 9, a billion
-≈: approximately equal to
-In words: the real difference, 4 billion, is bigger than an int can hold, so it wraps to a negative number and the comparator claims a < b.
-```
+Why it overflows: Java's `int` holds values only up to 2,147,483,647 (about 2.1 billion). Comparing 2 billion with −2 billion gives a true difference of 4 billion, which does not fit, so it wraps round to −294,967,296. The negative result tells the sort that 2 billion comes *before* −2 billion.
 
 - Random comparators (`() => Math.random() - 0.5` to "shuffle") are inconsistent and produce biased shuffles. Use Fisher–Yates.
 - **NaN.** Ordered comparisons (<, <=, >, >=) with NaN are false, while != is true. Treating NaN as equivalent to every value via neither-less-than breaks transitivity of incomparability. In Python, `sorted([3, nan, 1, 2])` returns `[3, nan, 1, 2]`: not sorted at all. Filter NaNs out first or use a key that places them explicitly.

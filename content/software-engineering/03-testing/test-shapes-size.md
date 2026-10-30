@@ -39,7 +39,7 @@ The common principle is the same: pick the cheapest test that would catch the bu
 Google separates two ideas that the word "unit" blurs.
 
 - **Scope** is how much code is exercised (one function or the whole system).
-- **Size** is what resources the test may use. Under the Google scheme described here, small tests use one thread in one process, without sleeping or external I/O; hermetic in-memory filesystem access is an exception. Medium tests may use multiple processes and localhost networking on one machine. Large tests may span machines.
+- **Size** is what resources the test may use. Under the Google scheme described here, small tests run in a single process (in many languages, a single thread), without sleeping, I/O or other blocking calls; a hermetic, in-memory filesystem is the one stated exception. Medium tests may use multiple processes and localhost networking on one machine. Large tests may span machines.
 
 The size constraints remove common sources of slowness and nondeterminism; they do not guarantee a particular execution duration or outcome. A narrow-scope test that secretly calls a real API is "unit" in name only.
 

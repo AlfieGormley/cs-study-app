@@ -53,21 +53,14 @@ result [1, 2, 3]
 
 The counter-intuitive part: to find the **smallest** k, use a **max**-heap; to find the **largest** k, use a **min**-heap. The root is the gatekeeper for "worst of the best".
 
-- **Time:** O(n log(k + 1)). Each element costs at most one O(log k) heap operation, and once the heap holds good values, most elements are rejected by a single comparison with the root. The "+ 1" only keeps the bound sensible for one retained item, where its logarithm would otherwise be zero.
+> [!analogy] Real-world analogy: a shortlist with a fixed number of places
+> A recruiter keeps a shortlist of the 10 strongest applicants from a stream of hundreds. She does not need the whole shortlist in order; she only needs to know who is currently the weakest on it. Each new applicant is compared with that person: stronger, and they swap places; otherwise the newcomer is turned away after one look.
+>
+> **How it maps:** the shortlist is the size-k heap, the weakest shortlisted applicant is the root (the largest value when you want the smallest k), one look at a newcomer is the single comparison with the root, and a swap is `heapreplace`.
+>
+> **Where it stops:** after a swap the recruiter can simply scan ten names to find the new weakest. A heap instead restores its order by sifting the newcomer down a few levels, which is what keeps each replacement logarithmic even when k is large.
 
-```formula
-T = O(n log(k + 1))
-n log_2(k + 1) ≈ 10^6 × 6.66 ≈ 6.7 × 10^6
-where
-T: the worst-case running time of the size-k heap method
-n: the number of elements read from the stream; a million (10^6) here
-k: how many smallest elements to keep; 100 here
-log_2(k + 1): the base-2 logarithm of k + 1, roughly the height of the heap; log_2(101) ≈ 6.66
-log: the logarithm (the base only changes a constant)
-O: Big O: grows at most this fast, up to a constant factor
-≈: approximately equal to
-In words: each item can travel down a logarithmic-height heap. The 6.7-million figure is a growth proxy, not a bound on literal executed instructions or measured time.
-```
+- **Time:** O(n log(k + 1)), where k is the number of values kept. Each element costs at most one O(log k) heap operation, and once the heap holds good values, most elements are rejected by a single comparison with the root. The "+ 1" only keeps the bound sensible for one retained item, where its logarithm would otherwise be zero. Keeping 100 values, the heap is only about 7 levels deep, so even a replacement is a short walk however long the stream is.
 
 - **Space:** O(k), independent of n. It works on a stream you cannot store: the 100 smallest response-time records from a stream. Ranking query frequencies additionally needs counting or a frequency sketch.
 

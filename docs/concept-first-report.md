@@ -1,6 +1,6 @@
 # Concept-first library review
 
-Status: **in progress**. 37/60 modules and 1071/1845 active lessons have current independent editorial reviews.
+Status: **in progress**. 40/60 modules and 1152/1845 active lessons have current independent editorial reviews.
 
 This report counts only active lesson IDs from module.json. Retired subjects (os, architecture, theory, languages; see `content/retired-subjects.json`) are excluded. Pending modules have not been certified by keyword scans or by renderer tests.
 
@@ -18,12 +18,12 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | [databases / Advanced SQL](../content/databases/02-advanced-sql/verification.json) | Reviewed | 41 | 71 | 30 → 3 | 0 / 3 | 22 → 0 | 149 | 135 | 10 |
 | [databases / Relational Theory & Normalisation](../content/databases/03-relational-theory/verification.json) | Reviewed | 35 | 72 | 55 → 34 | 5 / 29 | 96 → 2 | 192 | 160 | 7 |
 | [databases / Query Processing & Optimisation](../content/databases/04-query-processing/verification.json) | Reviewed | 33 | 67 | 33 → 20 | 5 / 15 | 32 → 0 | 193 | 149 | 4 |
-| databases / PostgreSQL | Pending review | 13 | — | — | — | — | — | — | — |
+| [databases / PostgreSQL](../content/databases/05-postgresql/verification.json) | Reviewed | 13 | 15 | 3 → 2 | 1 / 1 | 2 → 0 | 113 | 69 | 7 |
 | [dsa / Complexity Analysis](../content/dsa/01-complexity/verification.json) | Reviewed | 35 | 81 | 79 → 17 | 13 / 4 | 211 → 14 | 150 | 181 | 24 |
 | [dsa / Arrays, Lists, Stacks & Queues](../content/dsa/02-linear/verification.json) | Reviewed | 32 | 67 | 23 → 15 | 2 / 13 | 31 → 0 | 293 | 181 | 8 |
 | [dsa / Hash Tables & Hashing](../content/dsa/03-hashing/verification.json) | Reviewed | 37 | 73 | 48 → 26 | 4 / 22 | 55 → 0 | 158 | 182 | 9 |
 | [dsa / Trees & Heaps](../content/dsa/04-trees/verification.json) | Reviewed | 35 | 80 | 38 → 15 | 5 / 10 | 37 → 0 | 170 | 207 | 12 |
-| dsa / Sorting & Searching | Pending review | 46 | — | — | — | — | — | — | — |
+| [dsa / Sorting & Searching](../content/dsa/05-sorting-searching/verification.json) | Reviewed | 46 | 96 | 53 → 30 | 6 / 24 | 42 → 0 | 195 | 270 | 7 |
 | dsa / Graphs | Pending review | 37 | — | — | — | — | — | — | — |
 | dsa / Recursion, Backtracking & Greedy | Pending review | 40 | — | — | — | — | — | — | — |
 | dsa / Dynamic Programming | Pending review | 46 | — | — | — | — | — | — | — |
@@ -53,7 +53,7 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | security / Security Engineering in Practice | Pending review | 23 | — | — | — | — | — | — | — |
 | [software-engineering / Design Principles & Clean Code](../content/software-engineering/01-principles/verification.json) | Reviewed | 26 | 69 | 4 → 1 | 1 / 0 | 4 → 0 | 294 | 98 | 5 |
 | [software-engineering / Design Patterns](../content/software-engineering/02-design-patterns/verification.json) | Reviewed | 28 | 66 | 4 → 0 | 0 / 0 | 9 → 0 | 284 | 116 | 9 |
-| software-engineering / Testing | Pending review | 22 | — | — | — | — | — | — | — |
+| [software-engineering / Testing](../content/software-engineering/03-testing/verification.json) | Reviewed | 22 | 68 | 10 → 1 | 0 / 1 | 5 → 0 | 197 | 120 | 8 |
 | software-engineering / Version Control & CI/CD | Pending review | 26 | — | — | — | — | — | — | — |
 | software-engineering / Software Architecture at the Code Level | Pending review | 25 | — | — | — | — | — | — | — |
 | software-engineering / Engineering Practices | Pending review | 24 | — | — | — | — | — | — | — |
@@ -212,6 +212,41 @@ None recorded in this editorial review.
 - medium confidence, all PostgreSQL lessons: Timings, buffer counts, row counts and plan costs in plan excerpts. Machine-, cache-, sample- and data-dependent. Shapes and exact cost-model figures reproduced; single-run numbers differ and are labelled illustrative (lesson headers plus the run-specific labels I added).
 - medium confidence, qp-selectivity-dependencies / qp-statistics-optimiser-q5: Extended-statistics estimate about 12,400 (12,423 in one run). Sample-dependent: my two ANALYZE runs gave 12,283 and 12,343. The text says the figure varies with the sample.
 - medium confidence, qp-index-maintenance / qp-covering-partial-indexes / qp-index-tuning-q11: Date index size '6.9 MB'. pg_size_pretty shows 6,912 kB (6.75 MiB); the figure is 6,912 kB divided by 1,000. Not material to any answer; left unchanged.
+
+
+## databases / PostgreSQL
+
+2 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- V1 pg-vacuum-snapshots-statistics: 'a replication slot whose consumer has stopped reading' was listed as holding back table cleanup. Executed: a stale logical slot (catalog_xmin only) and a physical slot without feedback xmin both let VACUUM remove all 10,000 dead versions. Now: a slot that still records an old xmin from a standby that stopped connecting; logical slots hold back only system-catalog cleanup and WAL; check xmin or catalog_xmin; takeaway says slots with an old xmin.
+- V2 glossary autovacuum-vacuum-scale-factor: author's new bare alias 'scale factor' falls back across subjects (databases precedes synth), so system-design/11's unit-conversion 'scale factor' would have opened the autovacuum entry instead of synth's scale-factor. Alias removed (entry back to baseline); the 4 lesson uses and 3 question uses now say 'vacuum scale factor', an existing alias.
+- V3 glossary pg-stat-user-tables (new): fully shadowed by databases/04 pg-stat-user-indexes, which owns 'pg_stat_user_tables'; a dead new duplicate fails the release dictionary check. Removed.
+- V4 glossary pg-hot-standby-feedback: 'It prevents those queries being cancelled' overstated; the docs say it eliminates cancels caused by cleanup records. Now: stops cancellations caused by the primary cleaning up rows they were reading.
+- V5 glossary pg-postmaster: 'restarts the other processes if one crashes' was imprecise. Executed SIGKILL of one backend: every other session was terminated and the server reinitialised. Now says exactly that.
+- V6 pg-autovacuum-thresholds-q1 distractor 3 explanation claimed disabling autovacuum lets 'wraparound risk build all day'; anti-wraparound vacuums still run when autovacuum is off. Now: dead versions build up and automatic ANALYZE stops.
+- V7 pg-xid-freezing-wraparound: two new 'read-only' phrases linked to react/01 react-readonly-props (wrong sense). Reworded ('lock a row against change', 'queries that only read').
+
+**Scope gaps and exclusions:**
+
+- Practical survey retained; not a production provisioning, permission/pool configuration, payment workflow or least-privilege deployment runbook.
+- Logical restore, physical backup manifest, live disposable streaming standby replay/pause/promotion were tested. No full end-to-end physical PITR target replay, disaster failover, storage power-loss simulation or production performance benchmark is claimed.
+- No billion-ID wraparound experiment or promised autovacuum worker-start timing. Circular-order mathematics and actual freeze flags/continued row mutability were checked.
+- Optional pg_stat_statements requires configuration; unconfigured native access fails as expected.
+- Render check at 390 px not run: generated data/ cannot be rebuilt in this checkout; integration step must render the 13 lessons (12 analogy disclosures, 1 essential and 1 reference formula).
+- Most lessons still have one question (spec suggests 2-4); none added. Candidates: idle RC vs RR transaction and vacuum, synchronous_commit=off vs fsync=off, PITR whole-cluster scope, skip-scan suitability, which replication slots hold back cleanup.
+- PostgreSQL 18 asynchronous I/O (io_method), PG 17 vacuum memory changes, multixact wraparound and online rebuild tools (pg_repack) are not taught.
+- Defaults and features are PostgreSQL 18; PostgreSQL 19 was at RC1 on 2026-10-15 and should be re-checked when it is released.
+- The vacuum lesson names pg_stat_user_tables for dead-tuple counts, but the dictionary entry that opens (04 pg-stat-user-indexes) mentions only update/HOT counters.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, pg-backups-point-in-time-recovery: Amazon RDS DB-instance automated-backup retention0–35days, explicitly datedOctober2026, with deployment-dependent cluster/failover support. Fresh official AWS source supports current policy and deployment distinctions, but a service choice should recheck time-sensitive retention/recovery terms.
+- medium confidence, pg-query-indexes-explain: With many distinct leading values, a separate index on the later column is still the better fit than relying on skip scan. indexes-multicolumn says skip scan is generally chosen only with few distinct leading values and the planner otherwise prefers a sequential scan (confirmed by execution); recommending a separate index is sound design inference rather than a quoted rule.
+- medium confidence, all: Experiment figures (about a dozen pages, 2,942 pages, ~7,700 rows, 53 index searches, 360/1,416 kB, 9,976 kB spill, 24,788 kB quicksort, ~8 MB hash). Reproduced on 18.6/aarch64 (most exactly); they depend on version, platform, data and timing and are presented as one test run.
+- medium confidence, pg-autovacuum-thresholds: Insert threshold: '20 % of the rows in the part of the table not yet frozen'. PG 18 formula multiplies reltuples by the fraction of pages not all-frozen (1 - relallfrozen/relpages); the lesson's row-based phrasing is a faithful approximation, not the exact page-based definition.
+- medium confidence, pg-clients-backends-pools: PostgreSQL 18 is the current major release; PostgreSQL 19 is at release-candidate stage. True on 2026-10-30 (postgresql.org) and dated in the text, but time-sensitive: 19 GA is likely soon.
 
 
 ## dsa / Complexity Analysis
@@ -454,6 +489,83 @@ None recorded in this editorial review.
 - medium confidence, tree-balanced-workloads: CFS history, cached leftmost pointer, EEVDF transition from 6.6, epoll/rbtree uses. Kernel docs fetched and match (EEVDF doc: transition began in 6.6); kernel facts are time-sensitive.
 - medium confidence, tree-bst-deletion-cases: Common std::map implementations relink the successor rather than copy keys. Verified in libstdc++ and libc++ source and Linux rbtree; MSVC not checked; the standard implies it only through iterator-invalidation rules. Wording is hedged.
 - medium confidence, tree-morris-threads: Joseph M. Morris, 1979. Wikipedia's text and citation give 1979 (its reference spells the initial 'H.'); the original paper was not fetched.
+
+
+## dsa / Sorting & Searching
+
+52 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- sort-heap-practical-cost: "roughly 45% more comparisons than randomised quicksort" was the leading-term ratio (2 / 1.386 = 1.44) presented as the practical figure → prose now states the simulated count of the lesson heapsort at 10^6 shuffled keys (about 37 million, 1.85n log2 n) against quicksort's 25 million expectation (ratio about 1.5; 1.52 at 65,536) and labels 1.44 as the leading-term ratio; reference card definitions and In words aligned.
+- sort-merge-theorem-counts: "merge sort needs about 20 million comparisons in the worst case" for 10^6 → about 19 million (exact top-down worst case 18,951,425, as the bound-limits unit says).
+- sort-heapsort-lower-bound-q8 distractor [3]: "Merge sort needs only about 20 million here" → "at most about 19 million".
+- sort-timsort-merge-policy: attributed O(n) sorting of two concatenated sorted lists to galloping → run detection finds two runs and one linear merge does it; galloping only cuts that merge's comparisons further.
+- sort-introsort-fallback: "sub-arrays below a threshold (16 elements in libstdc++)" → "16 elements or fewer" (libstdc++ loops while size > _S_threshold = 16) with one final insertion pass.
+- sort-timsort-natural-runs: "the sort in Android, V8 ... and Swift" overstated Swift → object sort in Java 7 and Android libcore, V8 since 7.0 (2018), Swift uses a Timsort-style run-merging design (source read).
+- sort-key-caching: the only statement that a key function costs memory (one stored key per element) was inside the collapsed analogy → added visible prose (CPython keeps the computed keys in a separate array).
+
+**Scope gaps and exclusions:**
+
+- No universal wall-clock sorting ratio, crossover size, cache-residency guarantee or GPU benchmark is supplied; these require a named representation, implementation, target and workload.
+- Production implementations, locale-collation encoding, distributed sample sort, full floating-search tolerance design and percentile-summary accuracy proofs remain surveys rather than complete implementations.
+- The deliberately invalid C++ comparator was actually run in an isolated bounded ASan fixture; its observed overflow is not a promised portable outcome. The intentionally nonterminating Python search was run with an explicit iteration guard.
+- Compiled app routes, SVG diagrams, PWA/offline update behavior, completion-age migration and publication are the coordinator’s full-app integration checks after this scoped review.
+- Rendering checked with the app markdown renderer (23 analogies become closed <details>, no literal callout tags or stray Markdown); not checked in a browser at 390 px or offline — left to the orchestrator.
+- Lesson minutes left as baseline (frontmatter unchanged); the module grew from about 16,100 to 21,300 words, mostly collapsed analogies.
+- CLRS, Knuth, Musser 1997 and the BFPRT/Floyd-Rivest/Martinez-Roura papers were not text-extracted; their constants (3n/10 − 6, 2(1 + ln 2)n, n + min(k, n − k)) rest on the baseline verification plus the verifier's simulations.
+- Scope unchanged: no shell-sort gap analysis, parallel/GPU sorting internals or string-sorting (MSD/burstsort) depth beyond short notes.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, sort-bucket-distribution: Library algorithms, defaults or historical implementation details Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- medium confidence, sort-comparator-ordering: Practical speed, layout or leading comparison model Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- medium confidence, sort-dual-pivot-contracts: Library algorithms, defaults or historical implementation details Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- medium confidence, sort-heap-practical-cost: Practical speed, layout or leading comparison model Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- medium confidence, sort-insertion-shifts: Practical speed, layout or leading comparison model Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- medium confidence, sort-introsort-fallback: Library algorithms, defaults or historical implementation details Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- medium confidence, sort-key-caching: Practical speed, layout or leading comparison model Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- medium confidence, sort-library-hybrids: Library algorithms, defaults or historical implementation details Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- medium confidence, sort-merge-choosing: Practical speed, layout or leading comparison model Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- medium confidence, sort-merge-external-runs: Library algorithms, defaults or historical implementation details Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- medium confidence, sort-pivot-costs: Practical speed, layout or leading comparison model Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- medium confidence, sort-properties-inversions: Practical speed, layout or leading comparison model Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- medium confidence, sort-radix-encoded-keys: Practical speed, layout or leading comparison model Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- medium confidence, sort-radix-width-cost: Practical speed, layout or leading comparison model Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- medium confidence, sort-search-progress-overflow: Practical speed, layout or leading comparison model Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- medium confidence, sort-search-root-applications: Library algorithms, defaults or historical implementation details Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- medium confidence, sort-selection-hybrid-fallback: Library algorithms, defaults or historical implementation details Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- medium confidence, sort-selection-many-ranks: Practical speed, layout or leading comparison model Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- medium confidence, sort-simple-production: Practical speed, layout or leading comparison model Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- medium confidence, sort-stable-multi-key: Library algorithms, defaults or historical implementation details Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- medium confidence, sort-stream-top-k-heaps: Practical speed, layout or leading comparison model Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- medium confidence, sort-timsort-merge-policy: Library algorithms, defaults or historical implementation details Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- medium confidence, sort-timsort-natural-runs: Library algorithms, defaults or historical implementation details Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- medium confidence, glossary:analytic-engine: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:android: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:cpu-prefetcher: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:database-page-dsa: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:david-musser: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:dotnet: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:driftsort: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:hdr-histogram: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:innodb-dsa: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:ipnsort: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:jon-bentley: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:l1-cache: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:l2-cache: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:minrun: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:np-sort: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:rust-sort-unstable: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:sequential-access-dsa: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:swift-lang: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, glossary:t-digest: Contextual implementation, performance or historical specificity Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- medium confidence, sort-heap-practical-cost: Ordinary heapsort makes about 1.5 times randomised quicksort's comparisons at a million keys (leading terms 1.44). Verifier simulation of the lesson code (one random input each at 65,536 and 10^6); depends on the sift-down variant and input.
+- medium confidence, sort-heap-practical-cost: Linux lib/sort.c bottom-up sift-down needs a bit more than half as many comparisons on average. Quoted from the kernel source comment (fetched), not measured; the lesson attributes it to the source.
+- medium confidence, sort-library-hybrids / sort-introsort-fallback / sort-dual-pivot-contracts / sort-bucket-distribution / sort-timsort-natural-runs: Library version facts: Go pdqsort since 1.19 and slices since 1.21; Rust driftsort/ipnsort since 1.81; libc++ heap fallback from LLVM 14; JDK heapsort fallback; NumPy 1.17 dtype mapping; V8 7.0; CPython powersort since 3.11. Each confirmed in fetched release notes or source, but implementation details are time-sensitive; libc++ 14 is confirmed only by source diff (not release notes); the NumPy mapping is the 1.17 statement, current docs say only that it varies by dtype.
+- medium confidence, sort-timsort-natural-runs: Swift's standard-library sort uses a Timsort-style run-merging design. Read from current Sort.swift (run detection, minrun from listsort.txt, run-stack invariants); the date it was adopted (Swift 5) was not re-fetched and is not stated.
+- medium confidence, sort-search-closed-invariant: Bentley: about 90% of professional programmers' binary searches had bugs. Programming Pearls not legitimately available online; widely quoted figure retained from baseline verification.
+- medium confidence, sort-quickselect-one-side / sort-selection-hybrid-fallback: Quickselect median ≈ 3.39n comparisons; Floyd-Rivest ≈ n + min(k, n − k). Standard published constants; primary papers linked but not text-extracted in this pass.
 
 
 ## dsp / Samples, Signals and Levels
@@ -1204,6 +1316,40 @@ None recorded in this editorial review.
 - medium confidence, pattern-incremental-builders: The 2001 first edition of Effective Java has no builder item (so the 2008 edition added it). Second-edition contents fetched from the publisher; first-edition contents seen only in unofficial copies via search (Item 2 there is the singleton item).
 - medium confidence, glossary:effective-java: The book's builder item helped spread the fluent Builder style in Java. Influence claim, hedged ('helped spread'); the item itself is verified.
 - high confidence, pattern-costs-and-scales: GoF section 1.8 warning wording. Matched against the book text in a scanned copy and a quotation site; no publisher-hosted excerpt was found, so the URL cited is the quotation.
+
+
+## software-engineering / Testing
+
+20 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- {"lesson":"test-tdd-cycles","before":"with teams estimating 15–35 % more initial development time","after":"with managers estimating 15–35 % more initial development time","reason":"Nagappan et al. 2008, Table 3: the time increase is a management estimate (abstract: 'subjectively')."}
+- {"lesson":"test-unit-structure","before":"FIRST ... | Timely | Written with the code, not months later |","after":"FIRST, a mnemonic credited to Brett Schuchert and Tim Ottinger ... | Timely | Written just before the code, not months later |","reason":"Agile in a Flash F.I.R.S.T. post: Timely means written just before the code; the acronym is credited to Schuchert and Ottinger."}
+- {"lesson":"test-shapes-size","before":"q8 and glossary test-size: small tests use one thread in one process","after":"single process (in many languages a single thread), no sleeping, I/O or blocking calls","reason":"SWE at Google ch. 11; the author fixed the lessons but not q8 or the glossary entry."}
+- {"lesson":"test-service-contracts","before":"they check the recorded requests and response shapes","after":"they check the recorded requests and the response details the consumer relies on (often just field types)","reason":"Pact matching can be exact or type-based (Pact matching docs)."}
+- {"lesson":"test-mutant-boundaries","before":"q3 key: no test distinguishes 3 attempts from 4","after":"no test checks what happens when `attempts` is exactly 3","reason":"`>` and `>=` differ only at attempts == 3; the old wording was ambiguous."}
+- {"lesson":"test-behaviour-readability","before":"q11: 'One assert per test' is a myth","after":"'One assert per test' is too strict to follow literally","reason":"Contradicted the author's softened lesson wording."}
+- {"lesson":"glossary","before":"first-properties: 'Tim Ottinger and Jeff Langr describe Fast, Isolated...'; classicist: 'also called Detroit or Chicago school'; test-after: 'can be just as useful'","after":"FIRST credited to Schuchert and Ottinger, described by Ottinger and Langr; classicist 'informally called the Detroit school'; test-after 'can still be valuable'","reason":"Agile in a Flash post; Fowler names only Detroit/London; unsupported comparative claim."}
+- {"lesson":"several","before":"'expected value' (test-pytest-cases, q7), 'error handling' (test-tdd-cycles, tdd-property-q1, test-doubles-q11), 'error-handling branch' (test-path-coverage-limits)","after":"'value you expected', 'expected answer', 'inconsistent failure behaviour', 'rejection of bad input', 'handling of failed API calls', 'branch that handles a failed payment'","reason":"Each linked to a wrong-sense dictionary entry (system-design expected value; react JavaScript try...catch)."}
+- {"lesson":"test-path-coverage-limits","before":"usually quoted in the wording popularised by the anthropologist Marilyn Strathern","after":"usually quoted in the wording used by the anthropologist Marilyn Strathern in a 1997 paper","reason":"Wikipedia quotes the sentence from Strathern 1997; 'popularised' is not supported and the paper's full text was not read from a legitimate copy."}
+- {"lesson":"test-scope-pyramid","before":"a test drive has no real equivalent of that","after":"which is a much more common way for an automated test to go wrong than for a test drive","reason":"Analogy limit was absolute; test drives can also be spoiled by road or weather."}
+
+**Scope gaps and exclusions:**
+
+- Inherited testing scope: no production benchmark, public shop deployment, full Pact deployment or empirical universal TDD outcome is claimed.
+- Application-specific partial sketches were executed with explicitly declared scratch scaffolds. Browser journey uses intercepted local HTML and PostgreSQL uses a real isolated container.
+- Pyramid proportions and test timing examples are illustrative/source-specific. Hypothesis settings and commercial tool documentation are time-sensitive, fetched and checked on 2026-10-15.
+- Snapshot/approval testing, fuzzing beyond property-based testing and performance/load testing are not covered (outside the module's stated scope).
+- SWE at Google's hourglass anti-pattern is not mentioned beside the ice-cream cone.
+- 390 px render check not done by author or verifier; left to the orchestrator/release.
+- Testcontainers and Playwright snippets not executed.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, test-path-coverage-limits: The quoted Goodhart wording is the one used by Marilyn Strathern in her 1997 paper. Supported by Wikipedia's quotation and the Cambridge citation record; the paper's full text was not read from a legitimate copy.
+- medium confidence, test-property-strategies: A generic text strategy, and even a two-letter alphabet, rarely reaches a run of ten identical characters. Verifier sweep (Hypothesis 6.170.14, 100 examples, 20 seeds): st.text() 1/20, two-letter 3/20, runs strategy 20/20. Generator behaviour is version- and settings-dependent; the lesson states no rate.
+- medium confidence, test-time-isolation: freezegun and time-machine behaviour descriptions. Unchanged and named only as options; not re-executed in this pass.
 
 
 ## synth / Sound & Digital Audio

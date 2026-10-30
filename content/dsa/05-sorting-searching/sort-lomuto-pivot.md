@@ -57,6 +57,13 @@ end: swap a[3],a[7]     [2,1,3,4,8,5,7,6]
 
 After partitioning, the pivot is in its **final sorted position**. Recursion handles `[2,1,3]` and `[8,5,7,6]`.
 
+> [!analogy] Real-world analogy: lining a class up around one child's height
+> A teacher picks the last child in the line as the reference. Walking along the rest of the line, each child shorter than the reference is sent to join a group at the front; everyone else stays where they are. Finally the reference child steps in just behind the front group. That child is now exactly where they belong in height order, even though neither group is in order yet.
+>
+> **How it maps:** the reference child is the pivot, the back of the front group is the boundary `i`, sending a child forward is a swap, and the reference child stepping into place is Lomuto's final swap. Lining up each group the same way is the recursion.
+>
+> **Where it stops:** children can shuffle around freely; Lomuto rearranges one array in place by swapping pairs of positions. Those swaps can carry one child past another of the same height, which is why the partition is not stable.
+
 ## Key takeaways
 - Lomuto finishes by placing the pivot at its sorted index.
 - Partition swaps can reorder equal keys, so this implementation is unstable.

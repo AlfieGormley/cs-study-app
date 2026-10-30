@@ -13,24 +13,26 @@ A test suite is only useful if people trust it. Two things destroy that trust. *
 
 A **flaky test** passes and fails on the same code. Google's testing blog reported in 2016 that about 1.5% of all its test runs produced a flaky result, that almost 16% of its tests showed some flakiness, and that about 84% of the pass-to-fail transitions its CI observed involved a flaky test. Those figures describe that 2016 Google dataset. A transition involving a flaky test does not itself establish that no new product bug exists.
 
-The damage compounds. A full run is clean only if *every* test passes. When tests flake independently of each other, the chance of that is one copy of the per-test pass chance for each test, all multiplied together:
+The damage compounds. A full run is clean only if *every* test passes. When tests flake independently of each other, the per-test pass chances multiply, so the chance of a clean run falls quickly as the suite grows. If each of 200 tests flakes on 0.5 % of runs, only about 37 % of runs are fully green: nearly two runs in three go red with nothing wrong. Doubling to 400 such tests drops clean runs to about 13 %.
 
-```formula
+```formula reference
 P_clean = (1 − p)^n
-P_clean = (1 − 0.005)^200
-P_clean = 0.995^200 ≈ 0.37
-P_red = 1 − P_clean ≈ 0.63
 where
 P_clean: the probability that a full run has no spurious test failure, from 0 (never) to 1 (always)
-p: the probability that one test fails spuriously on a run; here 0.5 % = 0.005
-n: the number of tests in the suite, here 200
-^: raise to a power: 0.995^200 means 200 copies of 0.995 multiplied together
-P_red: the probability that at least one test fails spuriously, so the build goes red on correct code
-≈: approximately equal to (rounded)
-In words: if each of 200 tests flakes 0.5 % of the time, only about 37 % of runs are fully green, and about 63 % go red with nothing wrong.
+p: the probability that one test fails spuriously on a single run, as a fraction; 0.5 % is 0.005
+n: the number of tests in the suite
+^: raise to a power: (1 − p)^n means n copies of (1 − p) multiplied together
+In words: if flakes are independent, the chance of a fully green run is the per-test pass chance multiplied once for every test, so adding tests of the same quality keeps shrinking it.
 ```
 
-Doubling the suite to 400 such tests drops the clean-run chance to 0.995 to the power 400, about 13 %. The formula assumes the flakes are independent. In practice many share a cause (a slow CI machine, a shared database), so they cluster, but the lesson holds: tiny per-test flake rates add up across a big suite. In the independent 200-test illustration, most runs contain a spurious test failure. Re-running by reflex can then hide real failures in the noise.
+Real flakes are rarely fully independent. Many flakes share a cause (a slow CI machine, a shared database), so they cluster, but the lesson holds: tiny per-test flake rates add up across a big suite. Once most runs contain a spurious failure, people re-run by reflex, and real failures hide in the noise.
+
+> [!analogy] Real-world analogy: the smoke alarm by the toaster
+> A smoke alarm that goes off whenever someone makes toast soon gets its battery removed. After that, a real fire gets no warning either.
+>
+> **How it maps:** The alarm is a test, toast is a cause unrelated to the behaviour being checked (timing, order, a shared resource), and removing the battery is reflexive re-running, retrying or ignoring red builds. A building with hundreds of slightly over-sensitive alarms would almost always have one sounding, just as a large suite of slightly flaky tests is almost always red.
+>
+> **Where it stops:** Some "toast" alarms are real fires: a flaky test can be catching a genuine race in the product, so the cause needs investigating before you decide it is noise. And unlike an alarm, a test can be re-run many times under controlled order and seeds to reproduce exactly what triggered it.
 
 ### Common causes
 

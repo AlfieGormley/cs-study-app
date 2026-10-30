@@ -52,6 +52,13 @@ three copies: 4 - 1 = 3
 target 4: both results 4; zero copies
 ```
 
+> [!analogy] Real-world analogy: shelving another copy of a book
+> A library shelf holds three copies of the same title among other books in title order. A new copy could go just before the existing copies or just after them; both keep the shelf in order. The gap between those two spots is exactly the three existing copies.
+>
+> **How it maps:** "just before the copies" is the binary-search lower bound (the first book not earlier than the title), "just after" is the binary-search upper bound (the first book later than it), and the distance between them counts the equal keys. If the title is not on the shelf, both spots are the same place.
+>
+> **Where it stops:** on a real shelf you can push books aside to make room. In an array, inserting at the found position still means shifting every later element, so finding the spot is logarithmic but inserting is linear.
+
 lower_bound and upper_bound together answer most real questions: does x exist (`lo < n and a[lo] == x`), how many copies, where to insert while keeping order, and range queries ("all orders between 10:00 and 11:00" is `[lower_bound(10:00), lower_bound(11:00))`).
 
 Java’s `Arrays.binarySearch` returns a match index if present. If absent, its negative result encodes the insertion point: negate the insertion point and subtract one. For `[10, 20, 30, 40]`, searching for 25 has insertion point 2 and returns −3.

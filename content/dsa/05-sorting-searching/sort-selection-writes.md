@@ -27,20 +27,17 @@ def selection_sort(a):
         a[i], a[m] = a[m], a[i]
 ```
 
-The scan for the minimum always covers the whole unsorted part, so the counts never depend on the input:
+The scan for the minimum always covers the whole unsorted part, so the counts never depend on the input: about half of n squared comparisons (124,750 for 500 elements), but at most one swap per position (499 for 500 elements).
 
-```formula
-C = (n − 1) + (n − 2) + … + 1
+```formula reference
 C = (n(n − 1)) / 2
 S ≤ n − 1
-C = 500 × 499 / 2 = 124750
 where
-C: the number of comparisons selection sort makes, on every input
-S: the number of swaps it makes (one per position, at most)
-n: the number of elements in the array; here 500
-…: "and so on", down to 1
+C: the number of comparisons selection sort makes, on every input of n elements
+S: the number of swaps it makes, at most one per position
+n: the number of elements in the array
 ≤: less than or equal to
-In words: selection sort always makes about n²/2 comparisons, but never more than n − 1 swaps.
+In words: selection sort always makes about half of n squared comparisons, but never more than one swap per position.
 ```
 
 - Comparisons: always exactly that total, whatever the input. It is **not adaptive**: a sorted array costs the same as a reversed one.
@@ -54,6 +51,13 @@ i 0: min is 1, swap with 2a
 ```
 
 You can make it stable by shifting instead of swapping (insert the minimum and slide the rest right), but that costs O(n) writes per step and throws away its only advantage.
+
+> [!analogy] Real-world analogy: lining up heavy boxes by their labels
+> You must line up crates in weight order, and each crate's weight is printed on its label. Reading a label is easy; carrying a crate is hard work. So you read every remaining label to find the lightest, then make one carry to put it in the next spot.
+>
+> **How it maps:** reading labels is comparing keys, carrying a crate is writing to the array, and "find the lightest, then one carry" is selection sort's full scan followed by one swap per position.
+>
+> **Where it stops:** you might notice two crates already in the right place and skip work, but selection sort still scans the whole remaining row every time, so its comparison count never drops. The single swap is also what breaks stability: a carried crate can jump over an equal-weight crate.
 
 ## Key takeaways
 - Minimum scans always make the same comparison count.

@@ -45,25 +45,30 @@ Total shifts: 9, which is exactly the number of inversions in the input. That is
 > [!note] Insertion sort is O(n + inversions)
 > Each shift removes one inversion, and each element costs at most one extra comparison to stop. So the running time grows with the number of elements plus the number of inversions.
 
-```formula
+```formula essential
 T = Θ(n + I)
-I = 0  ⇒  T = Θ(n)
-I = (n(n − 1)) / 2  ⇒  T = Θ(n^2)
-I ≤ nk  ⇒  T = O(n(k + 1))
 where
 T: the running time of insertion sort, counted in comparisons plus shifts
 n: the number of elements in the array
 I: the number of inversions (out-of-order pairs) in the input
-k: the furthest any element starts from its final sorted position, in places
 Θ: Big Theta: grows exactly this fast, up to a constant factor
-O: Big O: grows at most this fast, up to a constant factor
-n^2: n squared, n × n
-⇒: "which means"
-≤: less than or equal to
-In words: insertion sort pays one step per element plus one per inversion, so it is linear on sorted input, quadratic on reversed input and close to linear when every element is near its final place.
+In words: insertion sort pays about one step per element plus one per inversion, so its cost tracks how disordered the input is.
 ```
 
-The trace has six elements and nine shifts. The sum of six and nine illustrates the growth model, rather than an exact count of executed instructions. Sorted input has zero displacement. The bound assumes shifting one place costs constant time, which is true for arrays.
+Three consequences follow:
+
+- **Sorted input** has no inversions, so insertion sort is linear: one comparison per element.
+- **Reversed input** has every pair inverted, so it is quadratic.
+- **Nearly sorted input**, where no element starts more than k places from its final position, has at most k inversions per element. The cost is then O(nk), which is linear when k is a small constant.
+
+The bound assumes shifting one place costs constant time, which is true for arrays. It is a growth model, not an exact count of executed instructions.
+
+> [!analogy] Real-world analogy: sorting a hand of cards
+> Many card players pick up cards one at a time and slide each new card left past any higher cards until it sits in order. If the cards arrive almost in order, each one barely moves; if they arrive in reverse, every new card travels past all the others.
+>
+> **How it maps:** the cards already held are the sorted prefix, sliding a card past a higher one is one shift (one inversion removed), and stopping at the first card that is not higher keeps equal cards in arrival order, which is stability.
+>
+> **Where it stops:** in your hand, the other cards make room for free. In an array, every element the key passes must be copied one slot right, so a long slide costs one write per position; that is why reversed input is quadratic.
 
 Insertion sort is:
 

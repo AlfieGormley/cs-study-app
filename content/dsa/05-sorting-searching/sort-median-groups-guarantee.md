@@ -64,7 +64,7 @@ Picture the groups as columns, each sorted with its median in the middle row, an
 
 Half of the medians are no larger than the chosen median M. Each of those medians has two more elements in its group below it. So at least 3 elements in each of about half the groups are no bigger than M, and by symmetry the same number are no smaller:
 
-```formula
+```formula reference
 s ≥ 3n / 10 − 6
 r ≤ 7n / 10 + 6
 where
@@ -74,12 +74,14 @@ n: the number of elements
 r: the most elements the recursive call in step 4 can receive
 ≥: greater than or equal to
 ≤: less than or equal to
-In words: three elements from each of half the n/5 groups lie on each side of M, so roughly 30% is thrown away every round; the − 6 accounts for the ragged last group and M's own group.
+In words: three elements from each of half the groups lie on each side of M, so at least about 30% of the input is discarded every round and the recursive call gets at most about 70%; the small constant allows for the ragged last group and M's own group.
 ```
 
-For 1,000 elements the conservative finite bound excludes at least 294 and leaves at most 706 for the retained recursive side. The recurrence is:
+For 1,000 elements the conservative finite bound excludes at least 294 and leaves at most 706 for the retained recursive side, whatever the input order.
 
-```formula
+That gives two recursive calls per round: one on the group medians (a fifth of the input) to choose the pivot, and one on the retained side (at most about seven tenths). Together they handle at most about **nine tenths** of the input, so each level of recursion does at most about 90% of the previous level's work.
+
+```formula reference
 T(n) ≤ T(⌈n / 5⌉) + T(r) + cn
 r ≤ 7n / 10 + 6
 1/5 + 7/10 = 9/10
@@ -92,25 +94,13 @@ c: a fixed per-element upper bound on grouping and partition work, in operations
 ⌈ ⌉: ceiling, round upward for the ragged group
 O: Big O: grows at most this fast, up to a constant factor
 ≤: less than or equal to
-In words: recursive size fractions total nine tenths apart from bounded rounding allowances, so sufficiently large levels shrink geometrically and the total is linear.
+In words: the pivot search and the retained side together receive about nine tenths of the input, apart from small rounding allowances, so the work shrinks geometrically from level to level and the total is linear.
 ```
 
 Ignoring constant rounding allowances for the asymptotic argument, the two recursive size fractions sum to nine tenths, which is less than one. The total work at each level of recursion shrinks geometrically, and the whole algorithm is **O(n)**.
 
 > [!note] Why groups of 5?
-> With groups of 3, the guarantee is only about a third on each side, giving the recurrence below. This analysis establishes only O(n log n), not a matching lower bound. Five is the smallest odd group size giving linear time by this simple argument; other algorithms can use repeated grouping or different methods.
-
-```formula
-T(n) ≤ T(n / 3) + T(2n / 3) + O(n)
-1/3 + 2/3 = 1
-where
-T(n): the worst-case running time on n elements with groups of 3
-n: the number of elements
-O(n): the linear work of grouping and partitioning
-O: Big O: grows at most this fast, up to a constant factor
-≤: less than or equal to
-In words: with groups of 3 the two recursive calls together get the whole input, so the work does not shrink from level to level and the argument only gives n log n.
-```
+> With groups of 3, the guarantee is only about a third on each side. The pivot search then gets a third of the input and the retained side up to two thirds: together the whole input, so the work no longer shrinks from level to level and this analysis establishes only O(n log n), not a matching lower bound. Five is the smallest odd group size giving linear time by this simple argument; other algorithms can use repeated grouping or different methods.
 
 ## Key takeaways
 - Groups of five guarantee a fixed fraction on each side, allowing rounding corrections.

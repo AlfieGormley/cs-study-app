@@ -3,29 +3,29 @@
     "id": "pg-troubleshooting-query-memory-q1",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A server runs 100 concurrent queries, each with three simultaneous sorts. work_mem is 4 MB. Ignore hash operations, parallel workers and other memory. Which planning conclusion is sound?",
+    "prompt": "One nightly report spills its sorts to disk. A colleague proposes raising `work_mem` from 4 MB to 256 MB in `postgresql.conf` for the whole server. During the day, about 150 sessions run queries that each sort and hash several result sets. What is the main risk, and what is the safer change?",
     "options": [
       {
-        "text": "4 MB limits the whole server",
-        "explanation": "work_mem applies to individual operations; it is not a server-wide pool."
+        "text": "No real risk: work_mem is one shared pool for the whole server",
+        "explanation": "work_mem is a per-operation allowance, not a server-wide pool. Each sort or hash in each session may use up to that amount."
       },
       {
-        "text": "The base sort allowances total about 1,200 MB; total server memory can be higher",
-        "explanation": "Multiplying the allowance per sort by operations and sessions gives the illustrative base budget. Other memory is deliberately excluded."
+        "text": "Daytime memory could multiply into many gigabytes; set work_mem only for the report's session or role",
+        "explanation": "Correct. Every active sort may use up to 256 MB and hashes up to twice that by default, in every busy session, so memory can exhaust the server. Raising it with SET LOCAL or for the report's role helps the report without changing everyone else."
       },
       {
-        "text": "Increasing work_mem to 64 MB leaves the total unchanged",
-        "explanation": "The same operation and concurrency counts would multiply the larger allowance."
+        "text": "The setting is reserved up front, so the server must allocate 256 MB per connection at startup",
+        "explanation": "work_mem is an upper limit used as needed, not memory reserved per connection. The danger is what busy sessions may use together, not an up-front allocation."
       },
       {
-        "text": "Hash operations are always limited to exactly 4 MB too",
-        "explanation": "PostgreSQL hash operations use work_mem times hash_mem_multiplier; its PostgreSQL 18 default is 2.0."
+        "text": "Hash operations ignore work_mem, so only sorts are affected",
+        "explanation": "Hash operations are limited by work_mem times hash_mem_multiplier (2.0 by default), so they can use even more than sorts after the change."
       }
     ],
     "answer": 1,
-    "workedExample": "1. Count the active sort allowances across sessions.\n\n```formula\nM = wkc\nM = 4 MB × 3 × 100\nM = 1200 MB\nwhere\nM: illustrative total sort-memory allowance, in megabytes (MB)\nw: allowance per sort, here 4 MB\nk: simultaneous sorts per query, here 3\nc: concurrent queries, here 100\nMB: megabytes, counted as 1024 kilobytes in PostgreSQL settings\nIn words: three sorts in each of one hundred queries can collectively use twelve hundred megabytes at four megabytes per sort.\n```\n\n2. This is not an upper bound on server memory.\n3. Add hash allowances, parallel workers, shared buffers and other allocations when planning capacity.",
+    "workedExample": "1. work_mem limits one sort or hash operation before it spills to temporary files; it is not a total for the server.\n2. A single query can run several such operations at once, hashes may use twice the allowance by default, and many sessions run in parallel.\n3. So raising the global value from 4 MB to 256 MB multiplies the possible daytime total by 64, on top of shared_buffers and each backend's own memory.\n4. Most of that is only used when queries need it, which is exactly when the server is busiest.\n5. Give the extra memory only to the report, with `SET LOCAL work_mem` in its transaction or a setting on its role, and confirm with EXPLAIN ANALYZE that its sort no longer reports an external merge on disk.",
     "link": {
-      "title": "PostgreSQL 18 documentation",
+      "title": "PostgreSQL 18: resource consumption (work_mem)",
       "url": "https://www.postgresql.org/docs/18/runtime-config-resource.html"
     }
   }

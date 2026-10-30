@@ -11,58 +11,36 @@ This unit builds on the preceding sorting units. Here n is the number of input e
 
 ## Pivot choice and the worst case
 
-Quicksort's cost depends entirely on how balanced the splits are. Two **recurrences** (costs written in terms of the same cost on smaller inputs) show the two extremes:
+Quicksort's cost depends entirely on how balanced the splits are. Each partition looks at every element of its range once. If every pivot lands near the middle, the ranges halve, there are logarithmically many levels, and the total is O(n log n), like merge sort. If every pivot is the smallest or largest element, each partition peels off only the pivot: the ranges shrink by one at a time, there are n levels, and the total is quadratic.
 
-```formula
+```formula reference
 T_good(n) = 2T_good(n / 2) + n
-T_good(n) = Θ(n log(n))
 T_bad(n) = T_bad(n − 1) + n
-T_bad(n) = Θ(n^2)
 where
-T_good(n): the running time on n elements when every pivot is the median, so each split is exactly in half
-T_bad(n): the running time when every pivot is the smallest or largest element, so each split peels off just one element
+T_good(n): the running time on n elements when every pivot is the median, so each split is exactly in half; it grows like n log n
+T_bad(n): the running time when every pivot is the smallest or largest element, so each split peels off just one element; it grows like n squared
 n: the number of elements in the current sub-array; the "+ n" term is the partition, which looks at every element once
-Θ: Big Theta: exactly this growth rate, up to a constant factor
-log: the logarithm (base 2 here; the base only changes a constant)
-n^2: n squared, n × n
-In words: halving every time gives merge sort's n log n; removing only one element each time gives a sum of n + (n − 1) + … + 1, which is quadratic.
+In words: halving every time gives merge sort's n log n; removing only one element each time adds up a shrinking series of partitions, which is quadratic.
 ```
 
-With the first or last element as the pivot, **already sorted input** is the worst case: each partition peels off one element. Lomuto then compares the pivot with every other element of a sub-array that shrinks by one each time:
+### Why sorted input is the classic trap
 
-```formula
-C = (n − 1) + (n − 2) + … + 1
-C = (n(n − 1)) / 2
-C = 100 × 99 / 2 = 4950
-C = 10^6 × (10^6 − 1) / 2 ≈ 5 × 10^11
-where
-C: the number of comparisons Lomuto quicksort makes on sorted input with a last-element pivot
-n: the number of elements; 100 in the first example, 1,000,000 (10^6) in the second
-…: "and so on", down to 1
-10^6: ten to the power 6, a million; 10^11 is a hundred billion
-≈: approximately equal to
-In words: sorted input turns quicksort into a triangle of comparisons, about n²/2 of them.
-```
-
-For 100 elements the recursion also goes 99 levels deep. For a million elements that is about 500 billion comparisons and a stack overflow. Sorted and reverse-sorted inputs are common in practice, so this is not theoretical.
+With the first or last element as the pivot, **already sorted input** is the worst case: the last element is the maximum of every range, so each partition compares the pivot with every other element and removes only the pivot. For 100 elements that is 4,950 comparisons and recursion 99 levels deep. For a million elements it is about 500 billion comparisons and, in most languages, a stack overflow long before the end. Reverse-sorted input is just as bad. Sorted and reverse-sorted inputs are common in practice, so this is not theoretical.
 
 Defences:
 
 - **Median-of-three**: use the median of the first, middle and last elements. Fixes sorted and reverse-sorted inputs and gives slightly better splits on random data. Large arrays can use the "ninther" (median of three medians of three).
-- **Random pivot**: pick a uniformly random element. Now no particular input is bad; only bad luck is. The expected number of comparisons is given below, for every fixed input of **distinct keys**, with fresh independent uniform pivots. Randomizing the pivot alone does not rescue Lomuto on all-equal keys. The probability of quadratic behaviour is vanishingly small for large n.
+- **Random pivot**: pick a uniformly random element. Now no particular input is bad; only bad luck is. For every fixed input of **distinct keys**, with fresh independent uniform pivots, the expected number of comparisons is only about **39% more than perfect halving** would need: about 25 million for a million keys, against about 18 million if every pivot were the exact median (the leading term alone, shown below, gives about 28 million). The probability of quadratic behaviour is vanishingly small for large n. Randomising the pivot alone does not rescue Lomuto on all-equal keys, because every split is still empty on one side.
 
-```formula
-C_avg ≈ 2n ln(n)
-C_avg ≈ 1.39n log_2(n)
-C_avg ≈ 1.39 × 10^6 × 19.93 ≈ 2.8 × 10^7
+```formula reference
+C_avg ≈ 2n ln(n) ≈ 1.39n log_2(n)
 where
 C_avg: the expected (average) number of comparisons randomised quicksort makes on n distinct keys
-n: the number of elements; 1,000,000 (10^6) in the last line
+n: the number of elements
 ln(n): the natural logarithm of n (base e, about 2.718); ln(n) ≈ 0.693 × log_2(n)
-log_2(n): the base-2 logarithm of n, how many times n can be halved before reaching 1; log_2(10^6) ≈ 19.93
-10^6: ten to the power 6, a million; 10^7 is ten million
+log_2(n): the base-2 logarithm of n, how many times n can be halved before reaching 1
 ≈: approximately equal to (the leading term only; lower-order terms are dropped)
-In words: with random pivots, quicksort makes only about 39% more comparisons than perfect halving would, around 28 million for a million keys.
+In words: random pivots cost only about 39% more comparisons than perfect halving would, because most pivots land reasonably near the middle.
 ```
 
 > [!warning] Deterministic pivots can be attacked

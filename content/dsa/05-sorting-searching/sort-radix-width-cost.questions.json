@@ -3,27 +3,27 @@
     "id": "sort-linear-time-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "You radix sort 100 million unsigned **64-bit** keys using one byte per digit (base 256). How many counting-sort passes are needed?",
+    "prompt": "An LSD radix sort with one byte per digit (base 256) sorts 100 million unsigned 32-bit keys. The keys are widened to 64 bits, with the same values. How does the radix sort's work change, and how would a comparison sort's change?",
     "options": [
       {
-        "text": "4",
-        "explanation": "Four byte-sized digits cover 32 bits, not 64."
+        "text": "Both stay the same, because the number of keys has not changed",
+        "explanation": "The comparison sort's count stays about the same, but radix sort makes one pass per byte of key width, so wider keys mean more passes."
       },
       {
-        "text": "8",
-        "explanation": "Correct. 64 bits ÷ 8 bits per digit = 8 passes, each over all 100 million keys with a 256-entry count table."
+        "text": "Radix sort needs twice as many passes (8 instead of 4), roughly doubling its work; a comparison sort's comparison count barely changes",
+        "explanation": "Correct. Radix passes depend on key width: 64 bits is 8 bytes. A comparison sort makes about the same number of comparisons whatever the key width, each still a single machine comparison for 64-bit integers."
       },
       {
-        "text": "64",
-        "explanation": "That is base 2 (one bit per pass). Base 256 handles 8 bits per pass."
+        "text": "Radix sort needs 64 passes, one per bit",
+        "explanation": "That would be base 2. With one byte per digit, each pass handles 8 bits."
       },
       {
-        "text": "27",
-        "explanation": "That is about log₂(10⁸), the depth of a comparison sort. Radix passes depend on key width, not n."
+        "text": "Radix sort's passes grow with the logarithm of the number of keys, so nothing changes",
+        "explanation": "Pass count depends on how many digits each key has, not on how many keys there are. Wider keys mean more digits."
       }
     ],
     "answer": 1,
-    "workedExample": "```formula\nd = w / log_2(b)\nd = 64 / log_2(2^8) = 64 / 8 = 8\nd = 64 / log_2(2^16) = 64 / 16 = 4\nwhere\nd: the number of counting-sort passes (digits per key)\nw: the key width in bits; here 64\nb: the base: how many values one digit can take; 2^8 = 256 or 2^16 = 65,536\nlog_2(b): the bits in one digit; log_2(2^8) = 8\n2^8: 8 copies of 2 multiplied together (likewise 2^16)\nIn words: divide the key width by the bits per digit: 8 passes in base 256, 4 in base 65,536.\n```\n\nBase 2¹⁶ halves the passes but needs a 65,536-entry count table per pass, which may exceed the target L1 cache capacity. Base 256 (8 passes, 256-entry table) is the common choice.\n\nThe eight passes make 800 million output placements, plus counting reads and other overhead. A logarithmic-factor comparison model suggests about 2.7 billion comparisons on 100 million keys; these are different operations, so the counts do not establish a runtime ratio.",
+    "workedExample": "1. Passes = key width ÷ bits per digit. With 8-bit digits, 32-bit keys need 4 passes and 64-bit keys need 8.\n2. Each pass reads and places all 100 million keys and uses a 256-entry count table, so doubling the passes roughly doubles the work: about 800 million placements instead of 400 million, plus counting reads and other overhead.\n3. A comparison sort makes about n log₂ n comparisons (a few billion here) regardless of key width; comparing two 64-bit integers is still one machine operation.\n\nSo wider keys erode radix sort's advantage. A larger base (for example 16 bits per digit) would halve the passes, but it needs a 65,536-entry count table per pass, which may exceed the target L1 cache capacity; base 256 is the common choice. The counts are different operations, so they do not establish a runtime ratio.",
     "link": {
       "title": "Radix sorts — Algorithms, 4th ed.",
       "url": "https://algs4.cs.princeton.edu/51radix/"
@@ -61,7 +61,7 @@
       1,
       4
     ],
-    "workedExample": "Put numbers on it for 10⁷ 32-bit keys:\n\n| Base | Passes | Table |\n|---|---|---|\n| 2⁸ | 4 | 256 counters |\n| 2¹⁶ | 2 | 65,536 counters |\n| 2 | 32 | 2 |\n\nBase 2 makes 32 passes: far too many. Base 2¹⁶ makes only 2 passes but with a large, cache-unfriendly table. Choose the base by measuring the actual representation, hardware and workload.\n\n```formula\nT = O(d(n + b))\nd ≥ ⌈log_b(n)⌉\nd ≥ ⌈log_b(10^7)⌉ = ⌈2.9⌉ = 3\nwhere\nT: the running time of LSD radix sort\nO: Big O: grows at most this fast, up to a constant factor\nd: the number of digits per key (passes)\nn: the number of keys; 10 million (10^7) here\nb: the base, values per digit; 256 in the last line (log_256(10^7) ≈ 2.9)\nlog_b(n): the logarithm of n to base b: the power you raise b to in order to get n\n⌈ ⌉: the ceiling: round up to a whole number\n≥: greater than or equal to\nIn words: d passes each cost about n + b, and n distinct keys need at least log_b(n) digits: 3 bytes for 10 million distinct keys.\n```\n\nThat is a lower bound on width, not an upper bound: keys may be much wider (32-bit keys use 4 bytes), and fixed-width keys give a bounded number of passes.",
+    "workedExample": "Put numbers on it for 10⁷ 32-bit keys:\n\n| Base | Passes | Table |\n|---|---|---|\n| 2⁸ | 4 | 256 counters |\n| 2¹⁶ | 2 | 65,536 counters |\n| 2 | 32 | 2 |\n\nBase 2 makes 32 passes: far too many. Base 2¹⁶ makes only 2 passes but with a large, cache-unfriendly table. Choose the base by measuring the actual representation, hardware and workload.\n\n- **Cost:** d passes, each costing about n plus b for its counter table. True.\n- **Key width:** 10 million distinct keys need at least 3 bytes to tell apart, so width is not free. That is a lower bound, not an upper bound: 32-bit keys use 4 bytes, and fixed-width keys give a bounded number of passes. True.\n- **Larger base always faster:** false, because of the table cost above.\n- **In-place:** false; each stable counting pass needs an O(n) output buffer.\n- **MSD on strings:** true; a bucket with one string needs no more characters examined.",
     "link": {
       "title": "Radix sorts — Algorithms, 4th ed.",
       "url": "https://algs4.cs.princeton.edu/51radix/"

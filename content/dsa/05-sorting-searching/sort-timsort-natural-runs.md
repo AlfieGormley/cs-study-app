@@ -13,7 +13,7 @@ Production sorts are **hybrid sorting algorithms** engineered to exploit that st
 
 ## Timsort
 
-Tim Peters wrote Timsort for Python in 2002. It became the object sort in Java 7, the sort in Android, V8 (Chrome and Node.js, since V8 7.0 in 2018) and Swift. It is a **stable, adaptive merge sort** built around **runs**.
+Tim Peters wrote Timsort for Python in 2002. It became the object sort in Java 7 and Android's Java libraries, and the array sort in V8 (Chrome and Node.js) since V8 7.0 in 2018; Swift's standard-library sort uses a Timsort-style run-merging design. It is a **stable, adaptive merge sort** built around **runs**.
 
 ### 1. Find natural runs
 
@@ -25,6 +25,13 @@ Scan for ascending or descending runs. In the original Timsort design, descendin
  run B: 8 5 2   (descending -> 2 5 8)
  run C: 3 6     (ascending)
 ```
+
+> [!analogy] Real-world analogy: re-shelving a returns trolley
+> A librarian re-shelving a trolley of returned books first notices stretches that are already in order (someone returned a whole series together) and keeps each stretch as a block. A stretch in exactly reverse order is simply flipped. Only then are the blocks merged into place.
+>
+> **How it maps:** each ordered stretch is a natural run, flipping a reversed stretch is run reversal, and merging blocks is Timsort's merge phase. The more order the trolley already has, the less work is left.
+>
+> **Where it stops:** a librarian can eyeball a whole stretch at once, while Timsort discovers a run one comparison at a time. And flipping a stretch that contains two copies of the same book would swap those copies, which is why reversal needs care with equal keys.
 
 ### 2. Enforce a minimum run length
 

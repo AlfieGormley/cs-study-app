@@ -43,6 +43,13 @@ Some concrete examples:
 - **Mock object**: an object that fails the test if `charge()` is not called exactly once with `(card, 10)`.
 - **Fake object**: an in-memory dictionary that behaves like your user repository, including enforcing unique emails.
 
+> [!analogy] Real-world analogy: stand-ins at a film rehearsal
+> A director rehearsing a scene may not have every actor available. A cardboard cut-out fills a chair nobody speaks to; a stand-in reads fixed cue lines; an assistant notes every line said to them; a strict stand-in stops the rehearsal if the lead skips a cue; an understudy actually plays the part, more simply.
+>
+> **How it maps:** The cut-out is a dummy, the cue-reader a stub (canned answers), the note-taker a spy (records calls), the strict stand-in a mock (expected calls, verified), and the understudy a fake (working but simplified). The lead actor is the code under test; the stand-ins are its collaborators.
+>
+> **Where it stops:** In `unittest.mock` one `Mock` object can play several of these roles; its role comes from how the test configures and checks it, not from its type. And a stand-in's mistakes are visible on stage, whereas a double that differs from the real collaborator fails silently: the test passes while production breaks.
+
 ## Doubles in Python: `unittest.mock`
 
 The snippets in this section are partial examples: assume `import pytest`; `convert` is your application’s conversion function.

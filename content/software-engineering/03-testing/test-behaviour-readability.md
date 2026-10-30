@@ -37,7 +37,7 @@ A test broken by a behaviour-preserving refactor is a prompt to inspect implemen
 
 ## One behaviour per test
 
-"One assert per test" is a myth. Several asserts that together check one behaviour are fine:
+"One assert per test" is too strict to follow literally. Several asserts that together check one behaviour are fine:
 
 ```python
 def test_split_name():
@@ -56,7 +56,7 @@ In production code, you remove duplication (DRY: don't repeat yourself). In test
 
 - Inline the values that matter to this test, so the reader can see them.
 - Hide the values that don't matter in helpers or factories.
-- Avoid loops and `if` statements in tests. Logic in a test can have bugs of its own, and nobody tests the tests.
+- Keep loops and `if` statements out of tests where you can (*Software Engineering at Google* puts it as "don't put logic in tests"). Logic in a test can have bugs of its own, and nothing tests the tests. Use `parametrize` for several literal cases instead.
 
 ## Common pitfalls
 

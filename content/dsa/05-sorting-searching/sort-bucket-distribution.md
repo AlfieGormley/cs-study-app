@@ -13,18 +13,7 @@ This unit builds on the preceding sorting units. Here n is the number of input e
 
 **Assumption:** keys are roughly **uniformly distributed** over a known range, for example floats in `[0, 1)`.
 
-Create n buckets (one per element), each covering an equal slice of the range. Drop each element into its bucket, sort each bucket (with insertion sort), then concatenate. The bucket for a value is found by arithmetic, not comparison:
-
-```formula
-j = ⌊xn⌋
-j = ⌊0.78 × 6⌋ = ⌊4.68⌋ = 4
-where
-j: the bucket number, from 0 to n − 1
-x: the value being placed, at least 0 and less than 1; here 0.78
-n: the number of elements, which is also the number of buckets; here 6
-⌊ ⌋: the floor: round down to a whole number
-In words: multiply the value by the number of buckets and round down; that picks the slice of [0, 1) the value falls in.
-```
+Create n buckets (one per element), each covering an equal slice of the range. Drop each element into its bucket, sort each bucket (with insertion sort), then concatenate. The bucket for a value is found by arithmetic, not comparison: multiply the value by the number of buckets and round down (`int(x * n)` in the code). With 6 buckets, 0.78 goes into bucket 4, which covers 0.667 up to 0.833.
 
 ```python
 def bucket_sort(a):  # floats in [0, 1)
@@ -54,6 +43,13 @@ sort each, concat:
 
 With independent uniform input, each bucket has expected occupancy one, and the **expected** time is O(n). But it is only as good as the distribution assumption. If all values fall in one interval whose width is the reciprocal of the bucket count aligned with a bucket, one bucket receives all n values. Insertion sort there can cost O(n²); the shown Python version uses sorted(), so its worst-case bound is O(n log n). A fixed-width interval such as [0.50, 0.51) spans many buckets when n is large.
 
+> [!analogy] Real-world analogy: sorting post by the first letter of the surname
+> A village post office sorts letters into 26 wall slots by the first letter of the surname, then tidies each slot by hand. When surnames are spread across the alphabet, every slot holds only a few letters and the tidying is quick. If half the village is called Smith, the S slot overflows and tidying it takes most of the morning.
+>
+> **How it maps:** the slots are buckets, choosing a slot from the first letter is computing the bucket from the value, tidying a slot is the inner sort, and the Smith problem is skewed data piling into one bucket.
+>
+> **Where it stops:** a postmaster who knows the village would make more slots for common letters. Plain bucket sort uses equal-width slices fixed in advance; choosing boundaries from a sample of the data is a separate technique (sample sort).
+
 Bucket sort ideas show up in **histogram-based** and **sample sort** algorithms: sample the data to choose bucket boundaries that split it evenly. Distributed sorts (MapReduce's TeraSort, Spark's `sortBy`) do exactly this to divide data across machines.
 
 ## When to use which
@@ -75,7 +71,7 @@ In real systems:
 ## Pitfalls
 
 1. **Memory.** Counting and LSD radix sorts need an O(n) output buffer plus O(k) or O(b) counters. They are not in place.
-2. **Small n.** Passes and buffers can outweigh radix benefits for small inputs. **Content gap:** universal crossover sizes are omitted because they need measurements for a particular implementation, dtype and hardware.
+2. **Small n.** Passes and buffers can outweigh radix benefits for small inputs. There is no universal crossover size: it depends on the implementation, data type and hardware, so measure.
 3. **Wide or complex keys.** A composite key (last name, then first name, then date) or a locale-aware string collation requires an appropriate order-preserving encoding; ICU collation keys, for example, are byte sequences that can themselves be radix-sorted. Total key length and encoding cost matter. A comparison sort with a key function is simpler and often fast enough.
 4. **Skewed data in bucket sort.** Real data is rarely uniform. Without sampling, buckets can be badly unbalanced.
 

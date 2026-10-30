@@ -43,7 +43,7 @@ def test_checkout(page):
 E2E tests provide evidence that selected journeys work through the tested wiring and configuration; they do not prove correctness for all users, inputs or environments. They often cost more to run and diagnose, and have more opportunities for environmental flakiness. Use them deliberately:
 
 - **Cover a few critical journeys**: sign up, log in, buy, pay. Not every edge case; push those down the pyramid.
-- **Wait for conditions, never for time.** Playwright's `expect` retries until the element appears or a timeout passes. `time.sleep(2)` is slow when the page is fast and flaky when it is slow.
+- **Wait for conditions, not for a fixed time.** Playwright's `expect` retries until the element appears or a timeout passes. `time.sleep(2)` is slow when the page is fast and flaky when it is slow.
 - **Own your test data.** Each test creates the user and products it needs, with unique names, rather than relying on shared records that another test may change.
 - **Use stable selectors**: roles, labels or dedicated test ids, not CSS paths that change with every redesign.
 - **Wrap pages in page objects** (`CheckoutPage.pay_with(card)`) so a UI change means editing one class, not forty tests.

@@ -33,6 +33,13 @@ Now the four properties that every sort in this module will be judged on.
 
 We also count two different costs: **key comparisons** (is `a[i] < a[j]`?) and **moves** (swaps or writes). They matter in different settings. Comparing two long strings is expensive; writing to flash memory wears it out.
 
+> [!analogy] Real-world analogy: boarding a plane by group
+> An airline calls passengers by boarding group. Within each group, people board in the order they were already standing in line; nobody in group 2 is reshuffled just because they share a group number.
+>
+> **How it maps:** the boarding group is the sort key, the order in the line is the input order, and keeping that order inside each group is stability. An unstable sort is like staff letting group 2 board in whatever order they happen to pick.
+>
+> **Where it stops:** staff can see the whole line and simply wave groups forward. A sorting algorithm discovers the order through comparisons and moves, and only some algorithms (insertion sort and merge sort, but not selection sort or heapsort) are built so that equal keys can never pass each other.
+
 ### Inversions: a measure of disorder
 
 An **inversion** is a pair of positions `i < j` with `a[i] > a[j]`: an earlier element that is bigger than a later one. A sorted array has 0 inversions.
@@ -42,31 +49,21 @@ An **inversion** is a pair of positions `i < j` with `a[i] > a[j]`: an earlier e
 inversions: (3,1) and (3,2)  ->  2
 ```
 
-How many inversions can there be? An array of n elements has a fixed number of pairs of positions, and in a reversed array of distinct items every one of those pairs is out of order. That gives the maximum:
+How many inversions can there be? In a reversed array of distinct items, **every pair of positions** is out of order, so a reversed array has the most. `[4, 3, 2, 1]` has 6 inversions, and a reversed array of 1,000 items has 499,500. In a shuffled array each pair is equally likely to be in or out of order, so on average about **half** the pairs are inversions: about 250,000 for 1,000 items. Both counts grow with the square of n.
 
-```formula
+```formula reference
 I_max = (n(n − 1)) / 2
-I_max = 4 × 3 / 2 = 6
-where
-I_max: the largest possible number of inversions, reached when the array is in exactly reverse order
-n: the number of elements in the array (all distinct); here 4, as in [4, 3, 2, 1]
-In words: each of the n elements can pair with the n − 1 others, and dividing by 2 stops each pair being counted twice; in a reversed array every pair is an inversion.
-```
-
-So `[4, 3, 2, 1]` has 6 inversions, and a reversed array of 1,000 items has 499,500.
-
-Inversions matter because swapping an out-of-order **adjacent** pair removes exactly one inversion; swapping an ordered pair can instead add one. So a sort that only swaps neighbours must do at least as many swaps as there are inversions. On a typical shuffled input, that is about half the maximum:
-
-```formula
 E[I] = (n(n − 1)) / 4
-E[I] = 1000 × 999 / 4 = 249750
 where
-E[I]: the expected (average) number of inversions I, averaged over every possible ordering of the input
-n: the number of elements, all distinct and in a uniformly random order; here 1,000
-In words: each pair is out of order with probability one half, so on average half of the n × (n − 1) / 2 pairs are inversions.
+I_max: the largest possible number of inversions, reached when n distinct elements are in exactly reverse order
+E[I]: the expected (average) number of inversions I when every ordering of the n distinct elements is equally likely
+n: the number of elements in the array
+In words: a reversed array has every pair of positions out of order, and a shuffled one has about half of those pairs out of order on average; both counts grow with the square of n.
 ```
 
-This only holds for a **uniformly random permutation** (every ordering equally likely) of distinct keys. Real data is often far less disordered, which is exactly what adaptive sorts exploit. Still, this single fact explains why bubble and insertion sort are quadratic on average: a quadratic average number of bubble swaps or insertion shifts.
+Inversions matter because swapping an out-of-order **adjacent** pair removes exactly one inversion; swapping an ordered pair can instead add one. So a sort that only swaps neighbours must do at least as many swaps as there are inversions.
+
+The "half of all pairs" average only holds for a **uniformly random permutation** (every ordering equally likely) of distinct keys. Real data is often far less disordered, which is exactly what adaptive sorts exploit. Still, this single fact explains why bubble and insertion sort are quadratic on average: a quadratic average number of bubble swaps or insertion shifts.
 
 ## Key takeaways
 - Stability preserves the input order of equal keys.

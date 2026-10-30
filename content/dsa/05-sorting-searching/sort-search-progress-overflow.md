@@ -21,40 +21,13 @@ int mid = lo + (hi - lo) / 2;   // fix
 int mid = (lo + hi) >>> 1;      // Java
 ```
 
-A 32-bit signed `int` can hold values only up to about 2.1 billion. Two large indices can add up to more than that:
-
-```formula
-s_max = 2^31 − 1 = 2147483647
-lo + hi = 1.1 × 10^9 + 1.2 × 10^9
-lo + hi = 2.3 × 10^9 > s_max
-lo + (hi − lo) / 2 ≤ hi
-where
-s_max: the largest value a 32-bit signed integer can hold
-lo: the low index of the search range; here 1.1 billion
-hi: the high index of the search range; here 1.2 billion
-2^31: 31 copies of 2 multiplied together
-10^9: ten to the power 9, a billion
-≤: less than or equal to
->: greater than
-In words: once both indices are above about a billion, their sum exceeds the largest int and wraps to a negative number; the safe form only ever adds half the gap to lo, so it never exceeds hi.
-```
+A 32-bit signed `int` can hold values only up to 2,147,483,647 (about 2.1 billion). Two large indices can add up to more than that: with `lo` at 1.1 billion and `hi` at 1.2 billion, the sum is 2.3 billion, which wraps round to a negative number. The safe form only ever adds half the gap to `lo`, so its result never exceeds `hi` and cannot overflow.
 
 For nonnegative Java int indices, the addition `lo + hi` can wrap once the array has more than about a billion elements, producing a negative midpoint. Signed overflow in C and C++ is undefined behavior; other languages have their own checked, wrapping or unsigned rules. In 2006 Joshua Bloch revealed that this bug had sat in Java's `Arrays.binarySearch` for about nine years, and in the version in Programming Pearls for two decades. Python's integers do not overflow, but C, C++, Java, Go and Rust code must use the safe form.
 
 ### 2. Infinite loops
 
-If you ever write `lo = mid`, check what happens when `hi = lo + 1`. Then the rounded-down midpoint is `lo` itself, so `lo = mid` changes nothing and the loop spins forever:
-
-```formula
-m = ⌊(lo + hi) / 2⌋
-m = ⌊(4 + 5) / 2⌋ = ⌊4.5⌋ = 4
-where
-m: the midpoint index, mid in the code
-lo: the low end of the range; here 4
-hi: the high end of the range; here 5, one more than lo
-⌊ ⌋: the floor: round down to a whole number (Python's // does this)
-In words: with two elements left, the rounded-down midpoint is lo itself, so setting lo to it makes no progress.
-```
+If you ever write `lo = mid`, check what happens when `hi = lo + 1`. Then the rounded-down midpoint is `lo` itself (for `lo` 4 and `hi` 5, `(4 + 5) // 2` is 4), so `lo = mid` changes nothing and the loop spins forever:
 
 ```
 lo 4, hi 5 -> mid 4 -> lo = mid = 4

@@ -15,7 +15,7 @@ An **automated test** is a small program that runs your code and checks the resu
 
 It is tempting to think tests exist to "find bugs". They do, but that is not their main value.
 
-- **Confidence to change code.** A fast, useful suite can give prompt feedback about whether its checked behaviour changed during a refactor. Without one, people stop touching old code, and it rots. This is the biggest benefit.
+- **Confidence to change code.** A fast, useful suite can give prompt feedback about whether its checked behaviour changed during a refactor. Without one, people stop touching old code, and it rots. Many practitioners rank this as the biggest benefit.
 - **Regression protection.** A regression test can catch the same failure again, provided it still exercises the relevant path and runs with useful assertions. Without the test, someone reintroduces it six months later.
 - **Executable documentation.** A test named `test_full_discount_is_free` tells a newcomer exactly what the code promises, and it can expose a mismatch between the tested expectation and implementation. A stale or incorrect expectation can still pass if the code agrees with it.
 - **Design feedback.** Code that is painful to test (needs a database, a clock and three globals just to call one function) is usually painfully coupled. Tests surface that early.
@@ -71,12 +71,21 @@ Each test follows the same shape, often called **Arrange, Act, Assert**: set up 
 
 Edsger Dijkstra put it plainly in *Notes on Structured Programming*: testing can show the presence of bugs, but never their absence. An example suite checks the cases it executes; untested inputs and environments can still fail.
 
-Suppose someone "tidies" the range check to `0 < percent <= 100`. All three tests above still pass. Yet `apply_discount(50.0, 0)` now raises `ValueError`, which will break every order without a discount. The suite missed it because nobody tested the **testing boundary** at 0.
+Suppose someone "tidies" the range check to `0 < percent <= 100`. All three tests above still pass. Yet `apply_discount(50.0, 0)` now raises `ValueError`, which will break every order without a discount. The suite missed it because no test sat on the boundary at 0. **Boundary testing** means checking the values at each limit and one step beyond it.
 
 > [!tip] Test the edges
 > Boundary cases are valuable targets: zero, one, empty, the maximum, off-by-one either side of a limit. When a function has a range check, test both ends of the range and one step outside each.
 
-So a green suite means "nothing we check is broken", not "nothing is broken". The rest of this module is about making "what we check" as close to "what matters" as possible, at a sensible cost.
+So a green suite means "nothing we check is broken", not "nothing is broken".
+
+> [!analogy] Real-world analogy: a vehicle inspection checklist
+> A garage inspects a car against a fixed checklist: lights, brakes, tyres. A pass tells you every listed item was fine on the day. It says nothing about the rattle nobody listed.
+>
+> **How it maps:** The checklist is the test suite, each item is a test case with its assertion, and the pass certificate is a green build. An unlisted fault is an untested input, like the 0 % discount above.
+>
+> **Where it stops:** A test suite is cheap to re-run on every change, and you can add an item the moment a fault is found (a regression test). An inspection is occasional, and a car can wear out between inspections, whereas code does not wear out: its behaviour changes only when the code, its inputs or its environment change.
+
+The rest of this module is about making "what we check" as close to "what matters" as possible, at a sensible cost.
 
 > [!note] The regression test habit
 > When you fix a bug, first write a test that reproduces it and watch it fail. Then fix the code and watch it pass. You have evidence for the exercised case and a check that can detect that regression if it recurs on the covered path.

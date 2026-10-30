@@ -3,29 +3,29 @@
     "id": "pg-autovacuum-thresholds-q1",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A PostgreSQL 18 table has one million estimated live rows. All vacuum threshold settings are at their defaults. What does a dead-tuple estimate just above 200,050 imply?",
+    "prompt": "A PostgreSQL 18 `bookings` table holds 50 million rows and takes steady updates. With default settings, autovacuum only becomes eligible after about 10 million dead row versions, and the table keeps bloating between runs. Which change most directly makes autovacuum clean this table sooner?",
     "options": [
       {
-        "text": "The dead-tuple trigger is eligible, but worker availability still affects its start",
-        "explanation": "The default fixed threshold plus 20% of the estimated row count is 200,050; the 100-million cap does not bind here."
+        "text": "Set `autovacuum_vacuum_scale_factor = 0.01` on this table",
+        "explanation": "Correct. The threshold is mostly the vacuum scale factor times the row count, so dropping it from 20 % to 1 % for this table makes it eligible after about 500,000 dead versions instead of about 10 million, without changing other tables."
       },
       {
-        "text": "Exactly 200,050 distinct logical rows must have been deleted",
-        "explanation": "The trigger counts estimated dead row versions; repeated updates can leave several versions of one logical row."
+        "text": "Raise `autovacuum_vacuum_threshold` from 50 to 1,000",
+        "explanation": "The fixed base is negligible beside 20 % of 50 million rows, and raising it would make autovacuum wait slightly longer, not sooner."
       },
       {
-        "text": "A worker is guaranteed to start within one minute",
-        "explanation": "The default check interval is not a scheduling deadline; workers may be busy."
+        "text": "Increase `autovacuum_naptime` so each check is more thorough",
+        "explanation": "Naptime is the gap between the launcher's rounds. A longer gap makes eligible tables wait longer; it does not change how many dead versions are needed."
       },
       {
-        "text": "The 100-million cap prevents vacuum until 100 million dead tuples exist",
-        "explanation": "The cap is a maximum threshold, not a minimum."
+        "text": "Disable autovacuum and run VACUUM FULL every night",
+        "explanation": "This lets dead versions build up all day and also stops automatic ANALYZE, and VACUUM FULL rewrites the table under an ACCESS EXCLUSIVE lock that blocks reads and writes while it runs."
       }
     ],
     "answer": 0,
-    "workedExample": "1. Use the PostgreSQL 18 dead-tuple threshold formula.\n\n```formula\nT = min(C, B + sN)\nT = min(100000000, 50 + 0.2 × 1000000)\nT = 200050 tuples\nwhere\nT: dead-tuple eligibility threshold, in row versions (tuples)\nC: maximum threshold, here 100,000,000 tuples\nB: fixed base threshold, here 50 tuples\ns: vacuum scale factor, here 0.2, dimensionless\nN: estimated table row count, here 1,000,000 rows\nmin: the function choosing the smaller input\ntuples: row versions counted by the trigger\nIn words: fifty plus twenty per cent of one million is below the cap, so the threshold is two hundred thousand and fifty dead versions.\n```\n\n2. Exceeding that estimate satisfies this trigger.\n3. It does not guarantee an immediate worker start, nor rule out other vacuum triggers.",
+    "workedExample": "1. The eligibility threshold is a fixed base (50) plus the vacuum scale factor (20 %) of the estimated row count, capped at 100 million in PostgreSQL 18.\n2. For 50 million rows the 20 % term dominates, which is why about 10 million dead versions build up before a run.\n3. The size the table settles at includes that dead space, so the table looks bloated even though autovacuum is working.\n4. Lowering the vacuum scale factor as a storage parameter on just this table shrinks the allowance to about 1 %, roughly 500,000 dead versions.\n5. Raising the base or the naptime pushes cleanup later, and replacing autovacuum with nightly VACUUM FULL adds heavy locking without preventing daytime bloat.",
     "link": {
-      "title": "PostgreSQL 18 documentation",
+      "title": "PostgreSQL 18: the autovacuum daemon",
       "url": "https://www.postgresql.org/docs/18/routine-vacuuming.html"
     }
   }

@@ -13,21 +13,19 @@ And yet it is notoriously easy to get wrong. Jon Bentley reported that when he a
 
 ## Why it is fast
 
-Each step halves the range. The search ends when one or zero elements remain, so the question is how many halvings that takes:
+Each probe halves the range of candidates. The search ends when one or zero candidates remain, so the number of probes is the number of times n can be halved before reaching 1:
 
-```formula
+```formula essential
 r_k ≈ n / 2^k
-n / 2^k = 1  ⇒  k = log_2(n)
-log_2(10^9) ≈ 29.9
+r_k ≈ 1  when  k ≈ log_2(n)
 where
-r_k: how many elements are still in range after k steps
-n: the number of elements in the sorted array; a billion (10^9) in the last line
-k: the number of steps (probes) taken so far
-2^k: k copies of 2 multiplied together
-log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n, which is how many halvings take n down to 1
-⇒: "which happens when"
+r_k: how many elements are still in range after k probes
+n: the number of elements in the sorted array
+k: the number of probes taken so far
+2^k: 2 multiplied by itself k times
+log_2(n): the base-2 logarithm of n: how many halvings take n down to 1
 ≈: approximately equal to
-In words: halving a billion items about 30 times leaves one, so binary search needs about 30 probes.
+In words: every probe halves what is left, so the number of probes grows with the logarithm of the array size: doubling the array adds only one probe.
 ```
 
 | n | max comparisons |
@@ -36,20 +34,14 @@ In words: halving a billion items about 30 times leaves one, so binary search ne
 | 1,000,000 | 20 |
 | 1,000,000,000 | 30 |
 
-Exactly:
+Precisely, a successful search needs at most one probe per halving plus one for the last remaining element. The decision-tree argument from the lower-bound units in this module shows no comparison-based search can do better in the worst case.
 
-```formula
-c_max = ⌊log_2(n)⌋ + 1
-c_max = ⌊log_2(1000)⌋ + 1 = 9 + 1 = 10
-where
-c_max: the most three-way comparisons (less, equal or greater) a successful search can need
-n: the number of elements; here 1,000
-log_2(n): the base-2 logarithm of n; log_2(1000) ≈ 9.97
-⌊ ⌋: the floor: round down to a whole number
-In words: binary search over n elements never needs more than one probe per halving plus one, which is 10 for a thousand elements and 30 for a billion.
-```
-
-That is where the table comes from. The decision-tree argument from the relevant unit in this module shows no comparison-based search can do better in the worst case.
+> [!analogy] Real-world analogy: finding a word in a printed dictionary
+> To find "otter" in a dictionary, open it near the middle. If the page shows words starting with "m", every page before it is ruled out, so you only ever look in the back half. Open the middle of that half, and so on. A thousand-page dictionary takes only about ten openings.
+>
+> **How it maps:** the pages still in play are the range `[lo, hi]`, opening the middle page is probing `mid`, and discarding the half that cannot contain the word is moving `lo` or `hi` past `mid`.
+>
+> **Where it stops:** people open a dictionary near where they expect the word ("o" is past the middle), which is interpolation search rather than binary search. And it only works because the dictionary is in alphabetical order; binary search on data that is not sorted by the same rule returns nonsense without any warning.
 
 ## Think in invariants
 

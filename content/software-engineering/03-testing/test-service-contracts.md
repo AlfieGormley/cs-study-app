@@ -47,6 +47,13 @@ The miniature checker tests required field presence and `isinstance` results, no
 
 **Pact** is one tool for this. Consumer tests, written against a Pact mock server, generate a pact file. A **Pact Broker** (or PactFlow) stores pacts from every consumer, and providers verify the relevant consumer contracts selected by version and environment in CI. Its `can-i-deploy` check answers "is this version of Users compatible with every consumer version currently in production?"
 
+> [!analogy] Real-world analogy: a kitchen's supplier checklist
+> A restaurant tells its supplier exactly what it relies on: "flour in 16 kg sacks, eggs size large". Before each delivery leaves, the supplier checks the load against every restaurant's checklist. The supplier can change anything not on any list, such as the van or the packaging colour.
+>
+> **How it maps:** Each restaurant is a consumer, its checklist is the contract recorded by the consumer's tests, the supplier is the provider, and checking the load before dispatch is provider verification in CI (with `can-i-deploy` asking "does this load satisfy every customer?"). Freedom to change unlisted things is why contracts list only what consumers use.
+>
+> **Where it stops:** A checklist is written by hand, so a restaurant can forget an item; a pact is generated from the consumer's tests, so it misses only what those tests do not exercise. Contract checks run automatically on every provider build, and they check the recorded requests and the response details the consumer relies on (often just field types), not the full correctness of the provider's behaviour.
+
 The key property is **consumer-driven**: the contract lists only what consumers actually use. Changes outside the recorded contract can still break consumers if their real dependencies were omitted; contracts need adequate consumer tests. This turns "we can never change this API" into "we can change anything no consumer depends on, and we will know immediately if we break one".
 
 Alternatives include **provider-driven** contracts, where the provider publishes an OpenAPI or protobuf schema and consumers are checked against it. Schemas catch type and shape changes well but say nothing about which fields any consumer actually needs.

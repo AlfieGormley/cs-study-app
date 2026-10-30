@@ -24,25 +24,19 @@ run 2 [buffer]  \
 run 100 [buffer]/
 ```
 
-The arithmetic of the plan:
-
-```formula
-r = D / M = 100 GB / 1 GB = 100
-B = r × 8 MB = 800 MB
-where
-r: the number of sorted runs phase 1 produces
-D: the total size of the data, here 100 gigabytes
-M: the memory used to sort each chunk, here 1 gigabyte
-B: the total memory phase 2 spends on input buffers, one per run
-GB: gigabyte, 1,000,000,000 bytes
-MB: megabyte, 1,000,000 bytes
-In words: 100 GB sorted 1 GB at a time gives 100 runs, and 100 input buffers of 8 MB need 800 MB in the merge phase.
-```
+In this plan, 100 input buffers of 8 MB take 800 MB during the merge. More runs means smaller buffers each, and very small buffers turn sequential reads into many short ones, so the run count and buffer size are planned together.
 
 Total: every record is read and written twice (once per phase), all sequentially. If there are too many runs to merge in one go, you merge in several passes, each multiplying run length by k.
 
 > [!example] PostgreSQL does exactly this
 > When a sort needs more memory than `work_mem` (default 4 MB), PostgreSQL switches to an external merge sort using temporary files. `EXPLAIN ANALYZE` shows `Sort Method: external merge  Disk: ...` instead of `quicksort  Memory: ...`. Raising `work_mem` for a big reporting query can keep the sort in memory.
+
+> [!analogy] Real-world analogy: sorting a huge card index on a small desk
+> You must alphabetise a hundred drawers of index cards, but your desk only holds one drawer's worth. So you sort one drawer at a time on the desk and put each sorted batch back in its own box. Then you line up the boxes, look only at the front card of each, and repeatedly move the earliest of those front cards onto the final pile.
+>
+> **How it maps:** the desk is RAM, each sorted box is a run written to disk, and choosing the earliest front card is the k-way merge (the min-heap keeps track of which front card is earliest). Every card is handled twice: once while making a box, once while merging.
+>
+> **Where it stops:** you can see a hundred front cards at a glance, but a computer must read each run through a small buffer and refill it from disk. Disks reward reading long stretches in order, so the real design is about buffer sizes and sequential I/O, not just card handling.
 
 The same pattern appears in big-data systems: MapReduce and Spark sort map output into spill files and merge them, and LSM-tree databases (RocksDB, Cassandra) merge sorted files during compaction.
 

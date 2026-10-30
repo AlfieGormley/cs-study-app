@@ -49,6 +49,13 @@ pointers cross: return j 4
 left [4,2,1,3,5]   right [8,6,7]
 ```
 
+> [!analogy] Real-world analogy: two people tidying a shelf from both ends
+> Two people stand at opposite ends of a bookshelf, agreeing that short books belong on the left and tall ones on the right, compared with one reference book. Each walks inwards until they find a book on the wrong side, then they swap those two books and carry on. When they meet, the shelf is split into a short side and a tall side.
+>
+> **How it maps:** the two people are the pointers `i` and `j`, the reference book's height is the pivot value, stopping at a misplaced book is the inner `while` loop ending, and the meeting point is the boundary Hoare returns.
+>
+> **Where it stops:** the reference book itself is not set aside in a special place; it can end up anywhere on its correct side. That is why Hoare's caller recurses on `[lo, p]` and `[p+1, hi]` rather than excluding a fixed pivot position.
+
 Two differences matter:
 
 - Under a uniformly random permutation of distinct keys, these classical schemes give Hoare roughly one-third of Lomuto's expected swaps; this is not a bound for every input.

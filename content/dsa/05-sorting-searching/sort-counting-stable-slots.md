@@ -17,6 +17,13 @@ That is the whole trick behind counting sort, radix sort and bucket sort. The ca
 
 Count how many times each key occurs, then use running totals to work out where each key's block starts in the output.
 
+> [!analogy] Real-world analogy: filing exam scripts into grade trays
+> A teacher sorting a class's scripts by grade A to E first counts how many scripts got each grade. If there are 3 As and 5 Bs, the As fill the first 3 places on the shelf and the Bs the next 5, so each grade's block can be marked out before a single script is moved. Then each script goes straight into its grade's block.
+>
+> **How it maps:** the grades are the small integer keys, the tally is the `count` array, working out where each block starts and ends is the prefix sum, and dropping a script into its block is the placement loop. Nothing is ever compared with another script.
+>
+> **Where it stops:** it only works because there are five grades. Sorting by exact marks out of a million would need a million trays, most of them empty; that is why counting sort needs a small key range.
+
 ```python
 def counting_sort(a, key, k):
     count = [0] * k
@@ -60,22 +67,7 @@ If you are sorting bare integers (no attached data), you can skip the output arr
 
 - Exam scores 0 to 100 for 2 million students: k = 101, n = 2,000,000. Linear and very fast.
 - Ages, HTTP status codes, bytes (k = 256), days of the year: all good fits.
-- 1,000 arbitrary 32-bit integers: about 4.3 billion possible values, so about 4.3 billion counters, whatever n is. The counts alone need 16 GiB (formula below); Python lists have different, larger overhead. Hopeless.
-
-```formula
-k = 2^32 ≈ 4.3 × 10^9
-M = k × 4 B = 2^34 B
-M = 16 GiB ≈ 17.2 GB
-where
-k: the number of possible key values: a 32-bit integer can take 2^32 values
-M: the memory the counter array needs
-2^32: 32 copies of 2 multiplied together, 4,294,967,296
-B: bytes; each counter here is a 4-byte integer
-GiB: gibibyte, 2^30 = 1,073,741,824 bytes
-GB: gigabyte, 1,000,000,000 bytes
-≈: approximately equal to
-In words: one 4-byte counter for each of the 4.3 billion possible values needs 16 GiB, even to sort only 1,000 numbers.
-```
+- 1,000 arbitrary 32-bit integers: about 4.3 billion possible values, so about 4.3 billion counters, whatever n is. At 4 bytes per counter that is 16 GiB (about 17.2 billion bytes) just for the counts, and the prefix-sum pass alone visits 4.3 billion counters to sort 1,000 numbers. Python lists have different, larger overhead. Hopeless.
 
 The rule: counting sort is great when **k is O(n)** or smaller. When k is much larger than n, use radix sort.
 

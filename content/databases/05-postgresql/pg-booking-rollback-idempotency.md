@@ -4,7 +4,7 @@ title: Booking retries and rollback
 level: intermediate
 minutes: 3
 sourceLesson: postgresql-in-practice
-summary: Roll back if the reservation returns no row.
+summary: Commit the seat and the booking together, and make a retry find the first booking instead of taking another seat.
 ---
 
 Use the ticket-shop `events` and `bookings` tables from the schema unit in a disposable database. Event 1 must exist with at least one seat. `bookings.event_id` references the event; `request_key` is NOT NULL and UNIQUE. Each new logical booking receives its own request key.
@@ -40,12 +40,12 @@ Keep transactions short. Do not hold the row lock while waiting for a customer o
 
 ## Key takeaways
 
-- Roll back if the reservation returns no row.
+- Roll back if the reservation returns no row or the insert fails.
 - A duplicate insert must not leave an extra decrement committed.
 - Database rollback cannot reverse an external payment.
 
 ## Further reading
 
-- [PostgreSQL 18: sql insert](https://www.postgresql.org/docs/18/sql-insert.html)
-- [PostgreSQL 18: tutorial transactions](https://www.postgresql.org/docs/18/tutorial-transactions.html)
-- [PostgreSQL 18: sql savepoint](https://www.postgresql.org/docs/18/sql-savepoint.html)
+- [PostgreSQL 18: INSERT and ON CONFLICT](https://www.postgresql.org/docs/18/sql-insert.html)
+- [PostgreSQL 18: transactions tutorial](https://www.postgresql.org/docs/18/tutorial-transactions.html)
+- [PostgreSQL 18: SAVEPOINT](https://www.postgresql.org/docs/18/sql-savepoint.html)

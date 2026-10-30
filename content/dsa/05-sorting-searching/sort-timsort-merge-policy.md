@@ -13,9 +13,9 @@ This unit builds on the preceding sorting units. Here n is the number of input e
 
 Runs are pushed onto a stack. Timsort merges only **adjacent** runs (merging non-adjacent ones would break stability) and chooses when to merge so that merges stay balanced and the stack stays small.
 
-Classic Timsort uses run-length inequalities to keep pending runs growing geometrically toward the bottom of the stack:
+Classic Timsort uses run-length rules to keep pending runs growing quickly toward the bottom of the stack: each run must be longer than the two above it combined. Run lengths then grow at least as fast as Fibonacci numbers, so even a huge array leaves only a few dozen runs waiting, and merges stay roughly balanced.
 
-```formula
+```formula reference
 |A| > |B| + |C|
 |B| > |C|
 where
@@ -24,7 +24,7 @@ B: the second run from the top
 C: the run on top of the stack, the most recently found
 |A|: the length of run A, in elements (likewise |B| and |C|)
 >: greater than
-In words: each pending run must be longer than the two above it combined, so lengths grow at least as fast as Fibonacci numbers and the stack stays short.
+In words: each pending run must be longer than the two above it combined, and the second run longer than the top one, so lengths grow at least as fast as Fibonacci numbers and the stack stays short.
 ```
 
 When an inequality fails, Timsort merges runs until both hold again. With runs of 15, 20 and 30 elements (C, B, A), the first rule fails because 30 is not greater than 20 + 15 = 35, so a merge happens. Correct collapse logic must maintain the intended invariant beyond just the top three runs. Stack capacity and policies differ by implementation; CPython uses powersort.
@@ -34,22 +34,7 @@ When an inequality fails, Timsort merges runs until both hold again. With runs o
 
 ### 4. Gallop when one run is winning
 
-During a normal merge, Timsort counts how many times in a row the output came from the same run. If that reaches `MIN_GALLOP` (initially 7), it switches to **galloping**: an exponential search checking positions 1, 3, 7, 15, ... then a binary search, to find how many elements it can copy in one block.
-
-```formula
-p_j = 2^j − 1
-g ≈ 2 log_2(m)
-g ≈ 2 log_2(500) ≈ 18
-where
-p_j: the position (offset from the start of the run) checked on probe number j: 1, 3, 7, 15, …
-j: the probe number, 1, 2, 3, …
-2^j: j copies of 2 multiplied together
-g: the comparisons galloping needs to find where the other run's next element belongs
-m: how many elements the winning run can copy in one block; 500 in the example below
-log_2(m): the base-2 logarithm of m: how many doublings it takes to reach m (log_2(500) ≈ 9)
-≈: approximately equal to
-In words: about log_2(m) doubling probes overshoot the target, then about log_2(m) binary-search steps pin it down, instead of m one-by-one comparisons.
-```
+During a normal merge, Timsort counts how many times in a row the output came from the same run. If that reaches `MIN_GALLOP` (initially 7), it switches to **galloping**: an exponential search checking positions 1, 3, 7, 15, ... then a binary search, to find how many elements it can copy in one block. Doubling probes overshoot the target in about log₂ m steps, where m is the length of the block, and binary search pins it down in about as many again: roughly twice log₂ m comparisons instead of m one-by-one comparisons.
 
 ```
 A: [1 2 3 4 5 ... 1000]
@@ -58,7 +43,7 @@ normal merge: ~500 comparisons for A's head
 galloping: about 18 boundary comparisons
 ```
 
-If galloping stops paying off, the threshold rises; if it keeps paying off, it falls. This adaptivity is why concatenating two sorted lists and sorting costs close to O(n), not O(n log n).
+If galloping stops paying off, the threshold rises; if it keeps paying off, it falls. Run detection is what makes sorting two concatenated sorted lists O(n): Timsort finds two runs and does one linear merge. Galloping then cuts that merge's comparisons further when the lists barely interleave.
 
 ### Timsort's profile
 

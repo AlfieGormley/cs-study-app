@@ -21,8 +21,7 @@ Google's guideline is that **one business day is the maximum** time to respond t
 ## Tooling and policy
 
 - **Formatters and linters** (Black, Ruff, Prettier, gofmt) end style arguments. Run them in CI and pre-commit hooks so style never reaches a human.
-Automate import ordering, known-vulnerable dependency checks, recognised bug patterns such as mutable defaults, and tests across supported interpreter versions. Scanners and linters depend on their configured rules and data; green results do not establish that a design fits the product.
-
+- **Other automated checks**: import ordering, known-vulnerable dependency checks, recognised bug patterns such as mutable defaults, and tests across supported interpreter versions. Scanners and linters depend on their configured rules and data; green results do not establish that a design fits the product.
 - **Branch protection** on GitHub or GitLab can require N approvals and passing status checks before merging, and can dismiss stale approvals when new commits are pushed.
 - **CODEOWNERS** maps paths to owners who can be requested for review; requiring owner approval is a separate protection setting. On GitHub the file lives in `.github/`, the repository root or `docs/`, and the **last matching pattern wins**:
 

@@ -1,6 +1,6 @@
 # Concept-first library review
 
-Status: **in progress**. 43/60 modules and 1265/1845 active lessons have current independent editorial reviews.
+Status: **in progress**. 45/60 modules and 1305/1845 active lessons have current independent editorial reviews.
 
 This report counts only active lesson IDs from module.json. Retired subjects (os, architecture, theory, languages; see `content/retired-subjects.json`) are excluded. Pending modules have not been certified by keyword scans or by renderer tests.
 
@@ -48,13 +48,13 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | [security / Security Fundamentals](../content/security/01-fundamentals/verification.json) | Reviewed | 27 | 66 | 9 → 5 | 3 / 2 | 4 → 0 | 416 | 135 | 8 |
 | [security / Cryptography Basics](../content/security/02-crypto-basics/verification.json) | Reviewed | 37 | 72 | 55 → 25 | 9 / 16 | 66 → 3 | 251 | 243 | 8 |
 | [security / Applied Cryptography & PKI](../content/security/03-applied-crypto/verification.json) | Reviewed | 39 | 71 | 24 → 14 | 8 / 6 | 25 → 3 | 276 | 171 | 6 |
-| security / Web Application Security | Pending review | 14 | — | — | — | — | — | — | — |
+| [security / Web Application Security](../content/security/04-web-security/verification.json) | Reviewed | 14 | 33 | 4 → 1 | 0 / 1 | 3 → 0 | 219 | 132 | 6 |
 | security / Systems Security | Pending review | 15 | — | — | — | — | — | — | — |
 | security / Security Engineering in Practice | Pending review | 23 | — | — | — | — | — | — | — |
 | [software-engineering / Design Principles & Clean Code](../content/software-engineering/01-principles/verification.json) | Reviewed | 26 | 69 | 4 → 1 | 1 / 0 | 4 → 0 | 294 | 98 | 5 |
 | [software-engineering / Design Patterns](../content/software-engineering/02-design-patterns/verification.json) | Reviewed | 28 | 66 | 4 → 0 | 0 / 0 | 9 → 0 | 284 | 116 | 9 |
 | [software-engineering / Testing](../content/software-engineering/03-testing/verification.json) | Reviewed | 22 | 68 | 10 → 1 | 0 / 1 | 5 → 0 | 197 | 120 | 8 |
-| software-engineering / Version Control & CI/CD | Pending review | 26 | — | — | — | — | — | — | — |
+| [software-engineering / Version Control & CI/CD](../content/software-engineering/04-git-cicd/verification.json) | Reviewed | 26 | 69 | 8 → 5 | 1 / 4 | 7 → 0 | 279 | 155 | 7 |
 | software-engineering / Software Architecture at the Code Level | Pending review | 25 | — | — | — | — | — | — | — |
 | software-engineering / Engineering Practices | Pending review | 24 | — | — | — | — | — | — | — |
 | [synth / Sound & Digital Audio](../content/synth/01-sound-sampling/verification.json) | Reviewed | 32 | 69 | 52 → 23 | 1 / 22 | 60 → 0 | 297 | 128 | 24 |
@@ -1545,6 +1545,57 @@ None recorded in this editorial review.
 - medium confidence, multiple (unchanged inherited claims): WhatsApp key transparency 2023, iMessage PQ3 2024, KyberSlash disclosure, SIKEp434 ~1 hour, Böck et al. 184 servers, DigiNotar, Symantec/Entrust distrust dates, OpenSSH 10.0 default. Unchanged from the earlier verified text and not re-fetched in this pass; earlier provenance retained.
 
 
+## security / Web Application Security
+
+8 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- web-csrf-request-filters: 'Origin names the page's origin on most cross-origin and unsafe-method requests' -> Origin is sent on CORS requests and on every non-GET/HEAD request (e.g. a form POST), usually absent from plain GET navigations and image loads, and can be null (opaque origins, some referrer policies) [Fetch: append a request Origin header].
+- web-csrf-samesite-context: 'Chrome and other Chromium-based browsers have done this since 2020, but MDN notes that only some browsers apply this default' -> dated statement that, as of November 2026, MDN's compatibility data and OWASP both report Lax-by-default in Chromium-based browsers only (Firefox behind a non-default preference, Safari not at all). OWASP changed its wording to this on 2026-11-01 (commit 5eb97542f9), resolving the author's OWASP-vs-MDN conflict. web-csrf-q10 option 0 explanation updated to match.
+- web-sop-cors-q11: prompt now says each Chromium user's browser sends the repeated OPTIONS; option 3 explanation now explains that a shared CDN cache cannot make each browser repeat OPTIONS (previously the CDN distractor was defensible for origin logs behind a CDN).
+- Wrong-sense glossary links: 'An encoding mistake' (web-csp-script-trust) and 'choosing an encoding by habit' (web-xss-q2 option 3) opened security/06's 'Encoding (versus encryption)' entry -> 'A missed output-encoding step' and 'the encoding'.
+- web-origin-boundaries analogy: 'when a reply arrives addressed to a different department' (misleading: the reply is addressed to you, from another origin) -> 'when a reply comes back from another department, the clerk will not hand you its contents unless that department has said you may see them'.
+- Glossary web-empty-string: definition tied to CSRF tokens although 'empty string(s)' is matched subject-wide (security/02 HKDF formula definitions) and, as a multi-word alias of an earlier subject than React, is now the cross-subject fallback in DSA/databases/system-design -> generic definition (a real value, not a missing one) with the security consequence. web-form-submission: added the empty-action default (page's own URL) and 'usually' GET/POST (HTML Standard form submission algorithm).
+- web-cors-credential-allowlists: unsupported 'That is where most real CORS bugs live' -> 'That is where CORS mistakes do the most damage, because the replies contain private data' (hedge).
+
+**Scope gaps and exclusions:**
+
+- No complete browser/version compatibility matrix or long real preflight-retention measurement.
+- Recent-cookie 120-second default-mode behavior is checked against Chromium guidance/source and arithmetic; no two-minute cookie-aging browser experiment is claimed.
+- Partial Flask, CSP, message and Trusted Types examples need the stated setup and production integration; passing local fixtures do not prove full application security.
+- Samy and Google’s sampled CSP study are historical source-backed cases; their spread or coverage is not newly reproduced.
+- Author gap confirmed: module scope (SOP/CORS, XSS/CSP, CSRF/SameSite/clickjacking) does not cover SSRF, broken access control/IDOR, session fixation/management or command injection; SQL injection only contrasted briefly (owned by security/01).
+- Browser behaviour verified only in local headless Chrome 156.0.8078.76 (macOS); Firefox and Safari SameSite/Trusted Types/CSP behaviour rests on MDN BCD and OWASP, not live tests. Preflight-cache retention not timed in a browser (source-checked only).
+- Isolation headers (CORP/COOP/COEP) remain a one-line summary table without worked examples.
+- Render check at 390 px and offline check not run in this module pass (left to the integration pass).
+- Lint-formulas: 28 hits in active files, all inline HTML/code or header syntax (Rule 6 exceptions), unchanged.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, web-origin-boundaries: Browser support, implementation defaults and framework behavior are version/configuration dependent. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- medium confidence, web-cors-preflight-permission: Browser support, implementation defaults and framework behavior are version/configuration dependent. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- medium confidence, web-preflight-cache-lifetime: Browser support, implementation defaults and framework behavior are version/configuration dependent. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- medium confidence, web-cors-credential-allowlists: Browser support, implementation defaults and framework behavior are version/configuration dependent. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- medium confidence, web-window-message-isolation: Browser support, implementation defaults and framework behavior are version/configuration dependent. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- medium confidence, web-xss-data-flows: Browser support, implementation defaults and framework behavior are version/configuration dependent. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- medium confidence, web-xss-output-contexts: Browser support, implementation defaults and framework behavior are version/configuration dependent. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- medium confidence, web-csp-script-trust: Browser support, implementation defaults and framework behavior are version/configuration dependent. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- medium confidence, web-csp-nonce-entropy: Browser support, implementation defaults and framework behavior are version/configuration dependent. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- medium confidence, web-trusted-dom-types: Browser support, implementation defaults and framework behavior are version/configuration dependent. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- medium confidence, web-csrf-request-intent: Browser support, implementation defaults and framework behavior are version/configuration dependent. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- medium confidence, web-csrf-session-tokens: Browser support, implementation defaults and framework behavior are version/configuration dependent. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- medium confidence, web-csrf-samesite-context: Browser support, implementation defaults and framework behavior are version/configuration dependent. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- medium confidence, web-csrf-request-filters: Browser support, implementation defaults and framework behavior are version/configuration dependent. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- medium confidence, web-preflight-cache-lifetime: Chromium caps preflight caching at two hours; 'same top-level site' as the plain reading of Fetch's network partition key. Cap read from Chromium main-branch source (kMaxTimeout = 2 h) on 2026-11-01, version-specific and not timed in a browser; partition keys can include more than the top-level site.
+- medium confidence, web-csrf-samesite-context: Lax-by-default only in Chromium-based browsers as of November 2026; Chromium Lax+POST two-minute exception still on by default. Verified in MDN BCD, OWASP (changed 2026-11-01), Chromium main source and a local Chrome 156 test, but time-sensitive; Chromium calls the exception temporary and Firefox/Safari were not tested live.
+- medium confidence, web-csrf-samesite-context: 6265bis 'approved but still waiting in the RFC Editor queue in October 2026' (also glossary web-rfc6265bis). Datatracker on 2026-11-01 still shows RFC Ed Queue / 'blocked: Final Approval Pending'; will date once published.
+- medium confidence, web-trusted-dom-types: Trusted Types supported across current major browsers since February 2026 (Baseline 2026). MDN badge and BCD (Chrome 83, Safari 26, Firefox 148) checked 2026-11-01; time-sensitive.
+- medium confidence, web-window-message-isolation: Modern Chrome makes the document.domain setter do nothing by default. Chrome's post: from Chrome 115, rolled out progressively, with Origin-Agent-Cluster: ?0 and an enterprise policy as opt-outs; not browser-tested here.
+- medium confidence, web-csrf-request-filters: OWASP accepts Fetch Metadata as a main defence for modern-browser-only apps with mandatory fallback; Sec-Fetch-* in all major browsers since March 2023. Quoted from the current OWASP sheet, which was edited several times in October-November 2026; the support date is OWASP's.
+- medium confidence, web-csp-script-trust: Google's 2016 CSP study figures (about 26,000 policies, 14 of 15 hosts, about three-quarters bypassable via allowlists). Figures match the paper's own text exactly, but they are a 2016 snapshot, as the lesson states.
+
+
 ## software-engineering / Design Principles & Clean Code
 
 9 question objects changed. Every changed question has a specific independent-review reason in the linked record.
@@ -1666,6 +1717,42 @@ None recorded in this editorial review.
 - medium confidence, test-path-coverage-limits: The quoted Goodhart wording is the one used by Marilyn Strathern in her 1997 paper. Supported by Wikipedia's quotation and the Cambridge citation record; the paper's full text was not read from a legitimate copy.
 - medium confidence, test-property-strategies: A generic text strategy, and even a two-letter alphabet, rarely reaches a run of ten identical characters. Verifier sweep (Hypothesis 6.170.14, 100 examples, 20 seeds): st.text() 1/20, two-letter 3/20, runs strategy 20/20. Generator behaviour is version- and settings-dependent; the lesson states no rate.
 - medium confidence, test-time-isolation: freezegun and time-machine behaviour descriptions. Unchanged and named only as options; not re-executed in this pass.
+
+
+## software-engineering / Version Control & CI/CD
+
+17 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- {"lesson":"git-review-standard","item":"git-code-review-q2","before":"PR B changes a logging call's signature at call sites in 50 files; key says B is probably too large","after":"PR B is a hand-written error-handling change across 50 files; explanation and worked example state Google's exception for large changes generated by a trusted automated refactoring tool","reason":"Google's Small CLs page exempts trusted automated refactorings, and git-code-review-q6 treats a mechanical rename as easy to verify, so the original B made the key debatable."}
+- {"lesson":"git-integration-flow","item":"lesson GitHub flow list and git-workflows-q2 explanation/worked example","before":"'popularised by GitHub' list ending 'Deploy main'; q2: 'GitHub flow's steps are branch, pull request, review and CI, merge, deploy'","after":"List attributed to Scott Chacon's 2011 GitHub Flow (link added); lesson and q2 note that GitHub's current guide lists branch, commit/push, pull request, review, merge, delete branch with no deploy step","reason":"docs.github.com GitHub flow has no deploy step; deploy-after-merge comes from Chacon's 2011 post."}
+- {"lesson":"git-progressive-rollouts","item":"git-cd-release-q7 option D explanation","before":"An equal rise points to a shared cause 'rather than the new release'","after":"Points to a shared cause, so the release is not the likely culprit; a canary sharing backends can occasionally harm the control, so absolute SLOs are watched too","reason":"SRE Workbook (Canarying releases): imperfect isolation means a bad canary can affect the control; use absolute measures such as SLOs."}
+- {"lesson":"git-storage-recovery","item":"git-object-model-q9 premise and worked example","before":"'.git uses about 15 MB'; 'a few versions are kept whole'","after":"'about 10 MB'; 'a couple of dozen versions are kept whole'; size depends on compressibility; --aggressive can shrink it several times","reason":"Verifier measurement (Git 2.53.0, normal commits then git gc): code-like ~1 MiB text 9.6 MiB with 22 whole blobs; random letters 13.9 MiB with 20; --aggressive 1.6/2.3 MiB."}
+- {"lesson":"git-ci-feedback","item":"workflow template","before":"actions/checkout@v6, actions/setup-python@v5","after":"actions/checkout@v7, actions/setup-python@v7, with the prose noting v7 was current in October 2026","reason":"GitHub API 2026-10-30: latest releases checkout v7.0.1 and setup-python v7.1.0; v7 inputs used by the template still exist."}
+- {"lesson":"git-merge-mechanics","item":"strategy-name sentence","before":"(Tested with Git 2.53, the success message still names the strategy you selected.)","after":"In Git 2.53, for example, `git merge -s recursive` still prints `Merge made by the 'recursive' strategy.` even though ort did the work.","reason":"Replaced an author lab note with the observed message (re-run on 2.53.0 and 2.50.1); the code span also stops 'recursive' linking to core 'recursion'."}
+- {"lesson":"git-content-hashes / git-storage-recovery / git-ci-flaky-tests","item":"analogy limits","before":"'old objects are only removed later, by git gc'; browser history 'kept only on your own machine'; 'A false alarm usually means a faulty detector'","after":"removed only once nothing refers to them; history 'usually lives on your own device'; a false smoke alarm 'usually has a harmless cause, such as steam or an oversensitive detector'","reason":"git-gc prunes only unreferenced objects past the grace period; browsers can sync history; smoke-alarm false alarms are commonly environmental."}
+
+**Scope gaps and exclusions:**
+
+- Hosted GitHub Actions was not dispatched: the Python CI YAML is explicitly a configuration template needing a repository, dependencies and hosted services. Local parse/semantic checks do not establish a hosted run.
+- No external push, CI dispatch or deployment was performed. All Git mutations and file-path pushes ran in throwaway verifier repositories/remotes with repository-scoped configuration; the real app Git state and global configuration were untouched.
+- Real systems can differ from illustrative sharding, canary and merge-queue models: assumptions are stated; no measured runtime, billing, statistical detection or rollback latency guarantee is claimed.
+- Hosted GitHub Actions, merge queue, branch protection/rulesets and CODEOWNERS enforcement checked only against current GitHub docs, not executed.
+- Git behaviour executed on Git 2.53.0 (merge subset also Apple Git 2.50.1); the docs consulted are Git 2.56; no 2.56 binary was run.
+- git-merge-mechanics, git-object-formats, git-ci-flaky-tests and git-progressive-rollouts keep one question each (new ids are not allowed); fast-forward prediction is now tested only by git-merge-rebase-q8.
+- Glossary three-way-merge says conflicts come from different changes to 'the same lines'; the lesson adds directly adjacent lines. The entry is incomplete rather than wrong and was left unchanged.
+- US spellings remain in unchanged questions (git-workflows-q5 'behavior', git-object-model-q5 'normalization', git-ci-pipelines-q9 'artifacts', git-ci-pipelines-q12 'serializes').
+- 390 px render check not done by author or verifier; left to the orchestrator/release.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, git-storage-recovery: git-object-model-q9 premise: about 10 MB after default git gc for 1,000 versions of a ~1 MB text file changing a few lines each Two synthetic measurements on Git 2.53.0 (9.6 and 13.9 MiB); real repositories vary with compressibility, history shape and repack settings. The answer key does not depend on the number.
+- medium confidence, git-merge-mechanics: git merge -s recursive still prints 'recursive' in its success message Observed on Git 2.53.0 and Apple Git 2.50.1; not checked on 2.54-2.56 binaries; the 2.56 merge-strategies page documents only that recursive is a synonym for ort.
+- medium confidence, git-object-formats / git-refs-index: Git 3.0 plans (SHA-256, main, reftable defaults) with no release date, as of the Git 2.56 docs Time-sensitive; dated in the text and consistent with security/02.
+- medium confidence, git-ci-feedback: actions/checkout and actions/setup-python current major version v7 True on 2026-10-30 (GitHub releases API); dated in the text; hosted run not executed.
+- medium confidence, git-progressive-rollouts: git-cd-release-q7 noise reasoning (sqrt of expected count; a 3-error gap about one stage in four) Stated as an assumption of rare, independent (Poisson) errors; real error streams can be correlated. Implies ~3,000 canary requests per stage.
+- medium confidence, all analogy lessons: 10 analogy callouts Teaching aids reviewed for mapping and limit against the lesson's sources; not evidence.
 
 
 ## synth / Sound & Digital Audio

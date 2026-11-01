@@ -15,7 +15,7 @@ The tooling (GitHub Actions, GitLab CI, Jenkins, Buildkite, CircleCI) exists to 
 
 - **Small integrations are cheap.** Problems surface within minutes of the change that caused them, while the author still remembers it.
 - **The mainline stays healthy.** If `main` always builds and passes tests, developers have a tested baseline for branching and diagnosis. Release readiness also depends on deployment, compatibility and operational checks.
-- **It replaces fear with evidence.** The pipeline supplies repeatable evidence about the behaviors and properties its checks cover; a green run is not proof that nothing breaks.
+- **It replaces fear with evidence.** The pipeline supplies repeatable evidence about the behaviours and properties its checks cover; a green run is not proof that nothing breaks.
 
 The cost is discipline: tests must be good enough to trust, and a red build must be fixed (or the change reverted) quickly. A common rule is that if a fix is not obvious within about ten minutes, revert first and investigate afterwards.
 
@@ -82,8 +82,8 @@ jobs:
       matrix:
         py: ["3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.py }}
           cache: pip
@@ -93,7 +93,7 @@ jobs:
       - run: pytest -q
 ```
 
-This teaching example uses readable version tags and a moving runner label; production policy should pin reviewed action commits and control tool/dependency versions. requirements.txt must include the test and lint dependencies.
+This teaching example uses readable version tags (v7 was the current major version of both actions in October 2026; check for newer ones) and a moving runner label; production policy should pin reviewed action commits and control tool/dependency versions. requirements.txt must include the test and lint dependencies.
 
 What each part does:
 

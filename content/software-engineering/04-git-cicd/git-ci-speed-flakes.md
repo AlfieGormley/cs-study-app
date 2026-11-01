@@ -20,24 +20,19 @@ Techniques, roughly in order of effort:
 3. **Run only what changed.** Monorepo build tools (Bazel, Nx, Pants, Turborepo) compute which targets are affected by a change and skip the rest.
 4. **Push slow tests later.** Run end-to-end suites after merge or on a schedule, not on every push, as long as failures are acted on.
 
-How much does test sharding help? Splitting a suite into test shards divides the test time but not the setup each CI runner must do first, and you pay for every runner for the whole wait:
+How much does test sharding help? Splitting a suite into test shards divides the test time but not the setup each CI runner must do first (checkout, installing dependencies), and you pay for every runner for the whole wait. So as you add shards, the wait shrinks towards that fixed CI setup duration while the compute bill grows.
 
-```formula
+```formula reference
 t_wall = N × t_test / S + t_setup
-t_wall = 2400 × 0.5 s / 8 + 60 s
-t_wall = 150 s + 60 s = 210 s = 3.5 min
 C = S × t_wall
-C = 8 × 210 s = 1680 s = 28 min
 where
 t_wall: the wall-clock time of the test stage, the time a developer actually waits, in seconds (s)
 N: the number of tests in the suite
 t_test: the average time one test takes, in seconds (s)
 S: the number of test shards: CI runners the suite is split evenly across, all starting together
 t_setup: the time each runner spends getting ready (checkout, installing dependencies) before testing, in seconds (s)
-C: the total compute you pay for, in runner-minutes: every runner is busy for the whole of t_wall
-s: seconds
-min: minutes; 1 min = 60 s
-In words: more test shards shrink elapsed test-stage duration towards the fixed CI setup duration, while the compute bill grows because every runner pays the setup.
+C: the total compute you pay for, in runner-seconds: every runner is busy for the whole of t_wall
+In words: more test shards shrink the elapsed test-stage time towards the fixed CI setup duration, while the compute bill grows because every runner pays the setup.
 ```
 
 > [!example] test sharding arithmetic

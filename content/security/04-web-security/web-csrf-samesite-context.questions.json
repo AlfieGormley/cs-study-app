@@ -70,27 +70,27 @@
     "id": "web-csrf-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "Assume a Chromium configuration with Lax-by-default and the 120-second Lax-allowing-unsafe exception. A session cookie with no SameSite attribute was newly created 60 seconds ago. A malicious page now submits a top-level cross-site POST; all other cookie conditions permit sending. Is the cookie sent?",
+    "prompt": "A site relies on Chromium's Lax-by-default behaviour instead of CSRF tokens. Its session cookie is set at login with **no** SameSite attribute. Thirty seconds after logging in, the user opens a malicious page that auto-submits a top-level cross-site POST form to `/transfer`. Assume a Chromium browser with the documented two-minute Lax+POST exception, and that all other cookie rules permit sending. What happens, and what is the best fix?",
     "options": [
       {
-        "text": "No: Chrome treats missing SameSite as Lax, which never sends cookies on cross-site POSTs",
-        "explanation": "Lax-by-default has a temporary exception for fresh cookies. Missing it is a common misunderstanding."
+        "text": "The cookie is withheld, because a missing SameSite is treated as Lax; no change is needed",
+        "explanation": "This misses the Lax+POST exception for fresh cookies with no SameSite attribute. It also assumes every browser applies Lax by default; as of November 2026 only Chromium-based browsers do (Firefox and Safari do not)."
       },
       {
-        "text": "Yes: Chrome's Lax+POST exception sends cookies under two minutes old (without an explicit SameSite) on top-level cross-site POSTs",
-        "explanation": "Correct. The cookie is 60 s old, under the 2-minute window, so it's sent. Setting `SameSite=Lax` explicitly removes the exception."
+        "text": "The cookie is sent, because it is under two minutes old and has no explicit SameSite; set `SameSite=Lax` explicitly and keep a CSRF token (or equivalent) check",
+        "explanation": "Correct. The exception applies only to cookies with no SameSite attribute, so explicit Lax removes it. A token check remains necessary for same-site attackers, unsafe GETs and browsers without Lax defaults."
       },
       {
-        "text": "Yes: cookies without SameSite are always treated as `None`",
-        "explanation": "Not under the stated configuration: missing SameSite uses a default mode with a limited recent-cookie exception, rather than unrestricted None behavior."
+        "text": "The cookie is sent, because a missing SameSite means None; fix it with `SameSite=None; Secure`",
+        "explanation": "Missing SameSite is not None in this configuration. And setting None would make things worse: the cookie would then go on every cross-site request that other rules permit."
       },
       {
-        "text": "No: Chrome blocks all cross-site POST form submissions",
-        "explanation": "Chrome doesn't block form submissions; SameSite only controls cookies."
+        "text": "Chromium blocks the cross-site form submission itself, so nothing needs fixing",
+        "explanation": "SameSite never blocks requests; it only decides whether the cookie is attached. The form is always submitted."
       }
     ],
     "answer": 1,
-    "workedExample": "Compare the cookie's age with the exception window:\n\n```formula\nt_age < t_window\n60 s < 120 s\nwhere\nt_age: how long ago the cookie was created, in seconds (s); here 60 s\nt_window: Chromium's Lax+POST window for cookies with no SameSite attribute, in seconds (s); here 120 s (two minutes)\n<: is less than\ns: seconds\nIn words: the cookie is younger than two minutes, so the exception still applies.\n```\n\nUnder the stated configuration the request is also a top-level navigation, so the cookie is sent. Explicit SameSite=Lax does not get this default-mode exception. Cookie creation time matters; a later replacement does not necessarily reset it. Maintain independent CSRF protection and check supported-client behavior.",
+    "workedExample": "1. The cookie has no SameSite attribute, so Chromium applies its default mode, which is Lax-like.\n2. Lax alone would withhold the cookie from a cross-site POST.\n3. But the cookie is 30 seconds old, inside Chromium's two-minute Lax+POST window, and this is a top-level navigation, so the cookie is sent.\n4. Fix in two parts: set `SameSite=Lax` explicitly (the exception never applies to explicit values), and keep CSRF tokens or an equivalent request check, because defaults differ between browsers and SameSite cannot stop same-site or client-side attacks.\n\nChromium describes the exception as temporary, so test the browsers you support rather than relying on it either way.",
     "link": {
       "title": "SameSite cookies explained — web.dev",
       "url": "https://web.dev/articles/samesite-cookies-explained"

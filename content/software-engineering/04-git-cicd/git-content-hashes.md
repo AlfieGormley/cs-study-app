@@ -13,7 +13,7 @@ The previous unit introduced blobs, trees, commits and tags. Here the objective 
 
 In a SHA-1-format repository, an object's name is the SHA-1 hash of a small header followed by its content. A hash function turns any sequence of bytes into a fixed-size fingerprint; the same bytes always give the same fingerprint, and a change normally gives a different fingerprint. Different inputs can collide; tamper-evidence assumes an attacker cannot feasibly find a suitable collision. Written as a formula:
 
-```formula
+```formula essential
 id = SHA-1(h ‖ c)
 h = t ‖ " " ‖ n ‖ NUL
 where
@@ -62,6 +62,13 @@ Content addressing has three big consequences.
 **2. History is tamper-evident.** A commit's hash covers its tree hash and its parent hashes. The tree hash covers every blob and subtree hash. To record different bytes in an old snapshot, Git needs replacement hashes along that tree and each rewritten descendant, assuming collision resistance. Existing objects are not modified, and the hash chain proves neither authorship nor code safety. This structure is a **Merkle DAG**, the same idea behind blockchains and certificate transparency logs.
 
 **3. Objects are immutable.** You cannot edit a commit. Amend and a replaying rebase create replacement commits and move a ref. A commit-level reset instead moves a ref and may update the index and working tree without creating a replacement commit.
+
+> [!analogy] Real-world analogy: a shelf code computed from the text
+> Imagine a library that shelves every document under a code calculated from its full text. Two identical copies get the same code and share one shelf slot. Correct one comma and the code changes, so the corrected version goes on a different shelf, while the original stays where it was.
+>
+> **How it maps:** The shelf code is the object ID, calculated from the object's header and content. Identical content is stored once (deduplication). Editing produces a new object with a new ID rather than changing the old one, which is why amend and rebase create replacement commits.
+>
+> **Where it stops:** A real library chooses its own codes and can relabel a shelf. Git cannot: the ID is fixed by the bytes. A Git tree also lists its children's IDs, so one change gives new IDs all the way up to the commit, and an old object is removed only later, by `git gc`, once nothing refers to it any more.
 
 ```
  illustrative object graph

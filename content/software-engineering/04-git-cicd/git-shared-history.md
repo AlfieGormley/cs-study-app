@@ -43,19 +43,18 @@ Platforms such as GitHub and GitLab offer **squash and merge**: all the branch's
 
 **`git bisect`** finds the commit that introduced a bug by binary search. You mark one commit as good (bug absent) and a later one as bad (bug present). Git checks out a commit halfway between them; you test it and answer `git bisect good` or `git bisect bad`, and the suspect range halves. Because the range halves every time, the number of tests grows only with the logarithm of the number of commits:
 
-```formula
+```formula reference
 s ≈ ⌈log_2(n)⌉
-s ≈ ⌈log_2(1000)⌉ = ⌈9.97⌉ = 10
 where
 s: roughly how many commits you must test before git bisect names the first bad commit
 n: the number of candidate commits between the known-good and known-bad commits
 log_2: the base-2 logarithm: how many times you halve a number to get down to 1 (log_2(8) = 3, because 8 → 4 → 2 → 1)
 ⌈ ⌉: the ceiling: round up to the next whole number, because you cannot run part of a test
 ≈: approximately equal to; Git's own "roughly N steps" message counts only the tests still left after the one it has just checked out, so for 1,000 commits it first says roughly 9
-In words: each test halves the suspects, so doubling the number of commits adds only about one more test.
+In words: each test halves the suspects, so about 10 tests cover 1,000 commits and doubling the number of commits adds only about one more test.
 ```
 
-So 1,000 commits take about 10 tests and 1,000,000 take about 20. The estimate assumes every commit can be built and tested: a commit that does not build has to be skipped (`git bisect skip`), which costs extra steps. With squash merges each candidate is one whole, reviewed pull request, so bisect lands on a meaningful unit; merge-heavy history works too, but bisect may test side-branch commits that never ran CI.
+A million commits need only about 20 tests. The estimate assumes every commit can be built and tested: a commit that does not build has to be skipped (`git bisect skip`), which costs extra steps. With squash merges each candidate is one whole, reviewed pull request, so bisect lands on a meaningful unit; merge-heavy history works too, but bisect may test side-branch commits that never ran CI.
 
 ## Cherry-pick
 

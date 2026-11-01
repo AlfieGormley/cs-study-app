@@ -3,27 +3,27 @@
     "id": "git-ci-pipelines-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A pipeline runs 200 tests. Each independently has a 0.5% chance of a flaky failure per run. Roughly what fraction of runs on **correct** code will be red?",
+    "prompt": "A team's integration stage runs 200 tests on unchanged `main` and goes red on roughly two runs in three. Each time a different test fails, and it passes when re-run. Measured individually, each test fails only about once in 200 runs. What is the best diagnosis and response?",
     "options": [
       {
-        "text": "About 63%",
-        "explanation": "Correct. The chance that all 200 pass is 0.995 raised to the power 200, about 0.367, so the chance that at least one flakes is about 0.633."
+        "text": "Each test is 99.5 % reliable, so most red runs must be genuine regressions; revert the latest merges",
+        "explanation": "0.5 % is a per-test rate. The code is unchanged, and the failing test differs each time and passes on re-run, which is the signature of flakiness rather than a regression."
       },
       {
-        "text": "About 10%",
-        "explanation": "Too low. Even a rough linear estimate gives 200 × 0.5% = 100%, which overshoots, but the true value is far above 10%."
+        "text": "Configure the stage to retry until it goes green, since flaky failures are harmless noise",
+        "explanation": "Blind retries hide flakiness, and an intermittent failure can be a real defect such as a race condition, which would then ship."
       },
       {
-        "text": "About 0.5%",
-        "explanation": "That's the per-test rate. A run is red if *any* of the 200 tests flakes, so the chances compound."
+        "text": "Rare per-test flakes compound across 200 tests, because a run is red if any one fails. Track flakiness per test, quarantine the worst with an owner, and investigate them for real races",
+        "explanation": "Correct. With 200 independent chances of a 0.5 % flake, all tests pass together only about 37 % of the time. Quarantine with an owner restores trust while keeping the repair work visible."
       },
       {
-        "text": "100%",
-        "explanation": "Adding 200 × 0.5% gives 100%, but probabilities of independent events don't add like this; you multiply the chances of passing."
+        "text": "The chances add up to 200 × 0.5 % = 100 %, so every run should be red; the CI system must be miscounting",
+        "explanation": "Probabilities of separate events do not simply add. The chance that every test passes is 0.995 multiplied by itself 200 times, about 0.37, so about 63 % of runs are red, matching what the team sees."
       }
     ],
-    "answer": 0,
-    "workedExample": "```formula\nP_red = 1 − (1 − p)^N\nP_red = 1 − 0.995^200\n0.995^200 = e^(200 × ln(0.995))\n0.995^200 ≈ e^(−1.0025) ≈ 0.367\nP_red ≈ 1 − 0.367 = 0.633\nwhere\nP_red: the probability that a run on correct code goes red, from 0 (never) to 1 (always)\np: the probability that one test flakes in one run; 0.5 % = 0.005\nN: the number of tests; 200\n^: raise to a power: (1 − p)^N is the chance that all N independent tests pass\ne: Euler's number, about 2.718, the base of natural logarithms\nln: the natural logarithm (log to base e), which turns a power into a multiplication so it is easy to work out by hand\n≈: approximately equal to\nIn words: a run is red unless every test passes; 200 chances of a 0.5 % flake make a red run more likely than not.\n```\n\n1. One test passes with probability 1 − 0.005 = 0.995.\n2. All 200 pass with probability 0.995 raised to the power 200 (200 copies of 0.995 multiplied together).\n3. Using logarithms: 200 × ln(0.995) ≈ −1.0025, and e to that power is about 0.367.\n4. So a run is red with probability about 0.633.\n\nNearly two-thirds of runs on good code fail, so engineers stop trusting red. Cutting per-test flakiness to 0.1% leaves about 82% of runs green (0.999 to the power 200), still 18% red. This hypothetical independent-probability model illustrates compounding risk; it is not a causal derivation of Google's observed transition statistics. Flaky failures can also expose real defects.",
+    "answer": 2,
+    "workedExample": "1. Symptoms: unchanged code, a different failing test each time, passes on re-run. That points to flaky tests, not a regression.\n2. Why so many red runs? One test passes 99.5 % of the time. All 200 pass together only if each one does: 0.995 multiplied by itself 200 times, about 0.37.\n3. So about 63 % of runs go red on correct code, roughly two in three, as observed. This assumes independent flakes; real flakes are often correlated, so treat it as a model.\n4. Response: record flakiness per test, quarantine the worst offenders out of the blocking suite with an owner and a ticket, and fix them. Look for timing, ordering, shared-state and network causes, and for genuine races.\n5. Do not paper over it with automatic retries: Google reported that about 84 % of observed pass-to-fail transitions involved a flaky test, and that people learn to ignore failures from noisy tests.",
     "link": {
       "title": "Flaky Tests at Google and How We Mitigate Them",
       "url": "https://testing.googleblog.com/2016/05/flaky-tests-at-google-and-how-we.html"

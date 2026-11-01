@@ -7,31 +7,33 @@ sourceLesson: web-sop-cors
 summary: A cached permission has a bounded lifetime and specific matching conditions.
 ---
 
-The preceding unit introduced the OPTIONS exchange for a CORS DELETE carrying x-token. A later matching request may reuse a successful permission instead of sending OPTIONS again. This cache is separate from ordinary HTTP response caching.
+The previous unit's preflight approved a cross-origin `DELETE` carrying an `x-token` header. Sending an extra `OPTIONS` before every such request costs a round trip, so the browser can remember a successful preflight and reuse it. This **preflight cache** is separate from the ordinary HTTP cache that stores page and API responses.
 
-The actual `DELETE` needs successful preflight permission. Fetch specifies a five-second default when the Access-Control-Max-Age value is missing or invalid, with implementation caps and entries possibly dropped earlier. Chromium source currently uses a two-hour maximum; this is version-specific, not a guarantee that entries are kept that long or a cache shared with ordinary HTTP responses.
+## How long the permission lasts
 
-How long can the browser keep using a cached preflight before it must send another `OPTIONS`? The server asks for a lifetime, and the browser applies its own cap. The limit is whichever is smaller:
+The server suggests a lifetime with `Access-Control-Max-Age`, in seconds. The browser then applies its own rules:
 
-```formula
-t_cache = min(t_req, t_cap)
-t_cache = min(600 s, 7200 s)
-t_cache = 600 s
-where
-t_cache: the longest time the browser may keep using this cached preflight permission, in seconds (s). It is a maximum: the browser may drop the entry sooner
-t_req: the lifetime the server asked for in Access-Control-Max-Age, in seconds (s); here 600 s (ten minutes). The Fetch Standard uses 5 s when the header is missing or invalid
-t_cap: the browser's own maximum, in seconds (s); 7200 s (two hours) in current Chromium source, and different in other browsers and versions
-min: the minimum function, which returns the smaller of its two inputs
-s: seconds, the unit of time
-In words: the browser keeps the cached permission for the server's requested time or its own cap, whichever is shorter, and possibly less.
-```
+- **It uses whichever is shorter:** the server's request or the browser's own cap.
+- **Chromium's cap is two hours** (7,200 seconds) in its current source. Other browsers use their own caps, and they can change between versions.
+- **A missing or invalid value means five seconds**, the default in the Fetch Standard.
+- **The browser may forget sooner.** The standard allows early removal at any time, and a CORS failure on a later request to the same URL clears the matching entries. The requested lifetime is an upper limit, not a promise.
 
-So the example above lets the browser skip new preflights for at most ten minutes. Had the server sent 86,400 s (one day), Chromium would still stop at its 7,200 s cap. Reuse requires a matching network partition key, serialized request origin and URL, plus the needed method/header permissions. A credentials-enabled entry can cover a later request without credentials mode include; an entry created without include cannot cover a later include request. A changed method or header needs another preflight only if the cached permissions do not already cover it.
+So the earlier `Access-Control-Max-Age: 600` lets the browser skip new preflights for at most ten minutes. A server sending 86,400 (one day) still gets at most two hours in Chromium. If you see `OPTIONS` requests reappearing in your logs, that is the browser's cap or eviction at work, not a server bug.
+
+## When a cached permission can be reused
+
+Reuse needs a close match with the original preflight:
+
+- **Same requester and target:** the same requesting origin, the same URL, and the same top-level site (browsers keep a separate preflight cache for each site the user is visiting).
+- **Covered method and headers:** a later request with a method or header that the cached answer did not allow needs a new preflight. One that the cached answer already covers does not.
+- **Credentials:** an approval obtained for a request with credentials can cover a later request without them, but not the other way round.
+
+The cache only saves the browser from asking again. It never weakens the server's own checks, which still run on every real request.
 
 ## Key takeaways
-- The smaller of the requested lifetime and implementation cap bounds reuse.
-- A browser can evict permission earlier; max-age is not a retention promise.
-- Reuse also requires matching cache-key and method/header conditions.
+- The browser keeps a preflight approval for the shorter of the server's requested lifetime and its own cap, and may drop it sooner.
+- A missing or invalid `Access-Control-Max-Age` gives only five seconds of reuse.
+- Reuse needs the same origin, URL and top-level site, plus a cached answer that covers the method, headers and credentials mode.
 
 ## Further reading
 - [Fetch Standard: CORS protocol](https://fetch.spec.whatwg.org/#http-cors-protocol)

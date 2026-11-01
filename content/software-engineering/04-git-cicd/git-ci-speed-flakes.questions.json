@@ -33,27 +33,27 @@
     "id": "git-ci-pipelines-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A test suite has 3,600 tests averaging 0.5 s each and runs on one machine. You split the tests evenly across 10 runners, and each runner spends 60 s on setup before testing. Roughly what is the new wall-clock time for the test stage? Assume equal total test duration per test shard, runners starting together, and no queueing or competition for shared resources.",
+    "prompt": "A test stage holds 1,800 seconds of tests, split evenly across 10 runners. Each runner spends 60 s on setup (checkout, installing dependencies) before testing, so developers wait about 4 minutes. A colleague raises the shard count to 40. The wait falls only to about 1¾ minutes, and the CI bill for the stage rises sharply. Assume the runners are independent and start together. What explains both results?",
     "options": [
       {
-        "text": "About 3 minutes",
-        "explanation": "That's 180 s of tests per test shard but forgets each runner's 60 s of setup."
+        "text": "Every runner repeats the setup, which does not shrink with more shards: the wait approaches the 60 s setup floor, while paid runner time grows with each extra runner",
+        "explanation": "Correct. Test time per shard falls from 180 s to 45 s, but each runner still spends 60 s on setup, and there are now 40 runners each paid for the whole wait."
       },
       {
-        "text": "About 4 minutes",
-        "explanation": "Correct. 3,600 × 0.5 = 1,800 s total; 1,800 / 10 = 180 s per test shard; plus 60 s setup = 240 s = 4 minutes."
+        "text": "The tests themselves became slower because more shards compete for the same machine",
+        "explanation": "The scenario states independent runners. The measured wait is exactly what test time divided across shards plus a fixed setup predicts, with no slowdown needed."
       },
       {
-        "text": "About 30 minutes",
-        "explanation": "That is the original single-machine time (1,800 s). Test sharding runs the test shards in parallel."
+        "text": "Sharding cannot reduce wall-clock time; the original 4 minutes was already the minimum",
+        "explanation": "The wait did fall, from 4 to about 1¾ minutes. Sharding shortens the test part; it cannot shorten the setup part."
       },
       {
-        "text": "About 10 minutes",
-        "explanation": "This would be total setup across all runners (10 × 60 s), which happens in parallel and isn't additive in wall-clock time."
+        "text": "One shard received a slow test file and now dominates the wait",
+        "explanation": "Uneven shards are a real problem worth checking, but here the tests are split evenly, and an uneven split would not explain the higher bill."
       }
     ],
-    "answer": 1,
-    "workedExample": "```formula\nt_wall = N × t_test / S + t_setup\nt_wall = 3600 × 0.5 s / 10 + 60 s\nt_wall = 180 s + 60 s = 240 s = 4 min\nC = S × t_wall = 10 × 240 s = 40 min\nwhere\nt_wall: the wall-clock time of the test stage, in seconds (s)\nN: the number of tests\nt_test: the average time per test, in seconds (s)\nS: the number of test shards (runners), all starting together\nt_setup: each runner's CI setup duration before testing, in seconds (s)\nC: the total compute paid for, in runner-minutes\ns: seconds\nmin: minutes; 1 min = 60 s\nIn words: the tests are divided across the runners, but every runner still pays the full CI setup duration.\n```\n\n1. Total test time: 3,600 × 0.5 s = 1,800 s (30 min).\n2. Per test shard: 1,800 s / 10 = 180 s.\n3. Add each runner's 60 seconds of preparation to its 180 seconds of tests: four elapsed minutes.\n4. Total compute is 40 runner-minutes, versus about 31 before, because each of the ten runners repeats preparation. The formula card above shows the calculation.\n\nSo test sharding cuts feedback time by nearly 8× (31 min to 4 min) for about 30% more compute. Uneven test shards (one slow test file) can dominate, so balance test shards by measured duration, not count.",
+    "answer": 0,
+    "workedExample": "Split the wait into the part sharding divides and the part it does not:\n\n1. Test time per runner: 1,800 s ÷ 10 = 180 s before; 1,800 s ÷ 40 = 45 s after.\n2. Setup per runner: 60 s in both cases, because every runner must check out and install dependencies.\n3. Wait: 180 s + 60 s = 240 s (4 min) before; 45 s + 60 s = 105 s (about 1¾ min) after.\n4. Paid runner time: 10 runners × 240 s = 40 runner-minutes before; 40 runners × 105 s = 70 runner-minutes after.\n\nSo the wait approaches the setup floor while cost keeps climbing. To go faster, cut the setup itself (caching, smaller images, prebuilt environments) or run fewer tests per change; balance shards by measured duration rather than test count.",
     "link": {
       "title": "Continuous Integration — Martin Fowler",
       "url": "https://martinfowler.com/articles/continuousIntegration.html"

@@ -3,7 +3,7 @@
     "id": "web-xss-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "A forum saves each post's body to the database and inserts it directly into server-rendered HTML without encoding. A user's post contains script that runs for every reader. What type of XSS is this?",
+    "prompt": "A forum saves each post's body to the database and inserts it directly into the HTML the server generates, without encoding. A user's post contains script that runs for every reader. What type of XSS is this?",
     "options": [
       {
         "text": "Reflected XSS",
@@ -11,7 +11,7 @@
       },
       {
         "text": "DOM-based XSS",
-        "explanation": "Client-side sink insertion would make it DOM-based too, but this question specifies direct server rendering. Stored versus reflected is a separate way of sorting XSS."
+        "explanation": "Client-side sink insertion would make it DOM-based too, but this question specifies that the server inserts it. Stored versus reflected is a separate way of sorting XSS."
       },
       {
         "text": "Stored XSS",
@@ -33,27 +33,27 @@
     "id": "web-xss-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "What does `markupsafe.escape(\"<b>Tom & Jerry</b>\")` produce?",
+    "prompt": "This search handler pastes the query into HTML:\n\n```python\nq = request.args.get(\"q\", \"\")\nreturn f\"<h1>Results for {q}</h1>\"\n```\n\nFour fixes are proposed. Which one is the correct fix for this bug?",
     "options": [
       {
-        "text": "`<b>Tom & Jerry</b>` unchanged, as it contains no script",
-        "explanation": "Escaping does not look for scripts. It encodes every special HTML character regardless of whether the content looks dangerous."
+        "text": "Strip `<script>` tags from `q` with a regular expression",
+        "explanation": "Filtering out known-bad patterns misses other ways to run script, such as an image with an `onerror` attribute, and regex HTML filtering is easy to bypass. It also silently changes legitimate text."
       },
       {
-        "text": "`Tom & Jerry`, with the tags stripped",
-        "explanation": "Stripping tags is what an HTML sanitiser might do. Escaping keeps every character but makes it display as text."
+        "text": "Pass `q` as a parameter instead, as you would in a parameterised SQL query",
+        "explanation": "Parameterised queries are the right fix for SQL injection, because the database receives code and data separately. Here `q` never reaches SQL, and a server-built HTML page has no placeholder: the browser parses the whole response as one document."
       },
       {
-        "text": "`&lt;b&gt;Tom &amp; Jerry&lt;/b&gt;`",
-        "explanation": "Correct. `<`, `>` and `&` become entities, so the browser shows the literal tags as text instead of making the text bold."
+        "text": "HTML-encode `q` where it is output, with `escape(q)` or an auto-escaping template, so `<` becomes `&lt;`",
+        "explanation": "Correct. Encoding for the HTML text context makes the browser display special characters instead of parsing them as markup. An auto-escaping template does this by default."
       },
       {
-        "text": "`%3Cb%3ETom%20%26%20Jerry%3C%2Fb%3E`",
-        "explanation": "That is URL percent-encoding, which is for query strings, not HTML output. Using the wrong encoding for the context is a classic mistake."
+        "text": "Percent-encode `q` (URL encoding) before inserting it",
+        "explanation": "That is the encoding for URL components, not HTML text. It would show users `%3C` and `%20` instead of their search, and choosing the encoding by habit rather than by context is exactly the mistake that causes XSS elsewhere."
       }
     ],
     "answer": 2,
-    "workedExample": "Go character by character:\n\n```\n<   -> &lt;\nb   -> b\n>   -> &gt;\nTom -> Tom\n&   -> &amp;\n...\n```\n\nResult: `&lt;b&gt;Tom &amp; Jerry&lt;/b&gt;`. The browser renders it as the visible text `<b>Tom & Jerry</b>`, not bold. That's the whole point: data stays data.",
+    "workedExample": "1. Name the destination: `q` lands in **HTML text**, between tags.\n2. Pick the defence for that context: HTML output encoding.\n3. Check the effect, for example `escape(\"<b>Tom & Jerry</b>\")`:\n\n```\n&lt;b&gt;Tom &amp; Jerry&lt;/b&gt;\n```\n\nThe browser shows the characters `<b>Tom & Jerry</b>` as plain visible text, not bold text, so data stays data.\n\n4. Compare with SQL: there, the strongest fix is a parameterised query, and OWASP discourages manual escaping. HTML pages have no such channel, so encoding (ideally automatic, in the template) is the standard defence.",
     "link": {
       "title": "Cross Site Scripting Prevention Cheat Sheet — OWASP",
       "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
@@ -71,7 +71,7 @@
       },
       {
         "text": "No: ordinary HTTP navigation omits the fragment, and this value reaches innerHTML in client code; use a text sink or suitable sanitisation",
-        "explanation": "Correct for this data flow. Escaping server-rendered values never transforms the fragment before this sink. Replace innerHTML with textContent for ordinary text; server-supplied CSP can provide additional defence."
+        "explanation": "Correct for this data flow. Escaping values in the server's HTML never transforms the fragment before this sink. Replace innerHTML with textContent for ordinary text; server-supplied CSP can provide additional defence."
       },
       {
         "text": "Yes, if they also add a WAF rule blocking `<script>` in URLs",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Trace the data flow:\n\n```\nURL  /page#<payload>\n      |  fragment stays in browser\n      v\nlocation.hash (source)\n      |\n      v\nbox.innerHTML (sink) -> parsed as HTML\n```\n\nNo server-rendered value is on this source-to-sink path, so output escaping on the server misses it. Replace the sink:\n\n```javascript\n// Replace content without HTML parsing.\nbox.textContent = t;\n```\n\nOr, if HTML is genuinely needed, `box.innerHTML = DOMPurify.sanitize(t)`.",
+    "workedExample": "Trace the data flow:\n\n```\nURL  /page#<payload>\n      |  fragment stays in browser\n      v\nlocation.hash (source)\n      |\n      v\nbox.innerHTML (sink) -> parsed as HTML\n```\n\nNo value from the server's HTML is on this source-to-sink path, so output escaping on the server misses it. Replace the sink:\n\n```javascript\n// Replace content without HTML parsing.\nbox.textContent = t;\n```\n\nOr, if HTML is genuinely needed, `box.innerHTML = DOMPurify.sanitize(t)`.",
     "link": {
       "title": "DOM based XSS Prevention Cheat Sheet — OWASP",
       "url": "https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html"

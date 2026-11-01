@@ -13,11 +13,7 @@ There are many named workflows, but they mostly differ on one variable: **how of
 
 ## Why integration frequency matters
 
-When two people work apart, their changes drift. Longer separation can increase integration work and delay discovery of incompatibilities; there is no universal mathematical growth law:
-
-> [!note] Evidence gap
-> No numerical integration-cost growth curve is included: this project has no reproducible evidence establishing a universal relationship between branch age and effort. The risks below are qualitative.
-
+When two people work apart, their changes drift. Longer separation can increase integration work and delay discovery of incompatibilities. There is no universal formula for how fast that cost grows with branch age; it depends on how much the changes overlap. The risks are qualitative:
 
 - More lines changed on each side means more textual conflicts.
 - Worse, **semantic conflicts** appear: changes that merge cleanly but break each other. One person renames a function's meaning while the other adds a new caller relying on the old meaning. Git cannot detect this; review, static analysis and tests of the combined code may detect it.
@@ -48,7 +44,7 @@ Martin Fowler calls the dreaded end-of-project phase **integration hell**. The f
 
 ## GitHub flow
 
-The simplest common workflow, popularised by GitHub:
+The simplest common workflow, as GitHub's Scott Chacon described it in 2011:
 
 1. `main` is always deployable.
 2. Create a descriptively named branch from `main` for each change.
@@ -56,7 +52,7 @@ The simplest common workflow, popularised by GitHub:
 4. Merge to `main` once approved and green.
 5. Deploy `main` (often automatically, right after merge).
 
-There are no `develop` or long-lived release branches. It suits web services that deploy continuously and only ever run one version in production. Its main risk is feature branches that live too long: GitHub flow does not *force* branches to be short, so teams must keep them short by habit.
+GitHub's current guide lists the same core steps (branch, commit and push, open a pull request, address review, merge, then delete the branch) without making deployment a step. There are no `develop` or long-lived release branches. It suits web services that deploy continuously and only ever run one version in production. Its main risk is feature branches that live too long: GitHub flow does not *force* branches to be short, so teams must keep them short by habit.
 
 ## Key takeaways
 
@@ -68,3 +64,4 @@ There are no `develop` or long-lived release branches. It suits web services tha
 
 - [Patterns for Managing Source Code Branches — Martin Fowler](https://martinfowler.com/articles/branching-patterns.html)
 - [GitHub flow — GitHub Docs](https://docs.github.com/en/get-started/using-github/github-flow)
+- [GitHub Flow — Scott Chacon (2011)](https://scottchacon.com/2011/08/31/github-flow/)

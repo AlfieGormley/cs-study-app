@@ -31,6 +31,13 @@ a08133f HEAD@{0}: commit (amend): copy file
 
 Reflog entries keep old commits alive. By default, entries for commits that are still reachable expire after 90 days and entries for unreachable ones after 30 days (`gc.reflogExpire`, `gc.reflogExpireUnreachable`). The usual prune grace period is two weeks (gc.pruneExpire), including expiry when using modern cruft packs. These are configurable age thresholds, not an extra guaranteed two weeks after a reflog entry expires.
 
+> [!analogy] Real-world analogy: a browser's history list
+> A web browser remembers the pages you visited, so you can return to one you navigated away from even though no bookmark points to it. The list usually lives on your own device, and old entries are cleared after a while.
+>
+> **How it maps:** The reflog is a local history of where `HEAD` and each branch pointed. After a bad reset or rebase, no branch points at the old commit any more, but a reflog entry still names it, which both lets you find it and stops `git gc` pruning it.
+>
+> **Where it stops:** A browser history records visits; a reflog records only ref updates, so edits you never committed are not in it. Entries expire by configurable age, and once they and other protections are gone, `git gc` can delete the commit itself; clearing a browser's history never deletes the website.
+
 > [!tip] Recovering "lost" work
 > Bad rebase or hard reset? Run `git reflog`, find the hash from before the mistake, and `git branch rescue <hash>`. The reflog is local only: it is not pushed, and a fresh clone has none of your history of moves.
 

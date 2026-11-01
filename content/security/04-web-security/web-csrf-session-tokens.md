@@ -7,17 +7,17 @@ sourceLesson: web-csrf
 summary: Reject missing tokens and bind double-submit validation to the authenticated session.
 ---
 
-The previous unit established that a session cookie alone proves no user intent. Token checks add a value that a hostile origin cannot normally read. These illustrative Flask hooks assume registered application objects and do not replace maintained framework CSRF integration.
+The previous unit showed that a session cookie alone proves no user intent. The classic fix adds a second value that the browser does *not* attach automatically and that a hostile site cannot read: an anti-CSRF token. The Flask hooks below are illustrations; in production, use your framework's maintained CSRF protection.
 
 ## Defence 1: anti-CSRF tokens
 
 The **synchroniser token** pattern gives the legitimate page a secret that the attacker's page can't know:
 
-1. When the session is created, the server generates a random token (a CSPRNG value, 128+ bits) and stores it in the session.
-2. Legitimate state-changing forms and JS requests to the protected application include it in a hidden field or custom header. Never send it to an untrusted destination.
-3. On every state-changing request, the server checks the submitted token matches the session's.
+1. The server generates a random token (from a CSPRNG, at least 128 bits) and stores it in the user's session.
+2. Every legitimate state-changing form or JavaScript request includes it, in a hidden field or a custom header. Never send it to other sites.
+3. On every state-changing request, the server checks that the submitted token matches the session's copy, and rejects the request if it is missing or wrong.
 
-The attacker can make the browser send the cookie, but can't read your page to learn the token (the SOP blocks that read), so their faked request fails.
+The attacker can make the browser send the cookie, but cannot read your page to learn the token (the SOP blocks that read), so their fake request fails.
 
 Vulnerable:
 
@@ -32,7 +32,7 @@ def transfer():
     return "ok"
 ```
 
-Illustrative Flask hook (assumes `app`, `session`, `request` and `abort` are imported/configured). Render `csrf_token()` into protected forms and rotate the session/token at authentication boundaries. Flask’s default session is a signed client cookie, not a server-side session store. Prefer a maintained CSRF integration in production.
+Illustrative hook (assumes `app`, `session`, `request` and `abort` are set up). Render `csrf_token()` into protected forms, and issue a new session and token when the user logs in. Note that Flask's default session is a signed cookie stored in the browser, not a server-side session store.
 
 ```python
 import hmac, secrets
@@ -66,37 +66,30 @@ def check_csrf():
         abort(403)
 ```
 
-`hmac.compare_digest` avoids content-dependent short-circuit comparison; type or length differences may still affect timing. Its string inputs must be ASCII, so the hook rejects non-ASCII input rather than raising an exception. Django’s generated project enables `CsrfViewMiddleware`; Spring Security enables CSRF protection by default for unsafe methods. Check the framework integration and configuration used by your application.
+Three details matter here:
 
-How big is the token in this hook? `secrets.token_urlsafe(32)` draws 32 random bytes, and each byte is 8 bits:
+- **Missing must mean reject.** If both the session and the request lack a token and the code defaults both to `""`, an empty-equals-empty comparison would pass.
+- **`hmac.compare_digest`** compares without stopping at the first different character, so response timing does not reveal how much of a guess was right. It accepts only ASCII strings, so the hook rejects other input instead of crashing.
+- **Size:** `token_urlsafe(32)` draws 32 random bytes, which is 256 bits, double the usual 128-bit minimum. Guessing is hopeless; practical attacks instead steal or *plant* a token, which a longer token does nothing to stop.
 
-```formula
-b = 8n_bytes
-b = 32 × 8
-b = 256 bits
-256 bits ≥ 128 bits
-where
-b: the token's size in bits: how many independent random yes/no choices it contains
-n_bytes: how many random bytes the generator draws; here 32
-8: the number of bits in one byte
-≥: is greater than or equal to
-bits: the unit of information; one bit is a single 0 or 1
-In words: 32 random bytes give a 256-bit token, twice 128 bits; guessing resistance assumes uniformly generated secret bytes and appropriate online controls.
-```
+Frameworks usually do all of this for you: Django's generated projects enable `CsrfViewMiddleware`, and Spring Security enables CSRF protection for unsafe methods by default. Check that yours is switched on and configured.
 
-Practical attacks may instead bypass guessing entirely: it is stealing or planting a token, which is what the next section is about. A longer token does nothing against those.
+## Double-submit cookies
 
-### Double-submit cookies
+If you can't keep server-side session state, the **double-submit** pattern puts the token in a cookie *and* in the request body or a header, and checks they match. The attacker can't read the cookie to copy it into their form.
 
-If you can't keep server-side session state, the **double-submit** pattern puts the token in a cookie *and* in the request body or header, and checks they match. The attacker can't read the cookie to copy it into the form.
+The naive version has a weakness: an attacker who can *write* cookies for your domain can choose both values. That includes anyone controlling a sibling subdomain, or a network attacker injecting cookies over plain HTTP. OWASP therefore recommends the **signed double-submit** variant: the token combines a random value with session-specific data under an HMAC keyed with a server secret, and the server checks the HMAC against the *current* session. A token minted for another session (such as the attacker's own) then fails.
 
-The naive version has a weakness: an attacker who controls any sibling subdomain (or a man-in-the-middle on plain HTTP) may be able to *set* a cookie for your domain, choosing both values. OWASP recommends the **signed double-submit** variant: bind a fresh random value and session-specific data into an HMAC with a server secret, and verify the HMAC as well as the submitted value. A valid token for another session must never work. In browsers enforcing cookie prefixes, `__Host-` forbids `Domain` and requires `Secure` and `Path=/`, preventing a sibling subdomain from planting that named parent-domain cookie. This does not isolate different ports on the same host.
+Two more layers help against planting:
+
+- A cookie named with the `__Host-` prefix must be `Secure`, have `Path=/` and have no `Domain` attribute. Supporting browsers then refuse to let a sibling subdomain set it. (It does not separate different ports on the same host.)
+- HTTPS everywhere, with HSTS, stops network attackers injecting cookies over plain HTTP.
 
 ## Key takeaways
-- A protected state-changing request needs an independently checked token.
-- Reject absent/empty session tokens before comparing ASCII values.
-- A signed double-submit token must bind to session-specific data; equality alone does not prevent planting.
-- Host-prefixed cookies and HTTPS/HSTS address scoped injection threats, without replacing token validation.
+- Every state-changing request needs an independently checked token; reject a missing or empty one before comparing.
+- Token length defeats guessing, not theft or planting.
+- Bind a double-submit token to the session with an HMAC; equality of two attacker-chosen values proves nothing.
+- `__Host-` cookies and HTTPS with HSTS reduce cookie injection, without replacing token validation.
 
 ## Further reading
 - [OWASP CSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)

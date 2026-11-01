@@ -32,6 +32,13 @@ C' has the same change and message as C but a **different hash**, because its pa
 
 `main` can now fast-forward to `feat`, giving a perfectly linear history.
 
+> [!analogy] Real-world analogy: copying margin notes into a new edition
+> You annotated chapter 3 of a textbook, then a new edition comes out. You copy your notes, one at a time, into the new edition. Most transfer directly; where the new edition rewrote the paragraph you annotated, you have to rework the note. Your old annotated copy still sits on the shelf.
+>
+> **How it maps:** The old and new editions are the old base and the new upstream tip. Each note is one of your commits; copying it is replaying its change, which produces a new commit with a new parent and a new hash. A conflicting paragraph is a rebase conflict, and the old copy on the shelf is the original commits, still findable through the reflog.
+>
+> **Where it stops:** Anyone who borrowed your old annotated copy keeps it. Replacing commits that colleagues already built on leaves them with diverging history, which the next lesson covers.
+
 ### Conflicts during rebase
 
 Each replayed commit can conflict. Git stops, you resolve, `git add`, then `git rebase --continue`. Other options are `--skip` (drop this commit) and `--abort` (go back to how things were).

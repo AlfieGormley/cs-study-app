@@ -23,7 +23,7 @@ git switch release/2.4
 git cherry-pick -x abc123
 ```
 
-Fixing trunk first avoids forgetting to forward-port that fix. Later edits can still regress the behavior, so retain a regression test. Release branches only receive fixes, never features, and are deleted when that release is no longer supported.
+Fixing trunk first avoids forgetting to forward-port that fix. Later edits can still regress the behaviour, so retain a regression test. Release branches only receive fixes, never features, and are deleted when that release is no longer supported.
 
 ## The forking workflow
 

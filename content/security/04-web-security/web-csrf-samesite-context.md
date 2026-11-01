@@ -2,18 +2,18 @@
 id: web-csrf-samesite-context
 title: SameSite cookies and browser default modes
 level: intermediate
-minutes: 3
+minutes: 4
 sourceLesson: web-csrf
 summary: Explicit cookie settings and request context determine cross-site sending.
 ---
 
-Token validation stays independent. This unit revisits schemeful sites: HTTPS sibling subdomains under the same registrable domain can be same-site while remaining cross-origin.
+Tokens make the server check intent. The `SameSite` cookie attribute attacks CSRF from the other side: it lets the browser *withhold* the cookie from cross-site requests, so a faked request arrives looking logged out.
 
 ## Defence 2: SameSite cookies
 
-The `SameSite` cookie attribute controls which **cross-site** request contexts permit a cookie; None, Lax and Strict impose different restrictions. Recall from the origin-boundary unit that *site* means scheme + registrable domain, so `app.example.com` and `api.example.com` are same-site.
+Recall from the origin unit that a *site* is the scheme plus the registrable domain. So `https://app.example.com` and `https://api.example.com` are same-site, even though they are different origins. SameSite only restricts **cross-site** requests.
 
-The following is a `Set-Cookie` value wrapped for display; join its lines with a space into one HTTP field value.
+Here is a `Set-Cookie` value, wrapped for display (it is one line in the real header):
 
 ```http
 sid=abc; Secure; HttpOnly;
@@ -26,16 +26,15 @@ SameSite=Lax; Path=/
 | `Lax` | Top-level navigations with safe methods (clicking a link, a GET redirect) |
 | `None` | SameSite imposes no restriction; other cookie policies still apply, and `Secure` is required |
 
-So with `Lax`, the hidden-form POST from `evil.example` arrives **without** the session cookie, and the user appears logged out. With `Strict`, an initial navigation from a cross-site webmail page omits the cookie, so cookie-authenticated users can appear logged out on arrival; a common pattern is a `Lax` session cookie plus a `Strict` cookie required for sensitive actions.
+So with `Lax`, the hidden-form POST from `evil.example` arrives **without** the session cookie, and the user appears logged out. `Strict` is tighter but has a usability cost: a user who follows a link from their webmail to your site arrives logged out, because that first navigation is cross-site. A common pattern is a `Lax` session cookie plus a separate `Strict` cookie that sensitive actions require.
 
 ### Browser defaults
 
-Since 2020, Chrome (and other Chromium browsers) treat cookies **without** a `SameSite` attribute as `Lax`. Two caveats:
+The cookie standard's revision ("6265bis", approved but still waiting in the RFC Editor queue in October 2026) treats a cookie with no `SameSite` attribute much like `Lax`. Browsers differ. As of November 2026, both MDN's compatibility data and OWASP report that Chrome and other Chromium-based browsers have done this since 2020, Firefox only behind a non-default setting, and Safari not at all.
 
-- To avoid breaking some single sign-on flows, Chrome makes an exception: a cookie without an explicit `SameSite` that is under **two minutes old** is still sent on top-level cross-site POSTs ("Lax+POST").
-- Exact defaults and compatibility behavior are browser/version dependent. A verified Firefox/Safari version matrix is absent here; this lesson does not assert their current defaults.
+Chromium also adds a compatibility exception, which the draft standard permits. A cookie with **no** SameSite attribute that is at most **two minutes old** is still sent on top-level cross-site POSTs ("Lax+POST"). It exists so that some single sign-on flows keep working, and Chromium describes it as temporary. Explicitly setting `SameSite=Lax` removes it.
 
-So **set `SameSite` explicitly** rather than relying on the default.
+So **set `SameSite` explicitly** rather than relying on any browser's default:
 
 ```python
 # Set transport, script and site rules.
@@ -48,18 +47,20 @@ app.config.update(
 
 ### Why SameSite alone isn't enough
 
-- **Same-site attackers.** A compromised or taken-over subdomain (`old-blog.example.com`) is same-site with your app, so SameSite alone does not isolate that origin. Other cookie conditions still apply.
+- **Same-site attackers.** A compromised or taken-over subdomain (`old-blog.example.com`) is same-site with your app, so its requests carry your SameSite cookies.
 - **State-changing GETs.** `Lax` sends cookies on top-level GET navigations, so a GET that transfers money is still exploitable.
+- **Client-side CSRF.** Requests sent by your own JavaScript are same-site, so SameSite does nothing when attacker input steers that code.
 - **Old or unusual clients** may not honour the attribute.
 
-OWASP recommends explicit CSRF protection in most deployments, with SameSite as another layer. Its guidance describes constrained cases where SameSite can serve as the primary defence; those require careful conditions rather than a universal guarantee.
+OWASP treats SameSite as a defence-in-depth layer to combine with tokens (or Fetch Metadata checks, next unit) in most deployments. It allows SameSite alone only in narrow cases: no untrusted hosts on the same registrable domain, no state-changing GETs, Strict (or carefully audited Lax with `__Host-`) cookies, and origin checks as an extra layer.
 
 ## Key takeaways
-- Strict omits cookies on cross-site requests; explicit Lax permits eligible top-level safe navigations.
-- None still requires Secure and remains subject to other cookie policy.
-- A missing SameSite default mode can differ from explicit Lax for recent cookies.
-- SameSite does not isolate a compromised same-site sibling origin or repair state-changing GET endpoints.
+- Strict withholds cookies on all cross-site requests; Lax still sends them on top-level safe navigations.
+- None needs Secure and is still subject to other cookie policy.
+- A missing SameSite attribute is not the same as explicit Lax: defaults vary by browser, and Chromium's Lax+POST exception applies only to missing ones.
+- SameSite does not stop same-site sibling attackers, client-side CSRF or state-changing GETs, so keep a CSRF token or equivalent check.
 
 ## Further reading
-- [Cookies: HTTP State Management Mechanism](https://httpwg.org/http-extensions/draft-ietf-httpbis-rfc6265bis.html)
+- [Cookies: HTTP State Management Mechanism (6265bis draft)](https://httpwg.org/http-extensions/draft-ietf-httpbis-rfc6265bis.html)
 - [Chromium SameSite guidance](https://www.chromium.org/updates/same-site/)
+- [OWASP CSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)

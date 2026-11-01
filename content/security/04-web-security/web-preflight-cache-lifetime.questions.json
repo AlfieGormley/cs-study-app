@@ -3,27 +3,27 @@
     "id": "web-sop-cors-q11",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Assume a Chromium build whose preflight-cache maximum is 7,200 seconds. A successful preflight advertises Access-Control-Max-Age: 86400. What upper expiry bound follows, allowing for the entry being dropped earlier?",
+    "prompt": "Your API answers preflights with `Access-Control-Max-Age: 86400` (one day). Your API's logs show each Chromium user's browser still sending a new `OPTIONS` request from the same page, for the same URL, method and headers, roughly every two hours. What is the most likely explanation?",
     "options": [
       {
-        "text": "24 hours, exactly as requested",
-        "explanation": "The supplied implementation cap is lower than the advertised value, so 86,400 seconds is not the upper expiry bound."
+        "text": "The header value is invalid, so the browser falls back to the 5-second default",
+        "explanation": "A missing or invalid value does give 5 seconds, but then you would see a preflight before almost every request, not one every two hours. 86400 is a valid number of seconds."
       },
       {
-        "text": "Up to 2 hours, because Chromium caps the preflight cache",
-        "explanation": "Correct. The smaller of 86,400 and 7,200 is 7,200 seconds, or two hours. Entries can be dropped sooner."
+        "text": "Chromium caps the preflight cache at two hours, and the browser uses the shorter of the server's requested lifetime and its own cap",
+        "explanation": "Correct. The server can only ask for a lifetime; the browser applies its own maximum (two hours in current Chromium source) and may drop the entry even sooner."
       },
       {
-        "text": "5 seconds, because large values are ignored",
-        "explanation": "5 seconds is the default when the header is *absent*. A large value is clamped to the cap, not discarded."
+        "text": "Browsers never cache preflights; each OPTIONS request is triggered by a new user action",
+        "explanation": "Browsers do cache successful preflights, for up to the requested lifetime (subject to their cap). That is why the requests are two hours apart rather than before every call."
       },
       {
-        "text": "Forever, until the user clears the cache",
-        "explanation": "Preflight results are always time-limited; there's no permanent caching."
+        "text": "A CDN's HTTP cache is expiring the stored OPTIONS response every two hours",
+        "explanation": "The preflight cache lives in the browser and is separate from HTTP caching. A shared CDN cache could only change how many OPTIONS requests reach your server; it cannot make each user's browser send one every two hours. That is decided by the browser's own preflight cache."
       }
     ],
     "answer": 1,
-    "workedExample": "The browser keeps a preflight result for the smaller of the server's requested lifetime and its own cap:\n\n```formula\nt_cache = min(t_req, t_cap)\nt_cache = min(86400 s, 7200 s)\nt_cache = 7200 s\nt_cache = 7200 s / (3600 s/h) = 2 h\nwhere\nt_cache: the longest time the browser may keep using the cached preflight permission, in seconds (s); the browser may drop it sooner\nt_req: the lifetime the server asked for in Access-Control-Max-Age, in seconds (s); here 86,400 s, which is 24 hours\nt_cap: the browser's own maximum, in seconds (s); here 7,200 s, as stated for this Chromium build\nmin: the minimum function, which returns the smaller of its two inputs\n3600: the number of seconds in one hour\ns: seconds\nh: hours\nIn words: the server asked for a day, but the browser's two-hour cap wins, so the entry lasts at most two hours.\n```\n\nFetch permits an implementation cap and earlier removal; an absent or invalid Access-Control-Max-Age value defaults to 5 seconds in the standard. The checked Chromium source uses two hours, but future versions and other browsers require their own checks. A cached permission avoids an extra preflight only when its key and method/header conditions match.",
+    "workedExample": "1. The server asked for one day (86,400 seconds).\n2. Fetch lets each browser impose a cap; current Chromium source caps preflight caching at two hours.\n3. The browser keeps the approval for whichever is shorter, so at most two hours.\n4. When it expires, the next matching request needs a new `OPTIONS`, which matches the two-hour pattern in the logs.\n\nAsking for a longer lifetime changes nothing in Chromium. Other browsers have their own caps, and any browser may drop an entry early, so never rely on the requested lifetime as a guarantee.",
     "link": {
       "title": "Access-Control-Max-Age — MDN",
       "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Access-Control-Max-Age"

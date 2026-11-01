@@ -2,7 +2,7 @@
 id: git-merge-mechanics
 title: Merge bases, fast-forwards and conflicts
 level: intermediate
-minutes: 4
+minutes: 5
 sourceLesson: git-merge-rebase
 summary: A fast-forward moves a ref; a divergent merge normally records two parents.
 ---
@@ -26,7 +26,16 @@ In this simple history there is one **merge base**, the best common ancestor of 
  merge base of main and feat = B
 ```
 
-Git compares three snapshots: the base (B), "ours" (E, the branch you are on) and "theirs" (D). That is why it is called a **three-way merge**. Complex histories can have multiple best bases; the ort strategy (and its earlier Git recursive strategy) can combine them into a virtual base. A line changed on only one side takes that side's version. A line changed differently on both sides is a **merge conflict**.
+Git compares three snapshots: the base (B), "ours" (E, the branch you are on) and "theirs" (D). That is why it is called a **three-way merge**. Complex histories can have multiple best bases; the ort strategy (and its earlier Git recursive strategy) can combine them into a virtual base.
+
+The base is what lets Git tell *who* changed something. A region changed on only one side takes that side's version. A region changed differently on both sides, including edits to directly adjacent lines, is a **merge conflict**. Edits in separate parts of the same file merge automatically; only the overlapping part is marked.
+
+> [!analogy] Real-world analogy: two edited copies of one letter
+> Two colleagues each mark up a photocopy of the same draft letter. To combine them, you compare each copy against the original draft, not just against each other. A sentence only one person changed takes their wording. A sentence both changed in different ways needs you to decide.
+>
+> **How it maps:** The original draft is the merge base, and the two marked-up copies are "ours" and "theirs". Comparing each tip with the base is what lets Git apply changes made on only one side automatically and stop only where both sides changed the same region.
+>
+> **Where it stops:** Git compares lines of text, not meaning. Two edits to adjacent lines conflict even when they are compatible, and edits far apart merge cleanly even when they break each other (a semantic conflict).
 
 ## Fast-forward merges
 
@@ -66,7 +75,7 @@ parent cbdec69...
 
 Parent order matters. The **first parent** is the branch you were on (`main`); the second is the branch you merged in. `git log --first-parent` follows only first parents, giving a view that skips merged side-branch internals while retaining direct mainline commits of `main` even in a merge-heavy history.
 
-Since Git 2.34 the default two-head merge strategy is **ort** (you will see "Merge made by the 'ort' strategy"), a faster replacement for the older Git recursive strategy. Since Git 2.50, selecting the option `-s recursive` uses ort; earlier releases had a separate implementation.
+Since Git 2.34 the default two-head merge strategy is **ort** (you will see "Merge made by the 'ort' strategy"), a faster replacement for the older Git recursive strategy. Since Git 2.50, selecting the option `-s recursive` uses ort; earlier releases had a separate implementation. In Git 2.53, for example, `git merge -s recursive` still prints `Merge made by the 'recursive' strategy.` even though ort did the work.
 
 ## Conflicts
 

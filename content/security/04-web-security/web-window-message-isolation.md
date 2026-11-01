@@ -7,11 +7,9 @@ sourceLesson: web-sop-cors
 summary: Window messages need explicit sender checks; isolation headers control different relationships.
 ---
 
-Origins still matter after loading a resource. Script inclusion runs code in the including page’s origin; an embedded cross-origin page retains its own origin and needs a controlled messaging protocol.
+Including a cross-origin *script* runs its code inside your origin. Embedding a cross-origin *page* in an iframe is different: the frame keeps its own origin, and neither side can read the other's DOM. When they need to talk, they use a deliberate messaging channel.
 
-## Other cross-origin channels
-
-### postMessage
+## postMessage
 
 `window.postMessage` is the sanctioned way for cross-origin windows and iframes to talk. Both sides must be careful:
 
@@ -31,27 +29,28 @@ addEventListener("message", (e) => {
 });
 ```
 
-Using `"*"` as the target can leak data to whatever page has been loaded into that window; an unchecked handler can accept messages from an untrusted window that has a reference to it. Validate origin, expected source and message structure, and treat the payload as untrusted data.
+- **Sender:** name the exact target origin. With `"*"`, the message goes to whatever page is currently loaded in that window, which may have navigated somewhere hostile.
+- **Receiver:** any window holding a reference to yours can send it messages. Check `e.origin` against the exact expected origin, check `e.source` is the window you expect, and validate the message's shape.
+- **Payload:** even from a trusted sender, treat the data as untrusted input. Passing it to `innerHTML` or `eval` turns a messaging bug into XSS (a later unit).
 
-### Isolation headers
+## Isolation headers
 
-Side-channel attacks such as Spectre showed that a page might read memory belonging to cross-origin resources loaded into the same process. Newer headers let a site ask for stronger isolation:
+Side-channel attacks such as Spectre showed that a page might read memory belonging to cross-origin resources loaded into the same process. Newer response headers let a site ask for stronger isolation. Each one controls a different relationship:
 
-| Header | Purpose |
+| Header | Controls |
 |---|---|
-| `Cross-Origin-Resource-Policy` | Restricts applicable cross-origin no-cors resource loads |
-| `Cross-Origin-Opener-Policy` | Controls browsing-context-group isolation for top-level documents |
-| `Cross-Origin-Embedder-Policy` | Controls embedding; require-corp and credentialless have different rules |
+| `Cross-Origin-Resource-Policy` (CORP) | Which origins or sites may load this resource in no-cors mode (for example as an image or script) |
+| `Cross-Origin-Opener-Policy` (COOP) | Whether cross-origin pages that open this one (or that it opens) share its browsing context group |
+| `Cross-Origin-Embedder-Policy` (COEP) | What this page may embed: `require-corp` loads only resources that allow it via CORS or CORP; `credentialless` loads no-cors resources without credentials |
 
-You also may see the old `document.domain` trick, where two subdomains both set `document.domain = "example.com"` to become same-origin. It weakens isolation and modern Chrome disables it by default; don't build on it.
+You may also see the old `document.domain` trick, where two subdomains both set `document.domain = "example.com"` to become same-origin. It weakens isolation, and modern Chrome makes the setter do nothing by default. Don't build on it.
 
-> [!note] Evidence limits
-> How long each browser keeps preflight results, third-party-cookie policy and legacy origin relaxation vary by version and configuration. A complete browser compatibility matrix and universal exploit-success rates are absent because they were not reliably established. Wire examples are abbreviated; the Flask hooks need an application, authentication, cache policy and preflight handling.
+Behaviour of these headers and of `document.domain` still varies by browser version, so test against the browsers you support.
 
 ## Key takeaways
-- postMessage crosses origin boundaries deliberately: validate origin, expected window and payload.
-- Third-party scripts run in the including page’s origin, while cross-origin iframe DOM stays isolated.
-- CORP, COOP and COEP constrain different resource or window relationships.
+- postMessage crosses origin boundaries on purpose: name the target origin when sending, and check origin, source window and payload when receiving.
+- Third-party scripts run in the including page's origin, while a cross-origin iframe's DOM stays isolated.
+- CORP, COOP and COEP constrain different relationships: who may embed a resource, who shares a window group, and what a page may embed.
 
 ## Further reading
 - [HTML Standard: origins](https://html.spec.whatwg.org/multipage/browsers.html#origins)

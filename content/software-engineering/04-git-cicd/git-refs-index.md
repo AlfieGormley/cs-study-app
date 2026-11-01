@@ -2,7 +2,7 @@
 id: git-refs-index
 title: Refs, HEAD and staging the next commit
 level: basic
-minutes: 3
+minutes: 4
 sourceLesson: git-object-model
 summary: A branch ref names a tip; HEAD normally names the current branch.
 ---
@@ -22,13 +22,22 @@ Creating a branch records a ref rather than copying the project or its history, 
 
 When you commit, Git writes the new objects, then updates the branch that HEAD points to. The symbolic target stored in HEAD stays the branch name; resolving HEAD now reaches the new commit.
 
+> [!analogy] Real-world analogy: bookmarks and a "you are here" clip
+> Picture a notebook where you never rewrite a page, only add new ones. Each bookmark marks one page, and a clip marks the bookmark you are currently following. When you write a new page, you move the clipped bookmark onto it.
+>
+> **How it maps:** A page is a commit, a bookmark is a branch ref, and the clip is HEAD. Committing writes a new commit and moves the branch that HEAD names, while other bookmarks stay where they were. Creating a branch just adds another bookmark; nothing is copied. Clipping a page directly instead of a bookmark is detached HEAD: new pages then carry no bookmark at all.
+>
+> **Where it stops:** Git's history is a graph, not one bound notebook: a commit can have several parents and many branches can grow from one commit. Pages that no bookmark or log can reach are eventually thrown away by `git gc`, which never happens to a paper notebook.
+
 ### Detached HEAD
 
-`git switch --detach <commit>` (or `git checkout <hash>`) makes HEAD contain a raw hash instead of a branch name. `git status` reports `HEAD detached at 5870310`. New commits made now are not on any branch. Switch away without a durable ref and they may no longer be reachable from branches or tags. Retained reflogs can still protect them temporarily; the next unit covers that recovery window.
+`git switch --detach <commit>` (or `git checkout <hash>`) makes HEAD contain a raw hash instead of a branch name. `git status` reports `HEAD detached at 5870310`. You can still commit: each new commit moves HEAD itself, and `git status` then says `HEAD detached from 5870310`. No branch moves, so these commits are not on any branch and `git log main` does not show them.
+
+If you switch away, Git warns that you are leaving commits behind and suggests `git branch <name> <hash>`. Without a durable ref they may no longer be reachable from branches or tags. Retained reflogs can still protect them temporarily; the next unit covers that recovery window. The simple habit: before leaving detached HEAD with work you want, run `git switch -c <name>` to put a branch on it.
 
 ### Packed refs
 
-With the files backend, maintenance can pack refs into `.git/packed-refs` to reduce loose-file overhead; not every branch ref is necessarily packed. Do not rely on reading `.git/refs/` directly in scripts; use `git rev-parse` or `git for-each-ref`. Git also supports the **reftable** ref storage backend; use Git commands rather than depending on its on-disk representation.
+With the files backend, maintenance can pack refs into `.git/packed-refs` to reduce loose-file overhead; not every branch ref is necessarily packed. Do not rely on reading `.git/refs/` directly in scripts; use `git rev-parse` or `git for-each-ref`. Git also supports the **reftable** ref storage backend; use Git commands rather than depending on its on-disk representation. Git's published plan for Git 3.0 (no release date as of the Git 2.56 documentation, October 2026) makes reftable the default for new repositories.
 
 ## The index (staging area)
 

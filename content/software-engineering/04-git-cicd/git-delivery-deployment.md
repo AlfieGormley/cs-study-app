@@ -24,11 +24,18 @@ Continuous deployment requires continuous delivery, but not the reverse. A mobil
 
 **Deploying** puts new code on production machines. **Releasing** exposes a behaviour to users. Feature flags let you separate them:
 
-- Deploy on Tuesday with the feature flag off: the gated behavior remains hidden, provided initialization, schema and other deployment changes remain compatible.
+- Deploy on Tuesday with the feature flag off: the gated behaviour remains hidden, provided initialisation, schema and other deployment changes remain compatible.
 - Release on Thursday by turning the flag on for 1% of users, then everyone.
 - Turn the flag off to return to the old path without redeploying, if that path is still compatible. Propagation takes time and disabling the flag does not undo data changes or completed side effects.
 
 A **dark launch** goes further: the new code path runs in production on real traffic (for example computing new recommendations) but its result is discarded or only logged, so you can check performance and correctness before anyone sees it.
+
+> [!analogy] Real-world analogy: building the set behind the curtain
+> A theatre crew can build and test a new set on stage while the curtain is down, then raise the curtain when the director says so. If the scene goes badly, they can lower the curtain without dismantling the set.
+>
+> **How it maps:** Building the set is deploying: the code is on production machines. Raising the curtain is releasing: a feature flag exposes the behaviour to users. Lowering the curtain is turning the flag off, returning users to the old path without a redeploy.
+>
+> **Where it stops:** Hidden code can still have effects: it is loaded, may initialise and may share a database with visible code. And lowering a flag does not undo what users already did, such as data written or payments taken while it was on.
 
 ## The deployment pipeline
 

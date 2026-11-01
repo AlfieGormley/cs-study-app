@@ -47,7 +47,7 @@ git describe
 
 ## Measuring delivery: the DORA metrics
 
-DORA's research groups delivery performance into DORA throughput metrics and DORA instability metrics:
+DORA's research groups delivery performance into DORA throughput metrics (the first three rows below) and DORA instability metrics (the last two):
 
 | Metric | Measures |
 |---|---|
@@ -55,25 +55,9 @@ DORA's research groups delivery performance into DORA throughput metrics and DOR
 | Deployment frequency | How often you deploy |
 | Failed deployment recovery time | Time to recover |
 | Change fail rate | Deploys needing fixes |
-| Deployment rework rate | Share of deploys caused by production incidents |
+| Deployment rework rate | Unplanned deploys caused by incidents |
 
-Two of the five are simple ratios, counted over a period such as a month:
-
-```formula
-CFR = D_fail / D_total
-DRR = D_rework / D_total
-CFR = 3 / 40 = 0.075 = 7.5 %
-where
-CFR: change fail rate, as a fraction or a percentage
-DRR: deployment rework rate, as a fraction or a percentage
-D_total: the number of deployments to production in the period
-D_fail: deployments that needed immediate intervention afterwards, such as a rollback or a hotfix
-D_rework: deployments that were not planned and happened only because of an incident in production
-%: per cent: parts per hundred
-In words: each DORA instability metric is the share of all deployments that went wrong (CFR) or were emergency repairs (DRR).
-```
-
-For example, a team that deployed 40 times last month, with 3 deployments needing a rollback, has a change fail rate of 7.5 %. If 2 of the 40 deployments were unplanned hotfixes for production incidents, its deployment rework rate is 2 / 40 = 5 %. The other three metrics are durations or counts: lead time and recovery time are measured in hours or days, deployment frequency in deployments per day or week.
+The two DORA instability metrics are simple shares of deployments, counted over a period such as a month. For example, a team that deployed 40 times last month, with 3 deployments needing a rollback or hotfix afterwards, has a change fail rate of 3 in 40, or 7.5 %. If 2 of the 40 deployments were unplanned hotfixes made because of production incidents, its deployment rework rate is 2 in 40, or 5 %. The other three metrics are durations or counts: lead time and recovery time are measured in hours or days, deployment frequency in deployments per day or week.
 
 DORA's consistent finding is that speed and stability are not a trade-off: teams that deploy small changes often also tend to have lower failure rates and faster recovery. Small batches are one practice associated with good performance; these observations do not establish a single universal cause.
 

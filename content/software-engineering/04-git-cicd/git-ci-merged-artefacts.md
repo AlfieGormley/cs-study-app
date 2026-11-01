@@ -30,13 +30,20 @@ If A renamed a function that B calls, `main` is now broken even though both PRs 
 
 ## Build once, deploy many
 
-The pipeline should produce **one immutable artefact per intended build configuration of a commit** (a container image, Python wheel or binary), associated with the source revision and identified by an immutable digest, and every later stage should deploy that exact artifact. A SHA-shaped image tag is still mutable unless registry policy prevents replacement. Rebuilding for staging and again for production means production runs something that was never tested.
+The pipeline should produce **one immutable artefact per intended build configuration of a commit** (a container image, Python wheel or binary), associated with the source revision and identified by an immutable digest, and every later stage should deploy that exact artefact. A SHA-shaped image tag is still mutable unless registry policy prevents replacement. Rebuilding for staging and again for production means production runs something that was never tested.
+
+> [!analogy] Real-world analogy: shipping the inspected crate
+> A warehouse inspects a packed crate, seals it and records the seal number. The safe practice is to ship that sealed crate. Repacking a "same" order at the loading bay could pick a different batch from the shelves, and nobody inspected that one.
+>
+> **How it maps:** Inspection is the test and staging stages, the seal number is the artefact's immutable digest, and shipping is deploying to production. Rebuilding from the same commit is the repack: dependency ranges and base images can resolve differently, so production may run untested contents.
+>
+> **Where it stops:** Each environment still supplies its own configuration, which is not part of the sealed artefact. And a fully reproducible build can make a rebuild bit-for-bit identical, which a warehouse repack never guarantees; promoting one artefact is still simpler to verify.
 
 Supporting practices:
 
 - **Pin dependencies** with lockfiles, so a build next month gets the same versions.
 - **Hermetic builds**: the build depends only on declared inputs, not on whatever happens to be installed on the runner. Bazel is built around this idea.
-- **Reproducible builds**: the same specified source, build instructions and environment reproduce bit-for-bit identical designated artifacts. Independent reproduction supports provenance checks; source alone does not specify all build inputs.
+- **Reproducible builds**: the same specified source, build instructions and environment reproduce bit-for-bit identical designated artefacts. Independent reproduction supports provenance checks; source alone does not specify all build inputs.
 
 ## Key takeaways
 

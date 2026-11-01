@@ -2,7 +2,7 @@
 id: git-schema-rollback
 title: Rollback and expand-and-contract migrations
 level: advanced
-minutes: 3
+minutes: 4
 sourceLesson: git-cd-release
 summary: Choose a recovery version that remains compatible with current data and schema.
 ---
@@ -29,6 +29,13 @@ Renaming `customers.name` to `full_name`:
 6. **Contract**: after all readers and writers have migrated and the rollback window for old code has closed, drop `name`.
 
 Expansion can preserve rollback compatibility, but stopping old-column writes and dropping the column restrict which versions are safe to restore. Check that contract explicitly at each stage. The cost is several deploys spread over days, which is cheap if deploys are routine.
+
+> [!analogy] Real-world analogy: renaming a street
+> A council renaming a street does not swap the signs overnight. It puts up the new name beside the old one, accepts post addressed either way, updates its own records, waits until maps and delivery firms use the new name, and only then takes the old signs down.
+>
+> **How it maps:** Putting the new sign beside the old corresponds to expanding the schema: a new column alongside the old one. Accepting both addresses and keeping records in both forms is dual writing; updating old records is the backfill; firms switching to the new name is switching reads. Removing the old signs last is the contract step, done only when nothing, including a rolled-back version, still needs the old name.
+>
+> **Where it stops:** A street has one sign-maker, but a database has many writers working at the same time: dual writes and the backfill must be done so that neither column misses an update made while the change is in progress.
 
 > [!warning] The one-step rename
 > `ALTER TABLE customers RENAME COLUMN name TO full_name` deployed with new code breaks every old instance still running mid-rollout, and makes the old code incompatible unless the schema is restored or another compatible recovery path is used.

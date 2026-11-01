@@ -7,16 +7,16 @@ summary: Separate estimates from targets and commitments, and understand team-lo
 sourceLesson: sepr-agile-estimation
 ---
 
-Forecasts support decisions under uncertainty. Relative sizing can expose different understandings, while staffing changes introduce their own uncertainty.
+Estimates exist to support decisions under uncertainty. This lesson covers what an estimate is (and is not), how relative sizing and velocity are used, and why adding people to a late project is a risky way to recover.
 
 ## Estimation
 Every business needs some answer to "when will it be ready?" Estimation is hard for well-understood reasons.
 
 - **Unknowns.** Much of software work is discovering what needs doing.
-- **The cone of uncertainty.** Steve McConnell, building on Barry Boehm's work, illustrates a possible early range of 0.25× to 4× in his cone model. It is not a universal statistical confidence interval. Reducing uncertainty requires decisions and learning; elapsed time alone does not narrow it.
+- **The cone of uncertainty.** Steve McConnell, building on Barry Boehm's work, shows that estimates made at the initial-concept stage by skilled estimators can be out by a factor of 4 either way (from a quarter to four times the actual). The cone shows the best accuracy skilled estimators achieve, not a statistical guarantee, and it narrows only as decisions remove sources of variability (what is in scope, what is not). Waiting alone does not narrow it.
 - **The planning fallacy.** Kahneman and Tversky described the tendency to underestimate task durations despite contrary experience; later experiments found evidence for it. Hofstadter's tongue-in-cheek law is commonly quoted as: "It always takes longer than you expect, even when you take into account Hofstadter's law."
 
-McConnell also separates three things that are often confused. An **engineering estimate** is a prediction ("probably 6–10 weeks"). A **delivery target** is a desired outcome ("launch by the conference"). A **delivery commitment** is a promise. Conflating them turns honest estimates into negotiations.
+McConnell also separates three things that are often confused. An **engineering estimate** is a prediction ("probably 6–10 weeks"). A **delivery target** is a desirable business objective ("launch by the conference"); being desirable or even mandatory does not make it achievable. A **delivery commitment** is a promise to deliver. Conflating them turns honest estimates into negotiations.
 
 ### Relative estimation: story points
 
@@ -24,49 +24,38 @@ Relative estimation is one technique for discussing size and uncertainty. **Stor
 
 **Planning poker** uses simultaneous revelation to reduce anchoring on the first spoken estimate: everyone reveals a card at once. If one person says 2 and another 13, they discuss, and usually one of them knows something the other does not. That conversation is the most valuable part.
 
-A team's **velocity** (sprint velocity) is the number of story points it completes per Sprint, used to forecast how much the team can take on. It is usually averaged over the last few Sprints, and a rough forecast divides the remaining backlog by it:
+A team's **velocity** (sprint velocity) is the number of story points it completes per Sprint, usually averaged over the last few Sprints. A rough forecast divides the remaining backlog by it: a team that has averaged about 21 points a Sprint, with 105 points left, needs roughly five more Sprints.
 
-```formula
-v = (P_1 + P_2 + P_3) / 3
-v = (21 + 18 + 24) / 3 = 21
-N ≈ B / v
-N ≈ 105 / 21 = 5
-where
-v: the team's velocity: the average number of story points it completed per Sprint
-P_1: the story points actually completed (meeting the Definition of Done) in the oldest of the last three Sprints, here 21
-P_2: the story points completed in the next Sprint, here 18
-P_3: the story points completed in the most recent Sprint, here 24
-3: the number of past Sprints averaged (an illustrative choice; teams often use the last few)
-N: the forecast number of Sprints needed to finish the remaining work
-B: the remaining backlog, in story points, sized by the same team
-≈: approximately equal to; the forecast is a rough guide, not a promise
-In words: a team that has averaged 21 points a Sprint, with 105 points of work left, will need roughly five more Sprints if nothing else changes.
-```
+That single number hides what the forecast rests on. If recent Sprints ranged from 18 to 24 points, the same backlog takes between about 4.4 and 5.8 Sprints, so "5 or 6" is more honest than "5". It also assumes the backlog stops growing and the team stays the same; when either changes, re-forecast.
 
-This illustrative forecast assumes the backlog stays the same size and the team's capacity stays stable. Because the past Sprints varied from 18 to 24 points, a range (about 4.4 to 5.8 Sprints, so 5 or 6) is more honest than the single number. Velocity only works within one team: points are not comparable across teams. Ranking teams by velocity can reward inflated point assignments rather than delivered value; use it for local planning, not as a productivity target. Scrum’s feedback practices also require acting on significant Review findings and following through on retrospective improvements, as introduced earlier.
+Velocity only works within one team: points are relative to that team's reference items, so they are not comparable across teams. Ranking teams by velocity rewards inflating point values rather than delivering value. Use it for local planning, not as a productivity target.
+
+Like any Scrum feedback loop, estimates only help if the team acts on what it learns. Ignoring significant Review findings, or choosing retrospective actions nobody follows through, keeps the ritual and loses the point.
 
 ## Brooks's law
-Fred Brooks, in *The Mythical Man-Month* (1975): "Adding manpower to a late software project makes it later." New people need training from existing members, and the number of possible pairwise communication links grows much faster than the team. Each person can pair with every other person, and that counts every pair twice (Ann–Bob and Bob–Ann), so divide by 2:
+Fred Brooks, in *The Mythical Man-Month* (1975): "Adding manpower to a late software project makes it later." Two effects drive it. New people need training from existing members, who deliver less while they teach. And the number of possible pairwise communication links grows much faster than the team: 5 people have 10 possible pairs, but 10 people have 45.
 
-```formula
-C = n × (n − 1) / 2
-C = 5 × 4 / 2 = 10
-C = 10 × 9 / 2 = 45
+```formula reference
+C = n(n − 1) / 2
 where
 C: the number of possible pairwise communication links in the team
-n: the number of people in the team; here 5, then 10
-2: corrects for counting each pair twice
-In words: doubling a team from 5 to 10 people more than quadruples the possible pairs, from 10 to 45.
+n: the number of people in the team
+2: corrects for counting each pair twice (Ann–Bob and Bob–Ann)
+In words: each person can pair with everyone else, so the possible links grow roughly with the square of team size: doubling a team from 5 to 10 people takes the possible pairs from 10 to 45.
 ```
 
-These are possible links, not a claim that every pair communicates or that actual overhead must be quadratic. Adding people can help on separable work; evaluate onboarding and coordination costs.
+These are possible links, not a claim that every pair talks; team structure and clear interfaces keep actual communication far lower. Some work also cannot be split at all: Brooks's example is that bearing a child takes nine months however many people are assigned.
+
+The law is contested. In a 1999 essay, Steve McConnell reports that twenty years on, Brooks still called it "the best zeroth order approximation to the truth". McConnell himself argued that it applies mainly in a project's final phase, and that many "late" projects are much further from done than their managers think, so added staff have time to become productive. The practical question is how far from the end you really are, and whether the work can be split into independent pieces.
 
 ## Key takeaways
 - An estimate predicts, a target expresses a desire and a commitment makes a promise.
 - Story points and velocity are local planning tools; compare shared assumptions rather than ranking teams.
-- Possible communication pairs grow faster than team size, but actual overhead depends on the work.
+- Brooks's law warns that onboarding and coordination can make a late project later; how much depends on how near the end you are and how separable the work is.
 
 ## Further reading
 - [The Purpose of Agile Planning — Mike Cohn](https://www.informit.com/articles/article.aspx?p=1374899)
 - [Planning Poker — Mike Cohn](https://www.mountaingoatsoftware.com/agile/planning-poker)
 - [Velocity — Mike Cohn](https://www.mountaingoatsoftware.com/agile/agile-leadership/dont-compare-team-velocities)
+- [The Cone of Uncertainty — Construx](https://www.construx.com/books/the-cone-of-uncertainty/)
+- [Brooks' Law Repealed? — Steve McConnell](https://stevemcconnell.com/articles/brooks-law-repealed/)

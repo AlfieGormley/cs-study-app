@@ -35,6 +35,13 @@ Beyond the three incidents introduced so far, recognise these patterns:
 > [!warning] Why dependency confusion works with pip
 > With `pip install --extra-index-url https://pypi.internal ...`, pip gives indexes no priority and selects the best compatible candidate under its version constraints and resolver rules. If `acme-auth` is 1.4 internally and an attacker publishes `acme-auth` 99.0 on PyPI, pip can choose 99.0 when both candidates are compatible and no other constraints or installed-state decisions change selection. Use a single `--index-url` pointing at a proxy that serves your internal names exclusively, and pin hashes.
 
+> [!analogy] Real-world analogy: ordering by part name from two suppliers
+> A workshop's ordering system asks both its in-house stores and a public catalogue for a part by name, say "AUTH-KIT", then automatically buys whichever offer has the newest model number. A stranger lists a part with the same name in the public catalogue and gives it model number 99.
+>
+> **How it maps:** The in-house stores are the internal index, the public catalogue is PyPI, the part name is the package name, and "newest model number" is pip choosing the highest compatible version across all configured indexes.
+>
+> **Where it stops:** A clerk might notice an odd supplier; pip applies its rules without suspicion, and a source package can run its build code during installation. The fix is also simpler than vetting suppliers: give the build only one index, which serves your internal names from the internal source.
+
 ## Key takeaways
 - Log4Shell was a vulnerability in affected Log4j Core configurations, rather than proof of a malicious implant.
 - Typosquatting, account takeover and maintainer handover attack different parts of package trust.

@@ -3,27 +3,27 @@
     "id": "sepr-debugging-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "A linear history has 500 candidate commits between known good and bad revisions, with one deterministic good-to-bad transition and no skipped commits. Using `git bisect`, roughly how many tests are needed?",
+    "prompt": "You bisect about 500 commits with `git bisect run ./check.sh`. It finishes in 9 steps and names a commit that only edits `README.md`. You then notice that `check.sh` fails about 1 run in 5 even on the known-good release. What most likely happened, and what should you do?",
     "options": [
       {
-        "text": "About 9",
-        "explanation": "Correct. Each test halves the range, and 9 halvings can tell apart 512 commits, which is at least 500, so about 9 tests suffice."
+        "text": "Bisect is reliable, so the README commit must be the cause; revert it",
+        "explanation": "Bisect is only as reliable as the answers it is given. A documentation-only commit cannot plausibly change behaviour, which is a strong hint that one of the marks was wrong."
       },
       {
-        "text": "About 50",
-        "explanation": "This assumes checking every tenth commit. Binary search grows with the logarithm of the number of commits, not a fixed fraction of it."
+        "text": "Nine steps is too few for 500 commits; widen the range and run it again",
+        "explanation": "Nine halvings are enough to tell apart 512 candidates, so the step count is exactly what bisect should take. Widening the range does nothing about the unreliable check."
       },
       {
-        "text": "About 250",
-        "explanation": "That is the average for a linear search from one end. Bisect halves the range each time."
+        "text": "The flaky check probably failed on a good commit, so bisect discarded the half that held the real cause. Make the check deterministic (or repeat it per commit and fail only on a consistent result), then bisect again",
+        "explanation": "Correct. Bisect assumes every 'bad' really means bad. One false failure sends it into the wrong half, after which it confidently names an innocent commit. `git bisect log` shows every mark, so you can see where it went wrong and replay from there once the check is trustworthy."
       },
       {
-        "text": "Exactly 500",
-        "explanation": "That would be testing every commit, which bisect exists to avoid."
+        "text": "Bisect only works for build failures, not test failures",
+        "explanation": "Bisect works with any check that returns good or bad. Test failures are its most common use; the problem here is that this test does not answer consistently."
       }
     ],
-    "answer": 0,
-    "workedExample": "Binary search halves the candidate range each step:\n\n```\n500 -> 250 -> 125 -> 63 -> 32\n    -> 16 -> 8 -> 4 -> 2 -> 1\n```\n\n```formula\nT = ⌈log_2(N)⌉\nT = ⌈log_2(500)⌉ = ⌈8.97⌉ = 9\n2^9 = 512 ≥ 500\nwhere\nT: the number of commits to test\nN: the number of candidate commits, 500\nlog_2: logarithm base 2: how many halvings shrink N to 1\n⌈ ⌉: ceiling: round up to a whole number\n2^9: 9 copies of 2 multiplied together\n≥: greater than or equal to\nIn words: 9 halvings can separate 512 commits, which covers 500, so about 9 tests find the bad commit.\n```\n\nEach test can be automated with `git bisect run`.",
+    "answer": 2,
+    "workedExample": "1. Sanity-check the result: a README-only commit cannot change the program's behaviour, so the answer is suspect.\n2. Check bisect's assumption: one clean good-to-bad transition and a test that answers truthfully at every commit. A check that fails 1 run in 5 on a known-good release breaks the second assumption.\n3. One false 'bad' at a midpoint makes bisect throw away the half that contains the real cause. Every later step is then confined to innocent commits, and bisect still finishes and names one of them.\n4. Fix the check first: remove the flakiness, or have the script run the test several times and exit 1 only if it fails consistently. Use `git bisect log` to review the marks, then bisect again.\n5. Nine steps for about 500 commits is normal: nine halvings separate 512 candidates. The step count was never the problem.",
     "link": {
       "title": "git-bisect documentation — Git",
       "url": "https://git-scm.com/docs/git-bisect"

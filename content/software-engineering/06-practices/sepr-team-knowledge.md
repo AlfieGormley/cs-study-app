@@ -2,14 +2,14 @@
 id: sepr-team-knowledge
 title: Shape ownership and write useful documentation
 level: advanced
-minutes: 4
+minutes: 5
 summary: Spread critical knowledge and separate design decisions from task guides and reference material.
 sourceLesson: sepr-teams
 ---
 
-Past a certain size, the hardest problems in software are not technical. A brilliant engineer who leaves no documentation, blocks every review and burns out on call creates less value than a merely good engineer who makes the whole team faster.
+As a team grows, many of its hardest problems stop being purely technical. An engineer who leaves no documentation, blocks every review and burns out on call can end up worth less to the team than a merely good engineer who makes everyone around them faster.
 
-This unit connects team responsibilities, shared knowledge and documentation. The following units cover review, sustainable on-call and learning from incidents. (The System Design module covers SLOs, error budgets and service-level incident response; here the focus is the team.)
+This lesson covers team responsibilities, shared knowledge and documentation. The next lessons cover review, sustainable on-call and learning from incidents. (The System Design module covers SLOs, error budgets and service-level incident response; here the focus is the team.)
 
 ## Teams shape systems
 **Conway's law** (Melvin Conway, 1968): organisations that design systems "are constrained to produce designs which are copies of the communication structures of these organizations". Eric Raymond's tongue-in-cheek restatement: "If you have four groups working on a compiler, you'll get a 4-pass compiler."
@@ -49,7 +49,18 @@ The **Diátaxis** framework points out that documentation serves four different 
 
 A README that mixes a walkthrough, exhaustive API details and a long architecture essay can make each task harder. A short overview can still link to those distinct resources. Separate them, and keep docs next to the code (**docs as code**) so they are reviewed and updated in the same pull request as the behaviour they describe.
 
+> [!analogy] Real-world analogy: four kinds of cookery writing
+> Diátaxis itself uses this comparison. Teaching a child to cook is a lesson: what matters is what they learn, not the dish. A recipe gets a specific dish made by someone who can already cook. The label on a food packet lists facts you look up. A book on food history and science explains why we cook the way we do, and you read it away from the stove.
+>
+> **How it maps:** The cooking lesson is a tutorial, the recipe a how-to guide, the packet label reference, and the history book explanation. Each disappoints if you hand it to someone wanting another: nobody in the middle of cooking wants the history of the dish.
+>
+> **Where it stops:** Software docs change with the code, so unlike a printed cookbook they must be kept up to date, and one page can sensibly link to all four kinds.
+
 **Runbooks** are a special case of how-to guide: step-by-step instructions for operational tasks and alerts. Every alert that can page someone should link to a runbook that says what it means, how to check impact and what to try first.
+
+## Pitfalls
+- **Docs written once and never updated.** Outdated instructions can mislead responders at the worst moment. Keep docs near the code, change them in the same PR as the behaviour they describe, and mark anything you are unsure of.
+- **Hero culture.** Celebrating the person who fixes everything at 2 a.m. rewards the bus factor of one that caused the problem.
 
 ## Key takeaways
 - Team communication and system boundaries influence each other; organisation alone does not guarantee independence.

@@ -31,6 +31,13 @@ How the incidents map:
 
 **Sigstore** (with its `cosign` tool) supports CI signing artefacts with short-lived certificates tied to an OIDC identity ("built by this GitHub Actions workflow in this repo"), and records signatures in a public transparency log. npm and PyPI now support provenance attestations based on this. Remember SolarWinds: signing tells you *who*, so verify the identity is the one you expect.
 
+> [!analogy] Real-world analogy: a certificate of origin from a named factory
+> An importer accepts goods only with a certificate of origin stamped by the factory's inspector, naming the factory, the production line and the batch. The importer checks that the stamp is genuine *and* that the named factory is one it has audited.
+>
+> **How it maps:** The certificate is the provenance statement, the inspector's stamp is the signature, the named factory and line are the builder and source repository, and the importer's list of audited factories is the verification policy that pins the expected identity.
+>
+> **Where it stops:** A genuine certificate from a stranger's factory is still genuine: Sigstore will happily certify an attacker's own workflow, so checking only that a signature is valid proves almost nothing. And a truthful certificate says where goods were made, not that the recipe was safe: a malicious commit built by the right builder gets accurate provenance.
+
 ### Choose and limit dependencies
 
 - Prefer fewer, well-maintained dependencies. **OpenSSF Scorecard** rates projects on branch protection, code review, signed releases and more.

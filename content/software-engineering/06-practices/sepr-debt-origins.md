@@ -2,7 +2,7 @@
 id: sepr-debt-origins
 title: Understand technical debt and its kinds
 level: basic
-minutes: 4
+minutes: 5
 summary: Distinguish principal and interest, classify debt and recognise risks beyond messy code.
 sourceLesson: sepr-technical-debt
 ---
@@ -22,22 +22,28 @@ Three ideas are packed in there:
 - **Debt interest**: the extra time every future change costs because you have not done that work.
 - **Borrowing can be smart.** Shipping early to learn from real users is valuable. The mistake is never repaying.
 
-Cunningham later stressed that he meant code written with your best current understanding, which becomes "debt" as you learn more about the problem. He did not mean permission to write sloppy code.
+In a 2009 video, Cunningham stressed that he meant code written with your best current understanding, which becomes "debt" as you learn more about the problem: "I'm never in favor of writing code poorly, but I am in favor of writing code to reflect your current understanding of a problem even if that understanding is partial." Repaying the debt means refactoring the code to match what you have since learned, which only works if the code is clean enough to refactor.
+
+### Where the metaphor stops
+
+Fowler points out one place the comparison breaks down: a bank charges interest as time passes, but code charges interest only when someone works on it. A tangled module nobody needs to change costs little change effort, however ugly it is. Unlike a loan, the "interest rate" is also never written down anywhere: principal and interest are estimates, not figures on a statement.
 
 ## Fowler's debt quadrant
 Martin Fowler sorted debt along two axes: was it **deliberate** or **inadvertent**, and was it **prudent** or **reckless**?
 
 | | Reckless | Prudent |
 |---|---|---|
-| Deliberate | "We don't have time for design." | "Ship now, deal with the consequences." |
+| Deliberate | "We don't have time for design." | "We must ship now and deal with consequences." |
 | Inadvertent | "What's layering?" | "Now we know how we should have done it." |
 
 - **Prudent, deliberate**: a conscious trade-off with a repayment plan. Hitting a trade-show deadline with a hard-coded config, ticketed for next sprint.
-- **Reckless, deliberate**: skipping tests and design because of pressure, knowing better. The timing and size of the cost depend on the project.
+- **Reckless, deliberate**: skipping tests and design under pressure, knowing better. Fowler's point is that "quick and dirty" rarely even buys speed: people underestimate how soon poor internal quality starts slowing them down (his judgement is "usually weeks not months").
 - **Reckless, inadvertent**: the team did not know good practice. Training and review fix the cause.
-- **Prudent, inadvertent**: can emerge even after careful design. Even excellent teams only learn the best design by building the thing. This is Cunningham's original sense.
+- **Prudent, inadvertent**: can emerge even after careful design, because even excellent teams only learn the best design by building the thing. Fowler identifies this as the kind of debt Cunningham described.
 
 The quadrant matters because the response differs. Prudent debt needs a repayment plan; reckless debt needs a change in how the team works.
+
+The labels are not universally accepted. In a 2009 post, Robert C. Martin ("Uncle Bob") argued that "a mess is not a technical debt": the word should be kept for reasoned trade-offs made under real project constraints, and even then the code must be kept clean. Fowler replied that asking whether a flaw "is" debt is the wrong question. A mess is reckless debt, and the useful distinction is prudent versus reckless, because the choice between paying the interest and paying down the principal applies either way.
 
 ## Kinds of debt
 Debt is not only messy code:
@@ -62,4 +68,6 @@ Debt is not only messy code:
 ## Further reading
 - [The WyCash Portfolio Management System — Ward Cunningham](https://c2.com/doc/oopsla92.html)
 - [Technical Debt Quadrant — Martin Fowler](https://martinfowler.com/bliki/TechnicalDebtQuadrant.html)
+- [Ward Explains Debt Metaphor (transcript of his video) — C2 wiki](https://wiki.c2.com/?WardExplainsDebtMetaphor)
+- [Technical Debt — Martin Fowler](https://martinfowler.com/bliki/TechnicalDebt.html)
 - [Sunsetting Python 2](https://www.python.org/doc/sunset-python-2/)

@@ -4,25 +4,14 @@ title: Dwell time and structured security events
 level: intermediate
 minutes: 3
 sourceLesson: secp-detection-response
-summary: Measure discovery delay and record useful events without logging credentials.
+summary: Understand discovery delay and record useful events without logging credentials.
 ---
 
 Prevention can fail through an unknown vulnerability, a phished password or a poisoned dependency. **How quickly you notice and how well you respond** can materially affect the outcome, alongside attacker access, system design and operational impact.
 
-Security people measure this as **dwell time**: how long an attacker is inside before being detected.
+Security people measure this as **dwell time**: how long an attacker is inside before being detected. If forensics shows a break-in on 3 March and the first alert, user report or outside notification came on 17 March, dwell time was 14 days. The break-in date is usually worked out only afterwards, from logs and forensic evidence, which is one reason good logging matters.
 
-```formula
-T_dwell = t_detect − t_in
-T_dwell = 14 days − 0 days = 14 days
-where
-T_dwell: dwell time, in days
-t_detect: when defenders first detect the intrusion (an alert, a user report or an outside notification), counted in days from the break-in
-t_in: when the attacker first got in, here day 0; usually only worked out afterwards from logs and forensics
-days: calendar days
-In words: dwell time is the gap between the break-in and its discovery; an attacker who got in on day 0 and was found on day 14 had 14 days inside.
-```
-
-Dwell time stops at detection: containment and recovery come later and are measured separately. Mandiant's M-Trends 2026 reports a 14-day global median for the 2025 investigations in its dataset, up from 11 days for 2024. These are incident-response sample statistics, not a measurement of every intrusion. Changes in detection, attacker behavior and case mix can affect the result; the trend alone does not prove one cause.
+Dwell time stops at detection: containment and incident recovery come later and are measured separately. Mandiant's M-Trends 2026 reports a 14-day global median for the 2025 investigations in its dataset, up from 11 days for 2024. These are incident-response sample statistics, not a measurement of every intrusion. Changes in detection, attacker behavior and case mix can affect the result; the trend alone does not prove one cause.
 
 
 ## What to log
@@ -70,7 +59,7 @@ audit("login_failed", "alice",
 > Never log passwords, session tokens, API keys or full card numbers. Log4Shell attackers used lookups such as `${env:AWS_SECRET_ACCESS_KEY}` precisely because logs and environments are full of them. Avoid passing secrets to logging APIs and apply central redaction as an additional safeguard; redaction cannot reliably infer every secret.
 
 ## Key takeaways
-- Dwell time ends at detection, before containment and recovery.
+- Dwell time ends at detection, before containment and incident recovery.
 - Incident-response sample medians describe the sampled investigations, not every intrusion.
 - Record who, what, when, where and outcome in machine-readable events.
 - Keep secrets out of logging calls and treat redaction as an additional safeguard.

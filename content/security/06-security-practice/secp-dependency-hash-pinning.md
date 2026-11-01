@@ -25,18 +25,18 @@ pip install --require-hashes \
   -r requirements.txt
 ```
 
-For each downloaded distribution, pip requires a match with an allowed digest for that requirement; several allowed hashes can cover different platform files. A cryptographic hash maps bytes to a fixed-length fingerprint. Changed bytes overwhelmingly produce a different SHA-256 digest, but collisions are mathematically possible:
+For each downloaded distribution, pip requires a match with an allowed digest for that requirement; several allowed hashes can cover different platform files. A cryptographic hash such as SHA-256 maps a file of any size to a fixed-length fingerprint (256 bits, written as 64 hexadecimal characters). pip installs a file only when the fingerprint of what it downloaded equals one you recorded.
 
-```formula
-H(f) = h_lock
-where
-H: the SHA-256 hash function: it turns a file of any size into a 256-bit fingerprint, written as 64 hexadecimal characters
-f: the package file pip has just downloaded (a wheel or source archive)
-h_lock: the SHA-256 fingerprint you recorded for that file in requirements.txt, after --hash=sha256:
-In words: pip installs a file only when the fingerprint of what it downloaded equals the fingerprint you recorded; a swapped or tampered file with no approved digest match is rejected. Matching a digest does not prove that the approved file is safe.
-```
+For example, if someone replaces `requests-2.32.3` on a mirror with a modified copy, its SHA-256 digest will, in practice, differ from the recorded full digest (shown here only as `70761c...`), and pip refuses it. Collisions are mathematically possible, so a match is strong computational evidence of approved bytes rather than a proof.
 
-For example, if someone replaces `requests-2.32.3` on a mirror with a modified copy, its digest will overwhelmingly differ from the recorded full digest (shown here only as `70761c...`) and pip refuses it. A match provides strong computational evidence of approved bytes, subject to the hash function’s collision resistance. If the file you recorded was already malicious, its *H(f)* matches perfectly.
+The check has a sharp limit: it compares bytes, not intentions. If the file you recorded was already malicious, its digest matches perfectly and pip installs it. Hash checking also says nothing about vulnerabilities discovered later in the approved file.
+
+> [!analogy] Real-world analogy: photographing your bike before a repair
+> Before leaving your bike at a repair shop, you photograph it. When you collect it, you compare the bike with the photo: if the shop hands you a different bike, you notice at once.
+>
+> **How it maps:** The photo is the recorded digest in `requirements.txt`; collecting the bike is pip downloading a file; refusing a bike that does not match the photo is hash-checking mode rejecting an unapproved file.
+>
+> **Where it stops:** If the frame was already bent when you took the photo, the bent bike matches perfectly: a hash approves exact bytes, not their safety. And a photo can miss a small change, whereas changing even one byte of a file changes its SHA-256 digest in practice.
 
 ## Key takeaways
 - Exact versions and artifact hashes make updates deliberate.

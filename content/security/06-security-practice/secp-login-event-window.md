@@ -15,24 +15,9 @@ A **SIEM** (security information and event management system, such as Splunk, El
 
 A simple in-memory rule alerts after more than 5 failed logins from one IP in a 60-second window. It assumes nondecreasing event timestamps per IP and a trusted clock. Production detection needs late-event handling, bounded/expired per-IP state, rate controls and deduplication; this sketch deliberately omits them.
 
-For each IP address, every new failed login moves a **sliding window** of the last 60 seconds forwards and counts what is inside it:
+For each IP address, every new failed login moves a **sliding window** of the last 60 seconds forwards. Failures at or before the cut-off (the new event's time minus 60 seconds) drop out; the rule fires when more than 5 remain. With failures at 0, 10, 20, 30, 40 and 50 seconds, the one at 50 s leaves all six inside the window, so it alerts.
 
-```formula
-t_cut = t_now − W
-N > L
-t_cut = 50 s − 60 s = −10 s
-N = 6 > 5
-where
-t_cut: the cut-off: failed logins at or before this time drop out of the window, in seconds (s)
-t_now: the timestamp of the failed login that has just arrived, in seconds
-W: the window length, 60 s (WINDOW in the code)
-N: the number of failed logins from this IP after t_cut, up to and including t_now (len(q) in the code)
-L: the limit, 5 (LIMIT in the code)
-s: seconds
-In words: the rule fires when more than L failures from one IP fall inside the last W seconds; with failures at 0, 10, 20, 30, 40 and 50 s, the one at 50 s leaves all six in the window, and 6 > 5 raises an alert.
-```
-
-The code keeps each IP's recent timestamps in a queue, drops from the front everything at or before *t_cut*, then compares how many are left, *N*, with *L*:
+The code keeps each IP's recent timestamps in a queue, drops old ones from the front, then compares how many are left with the limit:
 
 ```python
 from collections import defaultdict, deque
@@ -55,6 +40,8 @@ def on_failed_login(ip, ts):
         alert(ip, len(q))
 ```
 
+Think about what this rule cannot see. An attacker who tries one common password against many accounts from hundreds of addresses (password spraying), or who stays at four failures a minute, never crosses a per-IP threshold. Production detections therefore also count failures per account and across the whole service, and look for a success after many failures.
+
 **Sigma** provides a common detection-rule format. Conversion requires a supported backend and correct log-source/field mapping; not every rule maps automatically to every SIEM:
 
 ```
@@ -73,6 +60,7 @@ level: high
 - The sketch alerts on every event while the retained count exceeds five.
 - Nondecreasing trusted timestamps are an explicit assumption.
 - Production use also needs bounded state, late-event policy, rate controls and deduplication.
+- Per-IP counting misses spraying from many addresses and slow attempts; count per account and service-wide too.
 
 ## Further reading
 - [Python deque](https://docs.python.org/3/library/collections.html#collections.deque)

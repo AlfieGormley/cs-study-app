@@ -2,7 +2,7 @@
 id: sepr-refactoring-safety
 title: Refactoring without changing behaviour
 level: basic
-minutes: 4
+minutes: 5
 summary: Build a safety net and separate structural changes from feature and bug fixes.
 sourceLesson: sepr-refactoring
 ---
@@ -47,6 +47,15 @@ def test_price_characterisation():
 ```
 
 If a refactoring changes one of these outputs, you have changed behaviour, deliberately or not. Fix bugs afterwards, as a separate, visible change.
+
+Characterisation tests only protect the behaviour they exercise. Choose inputs that reach each branch you are about to touch, including edges such as zero and empty. The three tests above never try exactly 500 units, so they would stay green if a refactoring turned `>=` into `>`: add `qty=500` (and `qty=499`) before restructuring that branch.
+
+> [!analogy] Real-world analogy: a check-in inventory for a rented flat
+> When you move into a rented flat, you list its condition room by room, scuffs and a cracked tile included. You are not saying the flat is how it should be; you are recording how it is, so that any later change shows up.
+>
+> **How it maps:** The characterisation tests are the inventory. They record the code's current outputs, bugs included. After the refactoring (moving the furniture), a failing test is a new mark that was not there before.
+>
+> **Where it stops:** An inventory covers only the rooms you walked through, and tests cover only the inputs you ran. Code paths you never exercised can change silently.
 
 > [!tip] Commit at every green
 > Make one small move, run the tests, commit. If the next step goes wrong you can discard the intended tracked-file edits with `git restore <paths>` after checking the diff (unrelated uncommitted work must be preserved) instead of debugging a half-finished restructure.

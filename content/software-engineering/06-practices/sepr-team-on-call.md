@@ -3,11 +3,11 @@ id: sepr-team-on-call
 title: Design sustainable on-call
 level: advanced
 minutes: 5
-summary: Plan rotation capacity, actionable alerts, escalation and recovery for responders.
+summary: Size a rotation, know what the minimum leaves out, and keep pages actionable.
 sourceLesson: sepr-teams
 ---
 
-Running a service includes supporting the people who respond when it fails. Staffing arithmetic is a starting constraint; sustainable workload requires explicit policies and regular review.
+Running a service includes looking after the people who respond when it fails. A simple staffing rule gives a minimum team size, but a sustainable rotation also needs a manageable incident load, clear policies and regular review.
 
 ## On-call that people can sustain
 If your team runs production services, someone needs to respond when they break at 3 a.m. Done badly, on-call burns people out and drives them away. Done well, it is a manageable part of the job that also teaches people how the system really behaves.
@@ -21,33 +21,16 @@ Google's SRE book gives concrete guidelines worth knowing:
 - Google reports around **6 hours** of work per incident in its experience, including diagnosis and follow-up, and uses at most **2 incidents per 12-hour shift** as a workload guideline. This is not a universal incident-duration estimate.
 - Response expectations cited by Google: about **5 minutes** for user-facing, time-critical services, about **30 minutes** for less time-sensitive ones.
 
-Where does eight come from? Two roles must be filled at every moment, and nobody may spend more than a quarter of their time in either of them:
+These are Google's guidelines for its own SRE teams, not an industry standard; other organisations choose different limits. They are still a useful, well-reasoned starting point.
 
-```formula
-E_min = R / f_max
-E_min = 2 / 0.25
-E_min = 8
-where
-E_min: the smallest team that can staff the rotation, in engineers
-R: the number of on-call roles filled at all times: a primary and a secondary, so 2
-f_max: the largest fraction of time one engineer may spend on call: 25%, which is 0.25
-In words: two seats must always be filled and each person may sit in one only a quarter of the time, so you need four people per seat, eight in all.
-```
+Where does eight come from? Two seats (primary and secondary) must be filled every hour of every week, and nobody may sit in either seat more than a quarter of the time. So each seat needs four people taking turns, eight in all: with week-long shifts, each engineer is on call, as primary or secondary, one week in every four.
 
-With week-long shifts, each of the eight is on call (primary or secondary) for one week in every four, as the SRE book puts it. Real teams need more, to cover leave, illness and training.
+The incident limit follows similar reasoning: if each incident takes about 6 hours of work, two of them fill a 12-hour shift, and a third leaves no time to handle any of them properly.
 
-The incident limit follows the same kind of reasoning:
+What these figures do not tell you:
 
-```formula
-H = k × t
-H = 2 × 6 h = 12 h
-where
-H: the incident work generated during one shift, in hours (h)
-k: the number of incidents in the shift; Google's guideline maximum is 2
-t: the average hours of work per incident in Google's experience (root-cause analysis, remediation, and follow-up such as writing the postmortem and fixing bugs), about 6 h
-h: hours
-In words: two incidents of about six hours' work each fill a whole 12-hour shift, so more than two leaves no time to handle them properly.
-```
+- **Eight is a floor, not a staffing plan.** It assumes nobody is ever on leave, ill or in training. Real teams need more.
+- **It says nothing about load.** Eight people facing five incidents a shift will burn out however fairly the rota is shared; the incident guideline is a separate constraint, and Google aims for paging so evenly spread that the median day has no incidents at all.
 
 A **follow-the-sun** rotation across suitable time zones and shift lengths can avoid night duty, with clear handovers. Check that the roster covers all 24 hours: London and San Francisco each working an ordinary eight-hour day do not provide complete coverage.
 
@@ -71,11 +54,13 @@ Common failures and fixes:
 | Alert with no runbook | Add a runbook; keep necessary service-risk detection |
 | 20 alerts for 1 outage | Group and deduplicate |
 
+Page on symptoms users feel (errors, latency, imminent exhaustion that needs a human), not on every internal cause. High CPU alone need not page; a disk that will fill in two hours with no automatic fix does.
+
 **Alert fatigue** is dangerous: when most pages are noise, people stop treating them as urgent, and the real one gets missed. Review every page from the last rotation in a weekly meeting and ask "was this worth waking someone for?".
 
 ## Key takeaways
-- Two simultaneous duty roles at a 25% duty fraction require at least eight people in the simplified single-site model.
-- That arithmetic excludes leave and says nothing about incident volume or recovery needs.
+- Two duty roles with nobody on call more than 25% of the time need at least eight people at one site.
+- That minimum ignores leave, illness and training, and says nothing about incident load or recovery.
 - Page for urgent actionable threats to users and use runbooks, escalation and alert review.
 
 ## Further reading

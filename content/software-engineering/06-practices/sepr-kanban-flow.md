@@ -3,7 +3,7 @@ id: sepr-kanban-flow
 title: Control work in progress and reason about flow
 level: intermediate
 minutes: 5
-summary: Use pull policies and Little’s law with consistent boundaries and long-run averages.
+summary: Use pull policies and WIP limits, and know what Little's law does and does not promise about cycle time.
 sourceLesson: sepr-agile-estimation
 ---
 
@@ -11,6 +11,8 @@ Scrum creates a regular inspection rhythm. Kanban focuses on the flow of work an
 
 ## Kanban
 Kanban comes from Toyota's production system, where cards ("kanban" means signboard) signalled when to produce more. David J. Anderson adapted it for software in the mid-2000s.
+
+There is no single official definition: Kanban University's Kanban Method and *The Kanban Guide* (kanbanguides.org) describe different sets of practices and even use different names for similar flow measures.
 
 Kanban does not prescribe roles or iterations. Useful practices include:
 
@@ -28,43 +30,36 @@ Kanban does not prescribe roles or iterations. Useful practices include:
 | H     | E       |            |      |
 ```
 
-The numbers are WIP limits. Dev is full at 3, and Review is full at 2: A and B occupy its two slots. Help finish Review work first. Review may then pull C when its policy allows; finishing C alone does not create Dev capacity until it leaves that stage. Pull from To do only after a Dev slot opens. Keep the card and any delivery blockage visible. This is a **pull system**, not push: work moves when there is capacity downstream. Stop starting, start finishing.
+The numbers are WIP limits, and both Dev (3) and Review (2) are full. Rather than starting F, help finish A or B. When one leaves Review, C can move in, which frees a Dev slot for F. This is a **pull system**: work moves only when the next stage has capacity. Stop starting, start finishing.
 
 ### Little's law
 
-Why limit WIP? **Little's law**, proved by John Little in 1961 for queueing systems, links three averages. It answers the question "if we keep this much work open, how long will each item take on average?" It holds for a stable system over the long run, meaning work leaves at about the rate it arrives, so the queue is not growing without limit:
+Why limit WIP? **Little's law**, proved by John Little in 1961 for queueing systems, links three long-run averages. It answers the question "if we keep this much work open, how long will each item take on average?"
 
-```formula
-L = λ × W
-W = L / λ
+```formula essential
+L = λ W
 where
 L: the average WIP: how many items are in progress (started but not finished) at any moment, in items
 λ: flow-rate lambda, the average throughput: how many items the workflow finishes per unit of time, in items per week
 W: the average cycle time: how long one item spends between starting and finishing, in weeks
-In words: the average amount of open work equals the finishing rate times the average time each item spends in the system, so with the finishing rate fixed, less open work means each item gets through faster.
+In words: the average amount of open work equals the finishing rate multiplied by the average time each item spends in progress, so if the finishing rate stays the same, less open work means each item gets through faster on average.
 ```
 
-The second line is the same law rearranged. All three must use the same workflow boundary (say, "from Dev to Done") and the same time unit. The law says nothing about any single item, and a short filling or draining interval cannot be treated as a steady-state forecast without accounting for boundary effects. Temporary variation does not disprove the long-run identity.
+For example, a team that finishes about 4 items a week while keeping about 12 in progress has an average cycle time of about 3 weeks. If it cuts average WIP to 6 and still finishes 4 a week, the average falls to about 1.5 weeks.
 
-> [!example] Halving WIP
-> In a stable workflow, average throughput is 4 items a week and average WIP is 12. Then average WIP falls to 6 while throughput stays at 4. A WIP cap is not the measured average, and this does not promise that every item finishes twice as fast.
+What the law does and does not tell you:
 
-```formula
-W = L / λ
-W = 12 items / (4 items per wk)
-W = 3 wk
-W = 6 items / (4 items per wk)
-W = 1.5 wk
-where
-W: the average cycle time, in weeks (wk)
-L: the average WIP, in items: 12 before, 6 after
-λ: flow-rate lambda, the average throughput, in items per week; 4 in both cases
-items: count of work items inside the workflow boundary
-wk: weeks, the unit of time used here
-In words: with the finishing rate unchanged, halving the average amount of open work halves the average time an item takes, from 3 weeks to 1.5 weeks.
-```
+- **It is about long-run averages.** It says nothing about any single item, and holds only when work leaves at about the rate it arrives. A few weeks of filling or draining the board are not a steady state.
+- **All three numbers must match.** Use the same workflow boundary (say, "from Dev to Done") and the same time unit for each.
+- **A WIP cap is not the average WIP.** Setting a limit of 6 does not mean 6 items are open on average.
+- **Throughput is not guaranteed to stay fixed.** Lower WIP often reduces context switching, but a limit set too low can starve a stage and cut throughput, so cycle time falls by less than expected. Measure both.
 
-Lower WIP may reduce context switching, but excessive restriction can starve stages and reduce throughput. Measure both flow and capacity.
+> [!analogy] Real-world analogy: a busy café
+> A café serves about 30 customers an hour, and each one spends about 20 minutes inside. On average, then, about 10 customers are in the café at once. If service stays at 30 an hour but each visit stretched to 40 minutes, the room would hold about 20.
+>
+> **How it maps:** Customers inside are WIP, customers served per hour are throughput, and the time each one spends inside is cycle time. Letting fewer people in at once while serving at the same rate means each spends less time waiting.
+>
+> **Where it stops:** A café's capacity is mostly the counter; a software team's throughput depends on the work itself, and too few items in progress can leave people idle and lower throughput. The relationship also holds only on average, over a long enough period.
 
 ### Scrum versus Kanban
 
@@ -75,12 +70,12 @@ Lower WIP may reduce context switching, but excessive restriction can starve sta
 | Planning focus | Sprint Goal and evolving plan | Flow and WIP policies |
 | Useful measures | Goal outcomes and product value | WIP, throughput, work-item age, cycle time |
 
-Kanban suits work that arrives unpredictably (operations, support, platform teams). Scrum suits product development where a regular rhythm of planning and review helps. Kanban can also complement Scrum. Sprint scope may be clarified and renegotiated with the Product Owner as learning occurs without endangering the Sprint Goal.
+Kanban suits work that arrives unpredictably (operations, support, platform teams); Scrum suits product work that benefits from a regular rhythm of planning and review. The two can be combined, and even within Scrum, Sprint scope can be renegotiated with the Product Owner as long as the Sprint Goal holds.
 
 ## Key takeaways
 - Pull work only when the receiving stage has capacity under its explicit policies.
 - Little’s law links compatible long-run averages; a WIP cap is not the measured average.
-- Reducing WIP reduces average cycle time only if throughput remains fixed under the model.
+- Reducing WIP reduces average cycle time only if throughput holds up; a limit set too low can cut throughput.
 
 ## Further reading
 - [The Kanban Guide (May 2025)](https://kanbanguides.org/the-kanban-guide/2025.5/)

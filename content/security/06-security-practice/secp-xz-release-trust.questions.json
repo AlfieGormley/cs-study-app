@@ -3,27 +3,27 @@
     "id": "secp-supply-chain-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Andres Freund's report shows these timings for a failed SSH login to localhost on Debian unstable:\n\n```\nbefore:  real 0m0.299s\nafter:   real 0m0.807s\n```\n\nWhich option correctly compares the timings and explains how this unexpected anomaly led to investigation?",
+    "prompt": "On a test machine running a prerelease distribution, a developer notices that failed SSH logins now take about 0.8 s instead of about 0.3 s, `sshd` uses unexpected CPU, and Valgrind reports errors inside `liblzma`. Nothing in the OpenSSH package changed recently, but the xz package did. What is the most useful interpretation?",
     "options": [
       {
-        "text": "About 0.5 s (around 2.7×); an engineer investigated unexpected latency, CPU usage and Valgrind errors",
-        "explanation": "Correct: 0.508 seconds and about 2.70 times in Freund’s reported test. He investigated unexpected performance and Valgrind symptoms; this does not establish which other controls had been deployed."
+        "text": "Half a second is ordinary timing noise, so the observation can be ignored",
+        "explanation": "The slowdown was consistent and came with CPU use and Valgrind errors, which noise does not explain. Dismissing it is exactly the reaction a stealthy backdoor relies on."
       },
       {
-        "text": "About 5 s; SSH logins became unusable, so many users reported it",
-        "explanation": "The times are in seconds with three decimals: 0.299 s and 0.807 s, so the difference is about half a second, easy to overlook."
+        "text": "Treat it as an unexplained change after a dependency update: trace where the time goes, compare the new library release with the previous one, and report what you find",
+        "explanation": "Correct. This is how Andres Freund approached the xz-utils anomaly in March 2024: he profiled the slowdown and Valgrind errors, traced them into the updated liblzma, found the backdoor and disclosed it on 29 March 2024. An unexplained behaviour change after an update is a lead worth following."
       },
       {
-        "text": "About 0.05 s; it was caught by an automated performance regression test",
-        "explanation": "The difference is ten times larger than this, and it was not caught by automation but by a person investigating."
+        "text": "It must be a memory-safety bug in OpenSSH, so the fix is to patch OpenSSH",
+        "explanation": "The OpenSSH package had not changed; the errors pointed into liblzma. In the real incident the route into sshd was distribution-specific library linking to a deliberately modified liblzma, not an OpenSSH flaw."
       },
       {
-        "text": "There was no slowdown; it was found by SAST on the xz repository",
-        "explanation": "The report shows a slowdown investigated by Freund. The release-only build change and binary fixtures complicated review; this does not establish that every possible static analysis could never detect relevant malicious changes."
+        "text": "A static scan of the xz git repository will settle it, because any malicious code must be in git",
+        "explanation": "The disclosed trigger, a modified build-to-host.m4, was only in the release tarballs, and the payload was hidden in binary test files. A clean-looking repository scan would not settle the question; the built release is what changed."
       }
     ],
-    "answer": 0,
-    "workedExample": "Subtract for the slowdown and divide for the ratio:\n\n```formula\nΔt = t_after − t_before\nΔt = 0.807 s − 0.299 s = 0.508 s\nr = t_after / t_before\nr = (0.807 s) / (0.299 s) ≈ 2.70\nwhere\nΔt: delta t, the extra time each failed login took, in seconds (s)\nt_after: the time with the backdoored liblzma, 0.807 s\nt_before: the time without it, 0.299 s\nr: how many times longer the login took; a ratio, so it has no unit\n≈: approximately equal to (rounded)\ns: seconds\nIn words: each failed SSH login took about half a second longer, roughly 2.7 times as long as before.\n```\n\nFreund investigated this alongside CPU/Valgrind symptoms and disclosed the backdoor on 29 March 2024. These are observations from his setup, not universal performance or attribution claims. The first affected release was in February, not a full two months before disclosure.",
+    "answer": 1,
+    "workedExample": "1. Note what changed: the xz package was updated; OpenSSH was not.\n2. Note the symptoms: slower failed logins, extra CPU in sshd and Valgrind errors inside liblzma. Together they point at the updated library, reached by sshd through distribution-specific linking (sshd → libsystemd → liblzma).\n3. Reason about the next step: profile where the time goes and compare the new release with the previous one, including what the release archive builds, not only the git source.\n4. In 2024 this route exposed CVE-2024-3094: Freund reported a slowdown from about 0.3 s to about 0.8 s in his setup. These timings are from his test, not universal figures; the lesson is that unexplained behaviour after an update deserves investigation.",
     "link": {
       "title": "Andres Freund's xz-utils disclosure (oss-security)",
       "url": "https://www.openwall.com/lists/oss-security/2024/03/29/4"

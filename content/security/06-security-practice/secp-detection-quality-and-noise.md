@@ -4,10 +4,10 @@ title: Behaviour detections and alert precision
 level: intermediate
 minutes: 4
 sourceLesson: secp-detection-response
-summary: Use the Pyramid of Pain and a base-rate calculation to reason about useful alerts.
+summary: Use the Pyramid of Pain and the base-rate effect to reason about useful alerts.
 ---
 
-A detector can match a particular file or infrastructure address, or it can look for how an intrusion operates. This unit compares those signals and calculates why a small false-positive rate can overwhelm a response team when harmless events greatly outnumber attacks.
+A detector can match a particular file or infrastructure address, or it can look for how an intrusion operates. This unit compares those signals and explains why a small false-positive rate can overwhelm a response team when harmless events greatly outnumber attacks.
 
 ### The pyramid of pain
 
@@ -40,24 +40,30 @@ Keep detections healthy:
 - **Tier alerts**: page a human only for high-confidence, high-impact detections.
 - **Test detections**: re-run known attack techniques (for example with Atomic Red Team) and check the alert fires.
 
-**Precision** is a ratio, and it explains why noise is so hard to escape. Real attacks are rare compared with normal activity (a low **base rate**), so a rule that is wrong on only a tiny fraction of harmless events can still produce mostly false alarms. An illustrative calculation with made-up numbers: 1,000,000 harmless logins a day, 2 real attacks, and a rule that catches both attacks but misfires on 0.1 % of harmless logins:
+**Precision** is the fraction of a rule's alerts that were real. It explains why noise is so hard to escape. Real attacks are rare compared with normal activity (a low **base rate**), so a rule that is wrong on only a tiny fraction of harmless events can still produce mostly false alarms.
 
-```formula
+An illustrative example with made-up numbers: 1,000,000 harmless logins a day, 2 real attacks, and a rule that catches both attacks but misfires on 1 harmless login in 1,000. It raises about 1,000 false alerts and 2 real ones, so only about 2 alerts in every 1,000 are worth an analyst's time. The rule's false-positive rate sounds tiny (0.1 %), but its precision is dreadful (about 0.2 %).
+
+```formula reference
 P = TP / (TP + FP)
 FP = FPR N_ok
-FP = 0.001 × 1000000 = 1000
-P = 2 / (2 + 1000) ≈ 0.002
 where
-P: precision: the fraction of a rule's alerts that were real, from 0 (all noise) to 1 (all real); 0.002 is 0.2 %
-TP: true positives: alerts that fired on real malicious activity; here 2, assuming there were 2 real attacks that day and the rule caught both
+P: precision: the fraction of a rule's alerts that were real, from 0 (all noise) to 1 (all real)
+TP: true positives: alerts that fired on real malicious activity
 FP: false positives: alerts that fired on harmless activity
-FPR: false-positive rate: the fraction of harmless events the rule wrongly alerts on; here 0.001, which is 1 in 1,000
-N_ok: the number of harmless events the rule examines; here 1,000,000 logins a day
-≈: approximately equal to (the result is rounded)
-In words: a rule that misfires on only 1 harmless login in 1,000 still raises about 1,000 false alerts a day against a million logins, so even if it catches both real attacks only about 2 alerts in 1,000 are real.
+FPR: false-positive rate: the fraction of harmless events the rule wrongly alerts on, for example 0.001 (1 in 1,000)
+N_ok: the number of harmless events the rule examines, for example 1,000,000 logins a day
+In words: precision is real alerts divided by all alerts; false alerts grow with the volume of harmless events, so a low false-positive rate applied to a huge volume still swamps a handful of real attacks.
 ```
 
-To raise *P*, cut *FP*: narrow the rule, add context so it fires only on unusual combinations, or tier it so low-confidence matches enrich other alerts instead of paging someone. Catching more real attacks (*TP*) barely helps while *FP* is in the thousands.
+To raise precision, cut false positives: narrow the rule, add context so it fires only on unusual combinations, or tier it so low-confidence matches enrich other alerts instead of paging someone. Catching more real attacks barely helps while false alerts are in the thousands.
+
+> [!analogy] Real-world analogy: a smoke alarm above the toaster
+> A kitchen smoke alarm that sounds every time someone makes toast is rarely wrong about smoke, yet after a week everyone ignores it, and on the night of a real fire nobody gets up.
+>
+> **How it maps:** Toast is the flood of harmless events, the fire is the rare real attack, and ignoring the alarm is alert fatigue. Moving the alarm or switching to a heat detector in the kitchen is tuning the rule or adding context so that it fires on unusual combinations.
+>
+> **Where it stops:** A smoke alarm watches one room for one hazard. A SOC receives thousands of rules' output, and attackers deliberately make their activity look like the toast, so tuning never ends and must be checked by re-running known attack techniques.
 
 ## Key takeaways
 - Behavioural detections can force changes to attacker technique, although any one behaviour may be avoidable.

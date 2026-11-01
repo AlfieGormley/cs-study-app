@@ -2,7 +2,7 @@
 id: secp-development-lifecycle
 title: Security throughout development
 level: basic
-minutes: 3
+minutes: 4
 sourceLesson: secp-secure-sdlc
 summary: Match security activities to each stage of development and distinguish application requirements from process maturity.
 ---
@@ -19,6 +19,13 @@ Consider an illustrative late-review process: developers build for six months, a
 - **Context.** A developer fixing a SAST finding on their own pull request remembers the code. Six months later, someone else has to rediscover it.
 - **Blast radius.** A flaw in a design document costs an edit. The same flaw shipped to 10,000 customers costs a patch, a disclosure and perhaps a breach.
 - **Feedback loops.** Developers learn from fast feedback. Timely actionable feedback can be easier to apply than a delayed report; either format can still teach.
+
+> [!analogy] Real-world analogy: inspecting a house while it is built
+> A building inspector who checks the foundations and wiring while they are still exposed can ask for a quick fix. An inspector who first visits the finished house must open walls to see the same things.
+>
+> **How it maps:** The open foundations are a design document or a pull request; the finished house is released software. Checking early (threat modelling, code review, SAST on each change) finds a flaw while its context is visible and changing it touches little else.
+>
+> **Where it stops:** A house is inspected once and then stands still. Software keeps changing and new attacks keep appearing, so early checks complement, rather than replace, testing of the running system and monitoring in production.
 
 > [!note] About the "100× cheaper" statistic
 > You will often see a claim that a bug costs 100 times more to fix in production than in design, attributed to IBM. The original source is hard to trace and the exact multiplier is not well supported. Earlier discovery can avoid downstream rework, but actual cost depends on the defect and project. No universal multiplier is asserted here.
@@ -38,9 +45,11 @@ A few of these deserve a word:
 
 - **Abuse cases** are user stories written from the attacker's side: "As an attacker, I want to reset another user's password by guessing the token." They turn vague worries into testable requirements.
 - **Threat modelling** (STRIDE, attack trees; see the fundamentals module) happens at design time, when changing direction is cheap.
-- **Security requirements** can be taken from a checklist such as the **OWASP Application Security Verification Standard (ASVS)**, which lists concrete, testable controls at three levels of rigour.
+- **Security requirements** can be taken from a checklist such as the **OWASP Application Security Verification Standard (ASVS)**, which lists concrete, testable controls at three levels of rigour (version 5.0, checked November 2026). Level 1 is the starting baseline; higher levels add depth for riskier applications.
 
-You do not have to invent the process. **Microsoft's Security Development Lifecycle** (made mandatory internally in 2004, after Bill Gates's 2002 "Trustworthy Computing" memo) is one prominent large-scale example; no claim of historical priority is made here. The **NIST Secure Software Development Framework** (SP 800-218) recommends practices; **OWASP SAMM** provides an explicit maturity model for assessing them.
+You do not have to invent the process. **Microsoft's Security Development Lifecycle** (made mandatory internally in 2004, after Bill Gates's 2002 "Trustworthy Computing" memo) is one prominent large-scale example; no claim of historical priority is made here. The **NIST Secure Software Development Framework** (SP 800-218, version 1.1 from 2022; a version 1.2 draft appeared in December 2025) recommends practices in four groups: prepare the organisation, protect the software, produce well-secured software and respond to vulnerabilities. **OWASP SAMM** provides an explicit maturity model for assessing how well an organisation performs such practices.
+
+The distinction matters in practice. ASVS asks "does *this application* meet these controls?"; SAMM asks "how mature is *the way we build* applications?". A team can pass an ASVS review of one app while its organisation has no repeatable threat-modelling or incident-handling practice.
 
 ## Key takeaways
 - Place security work throughout requirements, design, implementation, testing, release and operation.

@@ -33,6 +33,13 @@ They did not commit malicious code to the repository, where developers might not
 
 The result, **SUNBURST**, was compiled into a legitimate DLL, **signed with SolarWinds' own code-signing certificate**, and shipped in Orion updates from around March to June 2020. SolarWinds initially estimated fewer than 18,000 customers might have installed affected versions. The backdoor waited roughly two weeks before calling home, and the attackers then picked a much smaller set of high-value targets for follow-on intrusion.
 
+> [!analogy] Real-world analogy: a swapped ingredient on the factory line
+> A food factory's recipe is checked and approved. On the production line, a saboteur swaps one ingredient during each batch and puts the original back afterwards. Every packet still leaves with the factory's genuine quality seal.
+>
+> **How it maps:** The approved recipe is the clean source in git. The production line is SolarWinds' build server, the swapped ingredient is SUNSPOT replacing `InventoryManager.cs` during compilation, and the quality seal is the code-signing signature applied after the build.
+>
+> **Where it stops:** Inspectors could test a food sample for the wrong ingredient. Compiled software carries no simple chemical trace of its source, so detecting this means protecting and checking the build itself, for example with isolated builders, provenance and independent rebuilds.
+
 Lessons:
 
 - **Code signing binds content to a signing key; it does not prove the actual builder or that the content is safe.** The signature was genuine.

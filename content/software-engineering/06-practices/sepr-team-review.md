@@ -7,7 +7,7 @@ summary: Keep code review focused on code health and create conditions for share
 sourceLesson: sepr-teams
 ---
 
-Documentation spreads context before work starts; review spreads it as code changes. The same respect and willingness to ask questions matter in both.
+Documentation spreads context before work starts; review spreads it as the code changes. Both depend on people being willing to ask questions.
 
 ## Code review
 Code review catches defects, but its bigger benefits are spreading knowledge (raising the bus factor) and keeping the codebase consistent.
@@ -30,6 +30,10 @@ Practical habits:
 - **Pairing and mobbing** spread knowledge fast, especially on unfamiliar code.
 - **Async by default** for things that do not need a meeting: written proposals, recorded decisions, threads rather than calls. Protect focus time.
 - **Rotate ownership** of components and of on-call so expertise is not concentrated.
+
+## Pitfalls
+- **Review as gatekeeping.** Blocking on style preferences, or leaving reviews for days, teaches people to avoid review and to batch changes into huge PRs.
+- **Rubber-stamping.** A quick "LGTM" on a 2,000-line change is not a review. If a change is too big to review properly, ask for it to be split.
 
 ## Key takeaways
 - Review small coherent changes promptly and distinguish blocking concerns from optional nits.

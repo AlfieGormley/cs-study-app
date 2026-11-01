@@ -23,6 +23,13 @@ The simplest SAST tools match patterns: "flag any call to `eval`". Better tools 
                => ALERT
 ```
 
+> [!analogy] Real-world analogy: a dye test in the plumbing
+> A plumber tracing a leak pours coloured dye into one inlet and watches which taps turn colour, and whether the water passed through a filter on the way.
+>
+> **How it maps:** The inlet is a taint source such as `request.args`, the dye is the taint label, the pipes are assignments and string formatting, and the tap is the sink argument such as the SQL text given to `execute`. A filter on the route is a sanitiser that suits that sink.
+>
+> **Where it stops:** Real dye flows wherever water goes. A static analyser only follows the pipes its model knows about, so data passing through queues, reflection or other services can vanish from view (a missed flow), and a route it cannot rule out may be flagged although no attacker data really reaches it.
+
 Here is vulnerable code that a suitably configured taint rule can flag:
 
 ```python

@@ -7,10 +7,10 @@ summary: Read the Agile values alongside Scrum accountabilities, events and qual
 sourceLesson: sepr-agile-estimation
 ---
 
-The label "Agile" is used for a variety of software processes. In practice that word covers everything from small, self-organising teams shipping daily to heavyweight processes with more meetings than releases. To work well in any of them, it helps to know what the ideas actually are and why they exist.
+The label "Agile" covers everything from small, self-organising teams shipping daily to heavyweight processes with more meetings than releases. To work well in any of them, it helps to know what the ideas actually are and why they exist.
 
 ## The problem Agile was solving
-The traditional **waterfall** model runs in phases: gather all requirements, design everything, build it, test it, release. Sequential planning is easier when requirements are stable, but safety-critical or contractual work does not by itself justify deferring integration, feedback or validation.
+The traditional **waterfall** model runs in phases: gather all requirements, design everything, build it, test it, release. Sequential phases can work when requirements are stable and well understood. Even then, leaving integration and user feedback until the end is risky, and that holds for safety-critical and contract-driven work too.
 
 Software requirements can change or remain uncertain. Users only know what they want once they see something; markets move; technical unknowns surface mid-build. A waterfall project discovers these problems at the end, when changing course is most expensive. (Winston Royce's 1970 paper, often cited as the origin of waterfall, actually described the purely sequential version as risky and recommended iteration.)
 

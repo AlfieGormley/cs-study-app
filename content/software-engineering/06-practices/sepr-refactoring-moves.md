@@ -3,11 +3,11 @@ id: sepr-refactoring-moves
 title: Recognise smells and make small moves
 level: basic
 minutes: 4
-summary: Use code smells to select focused refactorings and preserve arithmetic behaviour.
+summary: Use code smells to choose focused refactorings, and check that each move really preserves behaviour.
 sourceLesson: sepr-refactoring
 ---
 
-A safe refactoring starts from the tests and behaviour boundary established in the preceding unit. This unit connects design symptoms to small changes you can verify.
+With a safety net in place (previous lesson), the next questions are where to refactor and which small move to make. Code smells point to the first; a short catalogue of moves answers the second.
 
 ## Code smells: when to refactor
 A **code smell** is a surface symptom that often (not always) signals a deeper design problem. Some common ones from Fowler's catalogue:
@@ -25,7 +25,7 @@ A **code smell** is a surface symptom that often (not always) signals a deeper d
 Two of these are worth telling apart. **Shotgun surgery** is when one change forces edits in many places. **Divergent change** is the opposite: one module changes for many unrelated reasons. Both are coupling and cohesion problems seen from different directions.
 
 ## The core moves
-Most day-to-day refactoring uses a handful of moves. Here is a function definition for a fictional surcharge. The snippets are partial examples: no order is constructed or invoice called, so executing the definitions prints nothing. A call prints a formatted total; the numeric policy is invented for this exercise.
+Most day-to-day refactoring uses a handful of moves. Here is a function that adds up an order and applies an invented 20% surcharge for one country (a made-up policy for the exercise, not tax guidance). Calling it prints the formatted total:
 
 ```python
 def invoice(order):
@@ -61,7 +61,9 @@ def invoice(order):
     print(f"Total: {gross:.2f}")
 ```
 
-For the supported numeric inputs, the arithmetic and printed output are preserved. This is a fictional country-tagged surcharge, not a VAT implementation or tax guidance. Keep the original accumulation loop: replacing it with `sum` can change floating-point results on Python 3.12 and later. Now each part can be tested and reused, and adding a new country's rate touches one small function.
+The same arithmetic runs in the same order, so the printed total is unchanged. Now each part can be tested and reused, and adding a new country's rate touches one small function.
+
+Notice one deliberate choice: the extracted `subtotal` keeps the original loop. Swapping it for Python's `sum` function looks like a harmless tidy-up, but since Python 3.12 `sum` adds floats with a more accurate algorithm, so the result can differ in the last digits. Summing ten copies of `0.1` gives `0.9999999999999999` with a loop but `1.0` with `sum` on Python 3.12+. A rounded total usually hides that, but an exact comparison or a stored value would not. "Looks equivalent" is not the same as "behaves identically".
 
 Other moves you will use constantly:
 

@@ -2,7 +2,7 @@
 id: sepr-refactoring-migrations
 title: Migrate interfaces and legacy systems
 level: basic
-minutes: 4
+minutes: 5
 summary: Use expand and contract, branch by abstraction and strangler routing to replace systems incrementally.
 sourceLesson: sepr-refactoring
 ---
@@ -25,7 +25,14 @@ Change an interface in three phases, each safe to deploy on its own:
              nothing calls it.
 ```
 
-For columns, expand the schema and deploy atomic dual writes while still reading the old column. Drain every old-only writer, including jobs, before a race-safe backfill from the current row values; alternatively use database synchronization that also covers old writers. Validate equality before switching reads. Keep dual writes through the rollback window, then retire all old readers/writers before dropping the old column. Locks, transactions and conditional updates must prevent stale backfill data from overwriting newer values.
+A database column follows the same shape, with one extra danger: during a rolling deploy, old and new versions of the application write to the same rows at the same time.
+
+1. **Expand**: add the new column. Deploy code that writes both columns in one transaction but still reads the old one.
+2. **Backfill**: once no old-only writer remains (background jobs included), copy existing values across. Use conditional updates or locks so a slow backfill never overwrites a newer value. A database trigger that keeps the columns in sync is an alternative that also covers old writers.
+3. **Switch**: check the two columns agree, then read from the new one. Keep writing both until you are past the point where you might roll back.
+4. **Contract**: once nothing reads or writes the old column, drop it.
+
+The schema change itself is the easy part. The failures come from writers you forgot about and from stale copies racing newer data.
 
 ### Branch by abstraction
 

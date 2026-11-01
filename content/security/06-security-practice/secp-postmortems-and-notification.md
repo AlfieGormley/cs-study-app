@@ -13,6 +13,8 @@ Restoring service does not finish the learning and communication work. A postmor
 
 Run a **blameless postmortem**: what happened, why, what made it worse, and what will change, with owners and dates. "Blameless" does not mean nobody is accountable; it means you assume people acted reasonably with the information they had, so they tell you the truth. Blaming individuals teaches everyone to hide mistakes.
 
+NIST SP 800-61 Rev. 3 places this learning in the CSF 2.0 Improvement category (ID.IM) and expects it throughout an incident, not only at the end: a gap noticed during containment can be recorded and acted on without waiting for the final review.
+
 Also consider legal duties. For a reportable personal-data breach, the UK GDPR controller must notify the ICO without undue delay and, where feasible, within 72 hours of awareness. The exception is where risk to individuals' rights and freedoms is unlikely; delayed notification needs reasons and information may be supplied in phases. EU GDPR Article 33 uses the same core rule for its competent authority. Other duties, such as processor-to-controller notice or high-risk individual notification, differ; seek jurisdiction-specific advice for an actual incident.
 
 ## Apply the lessons

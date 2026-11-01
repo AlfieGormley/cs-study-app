@@ -7,9 +7,9 @@ summary: Replace guesses with falsifiable hypotheses, a reliable reproduction an
 sourceLesson: sepr-debugging
 ---
 
-Debugging can consume substantial engineering time. The usual approach is to stare at the code, guess, change something, and rerun. Sometimes it works. When it does not, you can lose a day.
+Debugging can consume substantial engineering time. The tempting approach is to stare at the code, guess, change something, and rerun. Sometimes it works. When it does not, you can lose a day.
 
-Methodical debugging replaces guessing with a process. A structured investigation can reduce wasted experiments; its benefit depends on the problem.
+Methodical debugging replaces guessing with a process. It will not make every bug quick, but it stops you repeating experiments and lets you tell when you are actually making progress.
 
 ## Debugging is the scientific method
 A bug is a gap between what you expect the program to do and what it actually does. Somewhere, one of your beliefs about the system is false. Debugging is finding which one.
@@ -39,14 +39,15 @@ Collect everything: the exact error message, the full stack trace, inputs, versi
 
 Python prints frames oldest first and says so: `Traceback (most recent call last)`. The bottom line is the exception; the frame just above it is where it was raised. Work upwards to find the first frame in *your* code, which is usually where the wrong value came from or was passed in.
 
-The following traceback is illustrative, with source filenames and line numbers chosen for the example.
+Here is a real traceback from Python 3.14 for an empty basket, with the outermost `<module>` frame trimmed and the file paths shortened. Python 3.11 and later underline the failing expression: the `^` marks the operator that raised.
 
 ```
 Traceback (most recent call last):
-  File "app.py", line 30, in handle
+  File "app.py", line 3, in handle
     total = order_total(basket)
-  File "pricing.py", line 12, in order_total
+  File "pricing.py", line 3, in order_total
     return sum(i.price for i in items) / n
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~
 ZeroDivisionError: division by zero
 ```
 

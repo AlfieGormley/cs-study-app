@@ -13,6 +13,13 @@ Federation moves the trust decision from possession of a long-lived stored cloud
 
 CI pipelines used to store a long-lived cloud access key as a CI secret, exactly the kind CircleCI lost. With **OIDC federation**, the CI platform instead issues a signed, short-lived JSON Web Token describing the job ("repo `acme/api`, branch `main`, workflow `deploy`"), and the cloud exchanges it for temporary credentials.
 
+> [!analogy] Real-world analogy: a staff badge exchanged for a day pass
+> Instead of giving a contractor a permanent copy of the building key, reception asks to see a photo badge issued by the contractor's employer that morning. If the badge names the right company and team, reception issues a day pass that stops working at 6 pm.
+>
+> **How it maps:** The employer is the CI platform acting as token issuer, the badge is the signed short-lived OIDC token, the names on it are claims such as `aud` and `sub`, reception's rule is the IAM trust policy, and the day pass is the temporary cloud credential. The permanent key copy is the long-lived access key stored as a CI secret.
+>
+> **Where it stops:** Reception trusts the employer completely. Anyone the employer will badge, here any job that matches the policy and may request a token, gets a pass, so a rule like "anyone from Acme" (`repo:acme/*`) admits far more people than intended.
+
 On AWS, the IAM role's trust policy pins what token it accepts:
 
 ```

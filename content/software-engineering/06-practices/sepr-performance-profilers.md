@@ -7,7 +7,7 @@ summary: Interpret call timings and sampled stacks, then choose tools for off-CP
 sourceLesson: sepr-profiling
 ---
 
-Once a representative benchmark exposes the expensive execution path, profile that workload. The question is where time goes, including time when the request is not computing.
+Once a representative benchmark shows the slow path, profile that workload. The question is where the time goes, including time when the request is not computing at all.
 
 ## Step 2: profile to find the bottleneck
 A **profiler** tells you where time goes. There are two main kinds.
@@ -21,13 +21,13 @@ A **profiler** tells you where time goes. There are two main kinds.
 
 ### Reading cProfile
 
-This command is a template: `app.py` must exist and the resulting profile depends on that program, its inputs and the runtime.
+Run your program under cProfile, sorted by cumulative time:
 
 ```
 python -m cProfile -s cumtime app.py
 ```
 
-Illustrative output, with some columns trimmed:
+A made-up but typical report, with some columns trimmed:
 
 ```
 ncalls  tottime  cumtime  function
@@ -59,7 +59,7 @@ A **flame graph** (Brendan Gregg's visualisation) aggregates stacks. This schema
 - Look for wide plateaus near the top: in a CPU-sampled graph with complete stack unwinding, these indicate self CPU time rather than just callees.
 
 ## CPU time versus waiting
-A request can be slow while the CPU is idle. It may be waiting for a database, a network call, a lock or the disk. This is **off-CPU** time, and a CPU-only profiler will not show it, because a sleeping thread is not on the CPU to be sampled.
+A request can be slow while the CPU is idle. It may be waiting for a database, a network call, a lock or the disk. This is **off-CPU** time, and a CPU-only profiler will not show it, because a sleeping thread is not on the CPU to be sampled. py-spy, for example, leaves idle threads out unless you pass `--idle`. cProfile behaves differently: by default it measures elapsed time rather than CPU time, so a blocked call shows up as time spent inside the function that was waiting. That is why `db.query` dominates the table above.
 
 Compare **wall-clock time** (what the user experiences) with **CPU time** (what the process actually computed). If a request takes 800 ms of wall time and 20 ms of CPU time, optimising Python code cannot help much; look at what it waits for, including time runnable but waiting for CPU scheduling. A low CPU time for one request does not show that the whole machine is idle. Distributed tracing, database slow-query logs and wall-clock profiling modes are the right tools there.
 

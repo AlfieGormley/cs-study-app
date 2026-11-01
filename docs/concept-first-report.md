@@ -1,6 +1,6 @@
 # Concept-first library review
 
-Status: **in progress**. 48/60 modules and 1385/1845 active lessons have current independent editorial reviews.
+Status: **in progress**. 50/60 modules and 1432/1845 active lessons have current independent editorial reviews.
 
 This report counts only active lesson IDs from module.json. Retired subjects (os, architecture, theory, languages; see `content/retired-subjects.json`) are excluded. Pending modules have not been certified by keyword scans or by renderer tests.
 
@@ -50,13 +50,13 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | [security / Applied Cryptography & PKI](../content/security/03-applied-crypto/verification.json) | Reviewed | 39 | 71 | 24 → 14 | 8 / 6 | 25 → 3 | 276 | 171 | 6 |
 | [security / Web Application Security](../content/security/04-web-security/verification.json) | Reviewed | 14 | 33 | 4 → 1 | 0 / 1 | 3 → 0 | 219 | 132 | 6 |
 | [security / Systems Security](../content/security/05-systems-security/verification.json) | Reviewed | 15 | 23 | 13 → 4 | 2 / 2 | 8 → 0 | 218 | 71 | 4 |
-| security / Security Engineering in Practice | Pending review | 23 | — | — | — | — | — | — | — |
+| [security / Security Engineering in Practice](../content/security/06-security-practice/verification.json) | Reviewed | 23 | 45 | 7 → 2 | 0 / 2 | 6 → 0 | 269 | 162 | 8 |
 | [software-engineering / Design Principles & Clean Code](../content/software-engineering/01-principles/verification.json) | Reviewed | 26 | 69 | 4 → 1 | 1 / 0 | 4 → 0 | 294 | 98 | 5 |
 | [software-engineering / Design Patterns](../content/software-engineering/02-design-patterns/verification.json) | Reviewed | 28 | 66 | 4 → 0 | 0 / 0 | 9 → 0 | 284 | 116 | 9 |
 | [software-engineering / Testing](../content/software-engineering/03-testing/verification.json) | Reviewed | 22 | 68 | 10 → 1 | 0 / 1 | 5 → 0 | 197 | 120 | 8 |
 | [software-engineering / Version Control & CI/CD](../content/software-engineering/04-git-cicd/verification.json) | Reviewed | 26 | 69 | 8 → 5 | 1 / 4 | 7 → 0 | 279 | 155 | 7 |
 | [software-engineering / Software Architecture at the Code Level](../content/software-engineering/05-code-architecture/verification.json) | Reviewed | 25 | 67 | 7 → 4 | 0 / 4 | 3 → 0 | 171 | 178 | 12 |
-| software-engineering / Engineering Practices | Pending review | 24 | — | — | — | — | — | — | — |
+| [software-engineering / Engineering Practices](../content/software-engineering/06-practices/verification.json) | Reviewed | 24 | 66 | 14 → 6 | 2 / 4 | 12 → 0 | 242 | 196 | 9 |
 | [synth / Sound & Digital Audio](../content/synth/01-sound-sampling/verification.json) | Reviewed | 32 | 69 | 52 → 23 | 1 / 22 | 60 → 0 | 297 | 128 | 24 |
 | [synth / Synthesis & DSP](../content/synth/02-synthesis-dsp/verification.json) | Reviewed | 44 | 82 | 56 → 18 | 4 / 14 | 60 → 0 | 112 | 234 | 18 |
 | [synth / Electronics for Synth Builders](../content/synth/03-electronics/verification.json) | Reviewed | 39 | 80 | 38 → 12 | 2 / 10 | 33 → 0 | 194 | 103 | 4 |
@@ -1692,6 +1692,62 @@ None recorded in this editorial review.
 - medium confidence, sys-finding-memory-bugs: ASan ~2x, MSan ~3x, Memcheck 20-30x Quoted from each tool's own documentation as typical figures; not measured here; the lesson states they are not guarantees.
 
 
+## security / Security Engineering in Practice
+
+9 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- secp-log-integrity-and-retention: 'An intruder may delete logs ... (T1070, Indicator Removal, listed under the Stealth tactic in ATT&CK v20)' -> ATT&CK v20 files selective removal/editing of entries under T1070 (Stealth) and clearing whole logs or disabling logging under T1685 Disable or Modify Tools (Defense Impairment, TA0112); T1070.001 Clear Windows Event Logs now redirects to T1685.005.
+- Glossary t1070: 'deleting or altering evidence, such as clearing logs' -> selective deletion/alteration of artefacts so activity blends in; wholesale log clearing filed under T1685 in ATT&CK v20.
+- Glossary secp-stealth-tactic: 'T1070 Indicator Removal, which deletes logs' -> 'which selectively deletes or edits log entries and other artefacts'; added 'while leaving security tools intact' from the TA0005 description.
+- secp-secret-scanning-entropy: detect-secrets flags strings 'scoring at least 4.5 / at least 3.0' -> 'above 4.5 / above 3.0' (source filter is entropy > limit) and 'quoted hex strings'.
+- Glossary ico: still described the Information Commissioner's Office; since 30 September 2026 the regulator is the Information Commission (UK GDPR Art. 33 now says 'the Commission'), which continues to be known as the ICO. Definition updated, aliases 'Information Commission' and 'Information Commission's Office' added, source set to the ICO announcement.
+- Glossary secp-nvd: 'enriches CVE records with ... CVSS Base scores' -> notes NIST's April 2026 change (prompt enrichment only for prioritised CVEs such as KEV entries; no routine separate NIST severity score when the CNA supplied one); source https://www.nist.gov/itl/nvd.
+- Glossary secp-exploited-in-the-wild: 'reliable evidence of malicious code run without the owner's permission' contradicted CISA's inclusion of attempted exploitation (code that did not execute, honeypots) -> 'tried to run' with attempted and successful exploitation both counted.
+- secp-detection-response-q8: distractor 0 'The new device *is* the attacker's MFA' -> 'probably the attacker's own second factor'; correct-option explanation 'an alert like this helped start FireEye's investigation' and workedExample 'Mandia testified that' -> tip-off wording matching the Senate transcript (Senator Blunt's statement, Mandia: 'Right').
+- Glossary secp-binding-operational-directive: unsupported 'often borrow its priorities' -> 'CISA encourages them to prioritise KEV entries too'; 'compulsory instruction' aligned to the directive's own 'compulsory direction to federal ... agencies' (FCEB scope).
+- Glossary secp-proof-of-concept-exploit: 'usually raises exploitation likelihood' -> 'can raise' (CISA: public PoC can increase likelihood but does not automatically indicate exploitation).
+- Glossary secp-password-spraying: 'often from many IP addresses and slowly' -> lockout avoidance as the defining feature (ATT&CK T1110.003), with spreading across addresses/slowing down as an option.
+- secp-postmortems-and-notification: 'a gap noticed during containment can be recorded and fixed straight away' -> 'recorded and acted on without waiting for the final review'.
+- Glossary secp-csf-improvement: definition aligned with CSF 2.0 ID.IM category text (improvements identified across all Functions from evaluations, tests/exercises and operational processes).
+- secp-dependency-selection-attacks analogy: 'a source package can run build code as soon as it is installed' -> 'during installation'.
+- Added glossary entries secp-defense-impairment-tactic (TA0112) and secp-t1685 (Disable or Modify Tools) for the corrected log-tampering sentence.
+
+**Scope gaps and exclusions:**
+
+- No live AWS, Vault database revocation, Kubernetes, CI/OIDC, Sigstore or deployment environment was modified. AWS client retrieval used botocore Stubber, and local pattern checks do not validate actual IAM authorisation.
+- The Sigma fragment is illustrative YAML, parsed and contrasted with obfuscated input; no production SIEM backend mapping or detection performance was measured.
+- No Log4Shell exploitation, xz/SolarWinds malware execution or offensive network activity was performed. Historical payload examples are text only. All SQL tests use an isolated local fixture.
+- Preserved earlier explicit omissions: universal credential-abuse times, bug-fix-cost multipliers, inventory-response speed comparisons, Target alert chronology and precise employee-phone-call narrative lack sufficient supporting evidence.
+- Phone checks at author stage use the genuine compiler diagnostic dictionary, renderer and real CSS. They are labelled diagnostic only; a stamped full build, actual lesson/quiz routes, progress migrations, offline/PWA checks and release remain the independent verifier/coordinator responsibilities.
+- All 23 active bodies, 45 complete question records and 252 glossary definitions/aliases were independently read. Primary/documentation checks do not constitute a production security audit or exhaustive historical proof.
+- Fedora Rawhide documentation returned a bot-challenge page despite HTTP 200; its ancillary definition remains medium confidence. Two broad-regex URLs are illustrative/non-links, and two guessed unused supplementary URLs returned 404. The active link checker separately checks actual course links.
+- Actual native engines were rerun with explicit local fixtures; an additional 31,753 independent assertions cover entropy, exact login-window boundaries and genuine offline two-index pip resolution. No production detector performance or SIEM backend was measured.
+- Author gap confirmed: the module's scope is SDLC, supply chain, secrets and detection/response; threat modelling lives in security/01 and compliance is covered only through UK GDPR/EU GDPR breach notification. No lessons added (ids fixed).
+- Vulnerability prioritisation is taught inside secp-release-component-inventory rather than its own lesson; SSVC is not taught by name (CISA's KEV page cites it as a framework that consumes KEV status). No question exercises CSF 2.0 / SP 800-61r3 structure directly.
+- https://www.rfc-editor.org/rfc/rfc3227 timed out in check-links (it 301-redirects to /info/rfc3227/, which returned 200 after about 39 s on manual retry); link left unchanged. The .txt copy was fetched and checked.
+- Render check used the app's markdown.js renderer in Node (no errors, analogies render as single <details>, no literal [!analogy] text); a 390 px browser render and offline check were not run in this module pass.
+- No live AWS, Vault, GitHub OIDC, Sigstore, SIEM or detect-secrets pre-commit deployment was exercised; AWS calls used botocore Stubber/placeholder construction only. No offensive or exploit code was run; SQL tests used a local sqlite fixture.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, secp-xz-release-trust: Social-engineering account coordination and affected-system scope Primary disclosure/project facts checked. Chronology reconstruction does not prove real identities or coordination of accounts; exploitability depends on specific build/link conditions.
+- medium confidence, secp-incident-detection-case-studies: Authentication-verifier clue in SolarWinds The primary Senate exchange confirms a tip-off, not the detailed employee-phone-call narrative or the only discovery cause.
+- medium confidence, secp-audit-events-and-dwell: M-Trends 2026 global median of 14 days Fresh primary report describes 2025 investigations in its dataset, not every intrusion. Current sample statistics remain time-sensitive.
+- medium confidence, secp-ci-oidc-trust: Immutable GitHub subjects and cloud trust-policy authorisation Primary current docs and June-updated changelog confirm July 2026 rollout and @ delimiter. Local pattern parsing does not validate a live AWS policy.
+- medium confidence, secp-leased-database-credentials: Target-enforced expiry and revocation Vault and AWS API semantics fetched; live permissions/connectivity/existing sessions and database revocation were not tested.
+- medium confidence, secp-workload-secret-stores: SDK role selection and secret auditing Fresh Boto3/CloudTrail/Kubernetes docs plus stubbed retrieval validate the scoped example, not live IAM or production log completeness.
+- medium confidence, secp-dependency-selection-attacks: Ancillary sources and historical reconstruction Two encyclopaedic sources remain; chronology is a reconstruction; Fedora docs returned a bot challenge. These entries are not upgraded to high.
+- medium confidence, secp-release-component-inventory: Illustrative three-step priority order (known-exploited on reachable systems first; then high EPSS or exploit code with high severity on exposed systems; then the rest) and the q2 key B, C, A. A synthesis consistent with FIRST 'Using EPSS' (KEV regardless of EPSS; recent KEV additions are strong evidence) and CISA KEV/BOD 26-04 variables, not a published standard; labelled illustrative in the lesson and 'hypothetical' in q2.
+- medium confidence, secp-release-component-inventory: BOD 26-04 (10 June 2026) revoked and superseded BOD 22-01 and sets deadlines from asset exposure, KEV status, exploit automation and technical impact. Confirmed verbatim on cisa.gov on 2026-11-01, but recent and time-sensitive; Table 1 deadlines deliberately not stated.
+- medium confidence, secp-secret-scanning-entropy: detect-secrets defaults: quoted base64 strings above 4.5, quoted hex above 3.0, separate keyword detector. Read from master-branch source and confirmed with detect-secrets 1.5.0 on 2026-11-01; version-specific and configurable.
+- medium confidence, secp-log-integrity-and-retention: ATT&CK v20 places T1070 under Stealth (TA0005) and log clearing/disabling under T1685 Defense Impairment (TA0112). Confirmed on attack.mitre.org (v20 live) on 2026-11-01; tactic structure changed recently and may change again between versions.
+- medium confidence, secp-development-lifecycle: SSDF 1.1 is final and 1.2 (SP 800-218 Rev. 1) is still an initial public draft; ASVS 5.0 is current. Checked on CSRC (r1 final URL 404) and OWASP on 2026-11-01; a final SSDF 1.2 could appear at any time.
+- medium confidence, secp-xz-release-trust: q6 generalises Freund's investigation as 'trace where the time goes and compare the new release with the previous one'. Freund's post documents odd sshd CPU, Valgrind errors, perf analysis into liblzma and tarball-vs-git differences; the question's best-practice framing is a reasonable generalisation, not a step-by-step reconstruction.
+- medium confidence, secp-incident-detection-case-studies: q8 first response to an owner-denied MFA enrolment (remove device, end sessions, reset credentials, review logs, open incident). Standard account-compromise containment consistent with SP 800-61r3/CSF RS.MI and RS.AN; no single primary source prescribes this exact sequence. The FireEye link rests on a senator's statement that Mandia affirmed.
+
+
 ## software-engineering / Design Principles & Clean Code
 
 9 question objects changed. Every changed question has a specific independent-review reason in the linked record.
@@ -1888,6 +1944,43 @@ None recorded in this editorial review.
 - medium confidence, sea-module-abstractness-metrics: Martin's original distance divides by the square root of 2 (maximum about 0.707). The fetched 1994 PDF's extracted text reads '|(A+I-1)÷ 2|' with an apparently lost glyph, while stating the range [0, ~0.707], which only the square-root form gives.
 - medium confidence, sea-hexagonal-composition-clean: How much Clean Architecture structure to adopt is debated among practitioners. A characterisation of practitioner opinion; no single primary source beyond Martin's 'circles are schematic'.
 - medium confidence, sea-hexagonal-costs-pitfalls: Netflix post details (2 hours, one-line change). netflixtechblog.com returns 403 to scripted requests; verified via an Internet Archive capture dated 2025-01-05, not the live page.
+
+
+## software-engineering / Engineering Practices
+
+17 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- {"lesson":"sepr-debt-origins","before":"Robert C. Martin argued that 'a mess made through ignorance is not debt at all'; Fowler's reply that 'the quadrant keeps the useful question ... while still marking reckless debt'","after":"In a 2009 post Martin argued 'a mess is not a technical debt': debt means reasoned trade-offs under real constraints and code must still be kept clean; Fowler replied that whether a flaw 'is' debt is the wrong question and a mess is reckless debt","reason":"'Through ignorance' is Fowler's paraphrase; Martin's own post calls a mess 'never rational' and 'based on laziness and unprofessionalism'. Fowler's reply restated from his quadrant page."}
+- {"lesson":"sepr-debt-origins","before":"'In a later video'","after":"'In a 2009 video'","reason":"YouTube metadata for pqeJFYwnkjE (Ward Cunningham, 'Debt Metaphor'): published 2009-02-14; the C2 transcript page carries Ward's CC-BY licence note."}
+- {"lesson":"sepr-debt-origins","item":"sepr-technical-debt-q2","before":"workedExample: 'Prudent-inadvertent is Cunningham's original sense of the metaphor'","after":"'Fowler identifies prudent-inadvertent debt as the kind Cunningham described'","reason":"Inconsistent with the corrected lesson and with Fowler's quadrant ('the kind of debt that Ward talked about in his video')."}
+- {"lesson":"sepr-debugging-reproduction","before":"'a real traceback ... with the outermost <module> frame trimmed'","after":"'... trimmed and the file paths shortened'","reason":"Executed: Python 3.9+ prints absolute script paths; the lesson shows bare file names."}
+- {"lesson":"sepr-performance-profilers","before":"'cProfile ... measures elapsed time rather than CPU time'","after":"'by default it measures elapsed time'","reason":"_lsprof.c uses a perf-counter timer unless a custom timer is passed; the pure-Python profile module defaults to process_time."}
+- {"lesson":"sepr-team-on-call","item":"sepr-teams-q4","before":"'Google expects the typical shift to have none' / 'with a typical shift having none'","after":"median of zero incidents a day","reason":"SRE book: paging should be very flat 'with a likely median value of 0' incidents per day."}
+- {"lesson":"sepr-refactoring-safety","before":"'Choose inputs ... including ... the 500-unit threshold above' (the example tests use 0, 3 and 600)","after":"States that the example never tries exactly 500, so >= -> > would pass, and adds qty=500 and 499","reason":"Executed: price(500,10) = 4900 with >= and 5000 with >; the sentence implied the example already covered the threshold."}
+- {"glossary":"sepr-robert-c-martin","before":"'argued that a mess made through ignorance should not be called technical debt' (source: Fowler)","after":"Martin's own 2009 wording; source his post","reason":"Primary source fetched."}
+- {"glossary":"sepr-aaib","before":"'which is the model blameless postmortems borrow from'","after":"'the kind of no-blame safety investigation that blameless postmortem culture draws on'","reason":"The SRE book credits healthcare and avionics generally, not the AAIB specifically."}
+
+**Scope gaps and exclusions:**
+
+- Production py-spy/perf attachment and supported sanitizer target/toolchain behaviour were checked in primary documentation, not against a live service. Actual app.py/business Git v2.3.0 commands remain expressly labelled templates.
+- PERT distribution calibration, full queueing proofs and specialised memory tooling are outside inherited module scope; all existing substantive examples and caveats retained.
+- Exact original Hofstadter book wording remains a disclosed medium-confidence historical provenance gap; active wording is hedged.
+- Observability for developers is covered only inside debugging-hard-cases and the profilers lesson; no dedicated lesson (question ids fixed).
+- DORA metrics live in software-engineering/04-git-cicd; this module keeps only the lead-time glossary entry.
+- sepr-three-point-estimates, sepr-throughput-forecasts and sepr-performance-memory still have one question each; adding ids is not allowed.
+- Browser rendering at 390 px was not performed; markdown.js render check only (24 lessons, 8 closed analogy disclosures, no literal callout tags).
+- Refactoring (Fowler, 2nd ed.), The Mythical Man-Month (1995) and Knuth's 1974 paper were not read in full; claims rest on the authors' own web pages, McConnell's essay, and a cited quotation (ACM DL returned 403 to scripted fetches).
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, sepr-relative-estimates: Exact original wording/provenance of the Hofstadter book quotation The original1979 book passage was not authenticated. A fetched author-associated Visible Language journal biography quotes a variant. Active prose and glossary expressly label the familiar text as commonly quoted and tongue-in-cheek; no quantitative prediction relies on it.
+- medium confidence, sepr-relative-estimates: Brooks called his law 'the best zeroth order approximation to the truth' in the 1995 anniversary edition Quoted via McConnell (1999), now attributed to him in the text; the book itself was not legitimately available.
+- medium confidence, sepr-three-point-estimates: ~33% / ~55% / ~7 days at 85% (2-4-12) and ~8 days at 85% (3-5-13, q6) Recomputed independently and correct for the common PERT-beta parameterisation (alpha = 1 + 4(M - O)/(P - O)); other historical PERT variance assumptions would give different percentages. The text labels them model results.
+- medium confidence, sepr-performance-algorithms: list ~0.4 s vs set ~0.3 ms; benchmarks: timeit about half a millisecond Single-machine, version-dependent timings; both are labelled as one laptop's results. Verifier measured 0.41-0.48 s, 0.23 ms and 0.54 ms on CPython 3.14.4.
+- medium confidence, sepr-throughput-forecasts: Weather-forecast analogy: '70% chance of rain because rain fell in about 70% of [simulated runs]' Ensemble forecasting confirmed (Met Office), but public precipitation probabilities are post-processed rather than a raw member count; used only inside an optional analogy.
+- medium confidence, sepr-kanban-flow: Descriptions of the two Kanban definitions Verified on both current guides (Kanban Guide 2025.5; Kanban University guide), but both are revised periodically.
 
 
 ## synth / Sound & Digital Audio

@@ -41,11 +41,18 @@ Here “auth” means authorization: checking whether the caller may perform the
 | Domain | What are the rules? | HTTP, storage |
 | Data | Where is it stored? | Who called |
 
-The point of the split is that each layer changes for a different reason. A redesign of the JSON format touches presentation. A new VAT rule touches the domain. Moving from MySQL to Postgres touches data. Separating those concerns can reduce the scope of changes; new requirements or storage semantics can still cross boundaries.
+The point of the split is that each layer changes for a different reason. A redesign of the JSON format touches presentation. A new VAT rule touches the domain. Moving from MySQL to Postgres touches data. Separating those concerns usually keeps such changes smaller, though not always: a new feature, or a database that behaves differently, can still reach across several layers.
+
+> [!analogy] Real-world analogy: a newspaper's departments
+> A newspaper has a layout desk that decides how pages look, editors who decide which stories run today, reporters' facts and the paper's style rules, and a printing plant. A front-page redesign doesn't change the facts, and switching to a new printer doesn't change editorial policy.
+>
+> **How it maps:** Layout is presentation, the editors' daily choices are the application layer, facts and house rules are the domain, and the printing plant is the data layer. The plant prints what it's given and never decides what goes on the front page, just as the data layer never decides how a discount works.
+>
+> **Where it stops:** People in a newsroom talk freely in every direction and adapt as they go. In code, layering is a rule about which module may import which, and it only holds if a check enforces it. Some changes, like a new section of the paper, still involve every department.
 
 ## The one rule: dependencies point down
 
-Here the rule permits downward skips: a layer may depend on any layer below it, never above. This is relaxed layering; a later unit compares it with the strict, adjacent-layer variant. The domain never imports a Flask request; the data layer never decides how a discount works.
+A layer may depend on layers below it, never on one above. The version used here lets a layer skip downwards past its neighbour, which is called relaxed layering; a later unit compares it with strict layering, where each layer may use only the one directly below. Either way, the domain never imports a Flask request, and the data layer never decides how a discount works.
 
 This intentionally broken Flask fragment assumes an existing app, request and database connection. It shows the problem before separating responsibilities:
 
@@ -69,7 +76,7 @@ def apply_discount(oid):
     return {"total": new}
 ```
 
-There are several problems here. The discount rule lives in a view, so the batch job can't reuse it. Testing it needs a web client and a database. An unknown code even crashes with `UnboundLocalError`, because `new` is never assigned. And money is stored as a float.
+There are several problems here. The discount rule lives in a view, so the batch job can't reuse it. Testing it needs a web client and a database. An unknown code even crashes with `UnboundLocalError`, because `new` is never assigned, and Flask turns that into a 500 error. And with a numeric total, `* 0.9` produces a float, an inexact type for money, which is then written back to the table.
 
 ## Key takeaways
 - Layers group code by kind of concern so changes can stay local.

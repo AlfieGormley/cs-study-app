@@ -35,6 +35,13 @@ def fact(n):
 
 Then the stack unwinds: `fact(1)` returns 1, `fact(2)` computes 2 × 1 = 2, `fact(3)` computes 3 × 2 = 6.
 
+> [!analogy] Real-world analogy: a pile of paused tasks
+> You are filling in a form when a question sends you to look something up in a second document, which in turn refers you to a third. Each time, you leave a sticky note on the page you were working on saying what you still have to do there. When the third lookup is finished you return to the most recent note first, then the one below it.
+>
+> **How it maps:** each sticky note is a stack frame: it records where to resume and what is still pending, such as "multiply by 3". The pile is the call stack; the newest note is always dealt with first, which is why work after a recursive call runs on the way back up.
+>
+> **Where it stops:** a desk can hold as many notes as you like. A real call stack has a fixed allowance (CPython's recursion limit) and each frame costs memory, so a very deep pile fails rather than just getting taller.
+
 Two consequences follow:
 
 - **Space is proportional to depth.** With constant-sized frame state, a recursion that is d calls deep at its deepest point costs O(d) control-stack space: d frames, each of fixed size. Retained lists, arbitrary-size integers and other objects must be counted separately. A recursive function over a linked list of length n uses O(n) space; over a balanced tree of n nodes, O(log n).

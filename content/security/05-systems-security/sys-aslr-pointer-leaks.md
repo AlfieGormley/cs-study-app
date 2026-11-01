@@ -9,34 +9,44 @@ summary: Subtract a known pointer offset to recover the base of that known libra
 
 ASLR can make a useful address hard to predict while an information leak makes it calculable. The important question is which build and which mapping the disclosed pointer identifies.
 
-Two caveats make ASLR weaker than the numbers suggest:
+Two caveats make ASLR weaker than its entropy suggests.
 
-1. **Leaks can weaken ASLR.** A pointer into a known library build at a known offset reveals that mapping base. It does not automatically reveal unrelated mappings or unknown builds.
+## Leaks turn guessing into arithmetic
 
-For the ordinary fixed-layout library mapping in this example, the relevant symbols have known offsets from the mapping base. A leak that identifies that build and target can therefore reveal the base. Some objects are allocated separately or functions are resolved dynamically, so a symbol name alone does not prove that its actual run-time address has that simple relationship. With illustrative hexadecimal numbers:
+ASLR moves a library's whole mapping as one block. Inside it, every function and variable stays at the same **offset** from the start, because the offsets are fixed when that build of the library is linked. So a single leaked pointer at a known offset in a known build reveals where the whole mapping starts, and from there, where everything else in it is:
 
-```formula
+```formula essential
 A_base = P − o_P
-A_base = 0x7f12345a1b20 − 0x2db20
-A_base = 0x7f1234574000
 A_T = A_base + o_T
-A_T = 0x7f1234574000 + 0x50d70
-A_T = 0x7f12345c4d70
 where
 A_base: the base address, where the library's mapping starts in this process
 P: the leaked pointer value, an address inside that library
 o_P: the known offset of the leaked pointer's target from the library start, read from the same build
 A_T: the address of another target the attacker wants, such as a useful function
 o_T: that target's known offset from the library start
-0x7f12345a1b20: a hexadecimal (base-16) number, marked by the 0x prefix; the values here are made up for illustration
 In words: subtract the leaked item's known offset to find where the library starts, then add another known offset to locate that target in the same mapping.
 ```
 
-In this fixed-layout model, ASLR moves the base rather than the relative offsets, which is why that particular leak identifies the mapping. The illustrative base ends in three hexadecimal zeros, consistent with a 4 KiB page boundary: 4,096 bytes. Actual page sizes and mapping alignments depend on the platform.
+With illustrative numbers: a leaked pointer `0x7f12345a1b20` whose target is known to sit at offset `0x2db20` gives the base `0x7f1234574000`, and a target at offset `0x50d70` is then at `0x7f12345c4d70`. The base ends in three hexadecimal zeros, consistent with a 4 KiB (4,096-byte) page boundary; the sizes of memory pages and mapping alignments depend on the platform.
 
-2. **Not every mapping is randomised.** Conventional non-PIE ELF executables have fixed main-code addresses. PIE permits random placement when the loader and OS enable it; compiler flags alone are not proof of effective randomisation.
+> [!analogy] Real-world analogy: a terrace of houses moved as one block
+> Imagine a builder who places an identical terrace of houses somewhere different on every new estate, but always in the same order with the same spacing. Learn the address of one house whose position in the terrace you know, and you can work out every other house in that terrace.
+>
+> **How it maps:** The terrace is a library mapping, its random position is the ASLR base, and the fixed order and spacing are the offsets from that build. The one known house is the leaked pointer.
+>
+> **Where it stops:** Knowing one terrace says nothing about a separate terrace elsewhere on the estate (another mapping, such as the stack or heap, with its own random base), or about a terrace built to a different plan (an unknown library build).
 
-Linux can randomise its kernel base when **KASLR** is supported and enabled. A known-offset kernel pointer leak can weaken that protection.
+Limits of what a leak gives:
+
+- It reveals one mapping. Unrelated mappings and unknown builds stay hidden.
+- Some objects are allocated separately or functions are resolved dynamically, so a symbol name alone does not prove that its run-time address has this simple relationship.
+- A leak is information, not control. It does not disable NX or canaries, and the attacker still needs a separate bug that corrupts memory.
+
+## Not every mapping is randomised
+
+Conventional non-PIE ELF executables have fixed main-code addresses, so their code is a known target even with ASLR on. PIE permits random placement when the loader and OS enable it; compiler flags alone are not proof of effective randomisation. On Linux, `readelf -h` reports a PIE binary's type as `DYN` and a non-PIE executable's as `EXEC`.
+
+Linux can randomise its kernel base when **KASLR** is supported and enabled. A known-offset kernel pointer leak can weaken that protection in the same way.
 
 ## Key takeaways
 - Subtract a known pointer offset to recover the base of that known library mapping.

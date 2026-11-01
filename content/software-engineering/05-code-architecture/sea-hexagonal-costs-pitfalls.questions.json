@@ -112,15 +112,15 @@
         "explanation": "Not a leak. Validating the *shape* of input is the adapter's job; the core should receive well-formed values. Whether quantity 0 is allowed would be policy."
       },
       {
-        "text": "`StripeAdapter` retries an uncertain charge only within the core’s retry policy, preserving the provider’s idempotency contract",
-        "explanation": "Transport retry mechanics can belong in an adapter, but charging retries must preserve the payment provider's idempotency contract and overall budget. Retrying a timeout blindly can duplicate effects."
+        "text": "`StripeAdapter` retries a timed-out network call with backoff, reusing the same idempotency key, up to the attempt limit the core passes in",
+        "explanation": "Not a leak. Retry mechanics such as backoff are transport detail and belong in the adapter. The business decision (how many attempts, by when) stays with the core, and reusing Stripe's idempotency key stops a retried request from charging the card twice."
       }
     ],
     "answer": [
       0,
       1
     ],
-    "workedExample": "A useful test: *would a business person have an opinion on this?*\n\n| Finding | Business opinion? | Where |\n|---|---|---|\n| Exclude cancelled | Yes | Core |\n| Max order size | Yes | Core |\n| JSON field present | No | Adapter |\n| Safe retry mechanics | Budget agreed | Adapter |\n\nThe danger with leaked policy is that each adapter grows its own version. The fake repository doesn't filter cancelled orders, so tests pass while production behaves differently.\n\nThe core owns the business retry policy; the adapter may implement backoff and transport mechanics while honoring its permitted attempts and deadlines and the provider’s idempotency rules.",
+    "workedExample": "A useful test: *would a business person have an opinion on this?*\n\n| Finding | Business opinion? | Where |\n|---|---|---|\n| Exclude cancelled | Yes | Core |\n| Max order size | Yes | Core |\n| JSON field present | No | Adapter |\n| Retry with backoff | Limit: yes; mechanics: no | Limit in core, mechanics in adapter |\n\nThe danger with leaked policy is that each adapter grows its own version. The fake repository doesn't filter cancelled orders, so tests pass while production behaves differently.\n\nFor the retry, the core owns the policy (attempts and deadline), and the adapter implements the mechanics in a way that is safe for the provider: here, by reusing the idempotency key so a retry can't duplicate the charge.",
     "link": {
       "title": "Hexagonal Architecture — Alistair Cockburn",
       "url": "https://alistair.cockburn.us/hexagonal-architecture/"
@@ -138,7 +138,7 @@
       },
       {
         "text": "Use Django's defaults (models, forms, admin) and extract a framework-free core later if real business rules emerge",
-        "explanation": "Given these requirements, framework defaults may be proportionate. Separate domain classes add work but do not inherently prohibit using Django admin or model forms on ORM models."
+        "explanation": "Correct. With almost no rules to protect, the ports, mappers and presenters would be cost with little benefit. Django's models, forms and admin fit simple CRUD well, and plain modules can be extracted later if real rules appear."
       },
       {
         "text": "Use clean architecture but skip tests, to save the time the extra layers cost",

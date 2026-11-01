@@ -11,9 +11,16 @@ Module boundaries need not imply separate services. This unit applies public int
 
 ## Modular monoliths
 
-A **modular monolith** is one deployable application split into modules with enforced boundaries, each with a public API and private internals. It gets most of the code-level benefits people want from microservices (ownership, independent reasoning, smaller blast radius for changes) without network calls, distributed transactions or separate deploys.
+A **modular monolith** is one deployable application split into modules with enforced boundaries, each with a public API and private internals. It aims for many of the code-level benefits people want from microservices (clear ownership, independent reasoning, a smaller blast radius for changes) without network calls, distributed transactions or separate deploys.
 
-Shopify is one published example. Its core Rails monolith (over 2.8 million lines of Ruby by 2020) was reorganised into components, and the company built **Packwerk**, a static analysis tool that checks references between packages against each package's declared dependencies, fast enough to run on every pull request. Existing violations are recorded in a to-do file per package, so only *new* ones fail the build. Shopify has also written candidly that the work was gradual, and that rules pushed without explaining the reasons mostly added friction.
+> [!analogy] Real-world analogy: a block of flats
+> A block of flats is one building with one roof, one set of foundations and shared plumbing. Each flat has its own front door, and neighbours don't wander into each other's kitchens; they knock, or leave a note.
+>
+> **How it maps:** The building is the single deployable application, sharing one process and one database server. Each flat is a module, the front door is its public API, and the kitchen is its private internals. Moving a household to its own house later (extracting a service) is easier when it never relied on next door's kitchen.
+>
+> **Where it stops:** Walls physically stop you walking through. In code, nothing stops one module importing another's internals except a check run in CI, which is why the tooling below matters. And flats in a block can still share hidden things, like one database schema, that make moving out harder than it looks.
+
+Shopify is one published example. Its core Rails monolith (over 2.8 million lines of Ruby by 2020) was reorganised into components, and the company built **Packwerk**, a static analysis tool that checks references between packages against each package's declared dependencies, fast enough to run on every pull request. Existing violations are recorded in a to-do file per package, so only *new* ones fail the build. Shopify has also written candidly that the work was gradual, and that an early push for consistent patterns, made without explaining the reasons well enough, added rules and friction without making the hard problems easier.
 
 The usual path is:
 

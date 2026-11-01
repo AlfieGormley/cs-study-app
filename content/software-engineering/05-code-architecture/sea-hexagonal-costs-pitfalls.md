@@ -12,7 +12,7 @@ With ports, adapters and wiring in place, the remaining question is whether the 
 ## Real-world use
 
 - *Architecture Patterns with Python* (Percival and Gregory, also free online as "Cosmic Python") builds a Flask and SQLAlchemy app this way, with repositories, a unit of work, a service layer and a message bus.
-- In its [2020 studio case study](https://netflixtechblog.com/ready-for-changes-with-hexagonal-architecture-b315ec967749), Netflix described moving a read from a JSON service to a GraphQL source through a new adapter. The sources held equivalent synchronized data; this case does not prove arbitrary providers are interchangeable.
+- In a [2020 post](https://netflixtechblog.com/ready-for-changes-with-hexagonal-architecture-b315ec967749), a Netflix studio engineering team described moving one read from a JSON API to a GraphQL service in about two hours: they wrote a new adapter for the existing repository interface and changed one line of wiring. It was easy partly because both sources held the same, synchronised data; a provider with different data or behaviour would need more than a new adapter.
 - Many Java teams use Spring with a hexagonal package layout, sometimes enforced with ArchUnit; Python teams use `import-linter`.
 
 ## Trade-offs
@@ -20,7 +20,7 @@ With ports, adapters and wiring in place, the remaining question is whether the 
 What you gain:
 
 - **Testability**: fast tests of business rules with in-memory fakes.
-- **Replaceability**: an adapter can isolate a provider change when its semantics satisfy the existing port; transactions, consistency and capabilities may still require design changes.
+- **Replaceability**: an adapter can contain a provider change, as long as the new provider can honour the same port. Differences in transactions, consistency or features may still force the port and the core to change.
 - **Deferrable decisions**: you can build and test the core before choosing the database.
 - **Clarity**: the core reads as a description of the business, not of the framework.
 

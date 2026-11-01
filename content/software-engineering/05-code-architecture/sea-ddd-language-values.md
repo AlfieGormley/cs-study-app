@@ -14,7 +14,7 @@ DDD has two halves:
 - **Strategic design**: how to carve a large domain into parts (bounded contexts) and how those parts relate.
 - **Tactical design**: building blocks for the model inside one part: entities, value objects, aggregates, domain events, repositories.
 
-Teams often adopt the tactical patterns and skip the strategic ones. Strategic boundaries deserve explicit attention; using entity and repository classes alone does not establish a useful domain model.
+Teams often adopt the tactical patterns and skip the strategic ones. Classes named `Entity` and `Repository` don't make a useful domain model on their own; the insight comes from the boundaries and the language.
 
 ## Ubiquitous language
 
@@ -42,11 +42,20 @@ class Customer:
     __hash__ = None
 ```
 
-Keep the identifier of an entity stable throughout their lifecycle. The example leaves entities unhashable so mutable attributes cannot corrupt set/dict membership. Entities can have a lifecycle: created, changed, perhaps archived.
+An entity has a lifecycle (created, changed, perhaps archived), and its identifier must stay the same throughout. In Python, a class that defines `__eq__` without `__hash__` is already unhashable; the `__hash__ = None` line just says so openly. That's a cautious choice: these objects can't go in a set or be dict keys. A common alternative is to hash on the id alone, which is safe as long as the id never changes.
 
 ## Value objects: defined by their values
 
-A **value object** has no identity. Two equal Money values represent the same amount and currency. Physical notes can have distinct serial-number identities in a different model. Value objects should be **immutable**: to "change" one you make a new one.
+A **value object** has no identity. Two equal Money values represent the same amount and currency, and either will do. Value objects should be **immutable**: to "change" one you make a new one.
+
+Whether something is an entity or a value depends on the model, not the thing. In a shop, any £10 is as good as another. A central bank that tracks individual banknotes by serial number would model each note as an entity.
+
+> [!analogy] Real-world analogy: a passport and a £10 note
+> If someone borrows £10 and pays you back with a different note, you don't mind. A passport office is different: it cares which person a passport belongs to, not what they currently look like. When you renew with a new photo, or after changing your name, its records still refer to the same person.
+>
+> **How it maps:** The £10 is a value object: equal amount means interchangeable. The person the passport office tracks is an entity, identified by something stable rather than by their current details; a new photo or name is an attribute change, not a new person.
+>
+> **Where it stops:** A real note has a serial number, so a different model could track it as an entity. And the passport office checks identity with documents and interviews; in code, identity is just an id field, so nothing stops two records being created for the same real person unless your system prevents it.
 
 ```python
 from dataclasses import dataclass
@@ -80,7 +89,9 @@ class Money:
         return Money(total, self.currency)
 ```
 
-With the default `eq=True`, dataclass generates field equality; combining it with `frozen=True` normally generates a hash. Frozen blocks ordinary attribute assignment but does not deeply freeze contained objects, and hashing requires hashable fields. This example deliberately supports only nonnegative GBP/USD amounts; other domains may need negative money values and different currency/rounding rules. So `Money(Decimal("5"), "GBP") == Money(Decimal("5"), "GBP")` is `True`.
+By default a dataclass compares objects field by field, so `Money(Decimal("5"), "GBP") == Money(Decimal("5"), "GBP")` is `True`. Adding `frozen=True` blocks ordinary attribute assignment and, together with that equality, makes the dataclass generate a hash, so values can go in sets and dict keys. Two limits: frozen is shallow (a list inside could still be changed), and hashing fails if any field is itself unhashable.
+
+This `Money` deliberately accepts only non-negative GBP or USD amounts. Other domains need negative amounts (refunds, balances) and their own currency and rounding rules.
 
 Why bother? Value objects:
 

@@ -3,27 +3,27 @@
     "id": "sys-mitigations-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "In the conventional protected stack-frame layout shown in the lesson, where is the canary and when is it checked?",
+    "prompt": "A Linux service built with `-fstack-protector-strong` and glibc dies, and its log ends with the line `*** stack smashing detected ***: terminated`. What does this tell you?",
     "options": [
       {
-        "text": "At the very bottom of the stack, checked when the program exits",
-        "explanation": "A per-process check at exit would be far too late: the hijacked return would already have happened."
+        "text": "A heap overflow corrupted allocator metadata, and `free` detected it",
+        "explanation": "Heap-allocator integrity checks print different messages. This message comes from `__stack_chk_fail`, which runs when a stack canary check fails."
       },
       {
-        "text": "Between the local buffers and the saved return address, checked just before the function returns",
-        "explanation": "Correct. A linear overflow from a buffer must cross the canary to reach the return address, and the epilogue verifies it before `ret`."
+        "text": "A protected function's canary changed before it returned, so the process aborted instead of using the return address; the overflow is still a bug to find and fix",
+        "explanation": "Correct. The epilogue compared the canary with the per-process guard, found a difference and aborted. That prevented use of a possibly corrupted return address, but the process still crashed and the faulty write remains."
       },
       {
-        "text": "Inside every heap allocation, checked on `free`",
-        "explanation": "That describes some heap hardening, not stack canaries. Canaries protect stack frames."
+        "text": "The CPU's shadow stack caught a mismatched return address",
+        "explanation": "A shadow-stack mismatch makes the CPU raise a control-protection fault, which is reported differently. Canaries are compiler-inserted checks in ordinary stack memory, and this message comes from glibc's `__stack_chk_fail`."
       },
       {
-        "text": "In the CPU's shadow stack, checked on every instruction",
-        "explanation": "Shadow stacks are a separate hardware mechanism and hold copies of return addresses, not canaries."
+        "text": "The attack succeeded and the message is only a warning",
+        "explanation": "`terminated` means the process was aborted before the protected function returned. The canary check worked as designed; whether anything was disclosed or changed before the check depends on what the function did first."
       }
     ],
     "answer": 1,
-    "workedExample": "Picture the frame from high to low addresses: return address, saved frame pointer, **canary**, buffers. An overflow writes upward from a buffer, so it hits the canary before it can reach the return address. The function's epilogue compares the canary with the per-process secret and calls `__stack_chk_fail` if they differ, so the corrupted return address is never used.",
+    "workedExample": "1. `-fstack-protector-strong` places a canary between protected stack buffers and the saved return address, and the function epilogue checks it before returning.\n2. The message `*** stack smashing detected ***: terminated` is printed by glibc's `__stack_chk_fail`, which the epilogue calls when the canary has changed. The process is then aborted with `SIGABRT`.\n3. So a write corrupted a protected stack frame, most likely a linear overflow of a local buffer, and the corrupted return address was never used.\n4. The abort is still a crash (an availability failure), and data changed or used *before* the check is not protected. Reproduce the input under AddressSanitizer to find the faulty write, then fix it.",
     "link": {
       "title": "Primary reference for this example",
       "url": "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"

@@ -4,71 +4,46 @@ sourceLesson: sea-modularity
 title: Abstractness and the main sequence
 level: advanced
 minutes: 5
-summary: Compare a package’s abstractness with instability and interpret the metric’s limits.
+summary: Read a package's position against Martin's main sequence and interpret what the metric can and can't tell you.
 ---
 
-The preceding unit defined instability from incoming and outgoing dependencies. Stable Abstractions adds another question: can a stable package be extended through abstract types rather than changed directly?
+The preceding unit measured stability from incoming and outgoing dependencies. The Stable Abstractions Principle adds another question: can a stable package be extended through abstract types rather than changed directly?
 
 ### Abstractness and the main sequence
 
-Martin also measures how abstract a package is, so the two principles can be checked together:
+Martin also measures how abstract a package is: the share of its classes that are abstract (interfaces, abstract base classes, and in Python, `Protocol` classes). A package of nothing but interfaces scores 1; a package of only concrete classes scores 0.
 
-```formula
+```formula reference
 A = Na / Nc
 where
 A: the abstractness of one package, from 0 (no abstract types) to 1 (only abstract types); a ratio of counts, so no unit
 Na: the number of abstract classes and interfaces in the package (in Python, abstract base classes and Protocols)
-Nc: the total number of classes in the package, abstract and concrete together
+Nc: the total number of classes in the package, abstract and concrete together; the ratio needs at least one class
 In words: abstractness is the fraction of a package's classes that are abstract.
 ```
 
-This ratio requires at least one class. With no classes, abstractness is undefined unless a tool supplies a convention. The normalized distance below also requires defined abstractness and instability, so an empty or completely isolated package needs explicit tool conventions.
+Martin's ideal is a balance between the two measures. A package that many others depend on (stable) should be mostly abstract, so it can be extended without being edited. A package that nothing depends on (unstable) can be concrete, because changing it hurts nobody. Plot every package on a square with abstractness up one side and instability along the other, and the good packages lie near the diagonal running from "stable and abstract" to "unstable and concrete". Martin calls that line the **main sequence**, and measures how far a package sits from it.
 
-Martin's ideal is that a package's abstractness and instability add up to 1: stable packages fully abstract, unstable packages fully concrete, or a balance in between. He calls the line where they add up to 1 the **main sequence**, and measures how far a package sits from it. (His original distance divided this by the square root of 2 to give the true perpendicular distance, at most about 0.707; the simpler form below, which he also gives, runs from 0 to 1.)
-
-```formula
+```formula reference
 D = |A + I − 1|
 where
-D: the distance from the main sequence, from 0 (on the ideal line) to 1 (as far from it as possible); no unit
-A: the package's abstractness, from 0 to 1, the number of abstract classes and interfaces divided by all classes in this package
-I: the package's instability, from 0 to 1, as defined in the preceding unit; outgoing dependencies divided by all incoming and outgoing dependencies
+D: the normalized distance from the main sequence, from 0 (on the ideal line) to 1 (as far from it as possible); no unit
+A: the package's abstractness, from 0 (all concrete) to 1 (all abstract)
+I: the package's instability, from 0 (maximally stable) to 1 (maximally unstable), as defined in the preceding unit
 | |: absolute value: drop any minus sign, so |−0.4| = 0.4
-In words: add abstractness and instability; the further the total is from 1, in either direction, the more the package breaks the stable-abstractions guideline.
+In words: the main sequence is where abstractness plus instability equals 1; the further a package's total is from 1, in either direction, the further it is from Martin's balance.
 ```
 
-First example: a `core.ports` package holds two Protocols and nothing else. The core and the adapters import it. Count only dependencies between these application packages; standard-library imports such as typing are excluded from this worked example.
+(Martin's 1994 paper gives this as a normalized form; his original distance divides by the square root of 2 to give the true perpendicular distance, at most about 0.707.)
 
-```formula
-A = Na / Nc = 2 / 2 = 1
-I = Ce / (Ca + Ce) = 0 / (2 + 0) = 0
-D = |A + I − 1| = |1 + 0 − 1| = 0
-where
-A: abstractness: both of its 2 classes are abstract
-Na: abstract classes and interfaces: 2
-Nc: all classes in the package: 2
-I: instability, from 0 to 1
-Ce: packages it imports: none, so 0
-Ca: packages importing it: the core and the adapters, counted here as 2
-D: distance from the main sequence, from 0 to 1
-| |: absolute value: drop any minus sign
-In words: the ports package is fully abstract and fully stable, so it sits exactly on the main sequence.
-```
+Two examples show the extremes:
 
-Second example: a concrete `pricing` package with no abstract types, which many packages import and which imports nothing.
+- A `core.ports` package holding only two Protocols, imported by the core and the adapters and importing nothing, is fully abstract and fully stable. It sits exactly on the main sequence: the textbook place for ports.
+- A concrete `pricing` package with no abstract types, which many packages import and which imports nothing, is fully stable *and* fully concrete. It is as far from the main sequence as a package can be.
 
-```formula
-A = 0
-I = 0
-D = |0 + 0 − 1| = 1
-where
-A: abstractness: no abstract types, so 0
-I: instability: nothing imported, so 0
-D: distance from the main sequence, from 0 to 1
-| |: absolute value: drop any minus sign
-In words: a stable but fully concrete package is as far from the main sequence as possible.
-```
+Martin's later writing, including his 2017 book *Clean Architecture*, calls that second corner the **zone of pain**: everything depends on the package, and it offers no abstraction to extend instead of editing it. Whether that actually hurts depends on how often the code needs to change. A mature, stable utility that almost never changes does little harm there; a pricing package whose rules change monthly does. The opposite corner, fully abstract with nothing depending on it, is the **zone of uselessness**: abstractions that nobody uses.
 
-Martin calls this corner the **zone of pain**: everything depends on the package, and it offers no abstraction to extend instead of edit. Stable concrete code that almost never needs to change, such as a standard string library, is harmless there. The opposite corner, fully abstract and fully unstable, is the **zone of uselessness**: abstract types with no incoming dependents; the metric alone does not establish whether implementations exist. These numbers are prompts for a conversation, not targets to optimise.
+These numbers are prompts for a conversation, not targets to optimise. A tool can report them for every package, but adding interfaces just to move a number is the wrong lesson; the useful question is whether the packages that everyone depends on are the ones that keep changing.
 
 ## Key takeaways
 - Abstractness is the share of classes that are abstract.

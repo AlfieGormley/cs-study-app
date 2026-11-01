@@ -48,25 +48,16 @@ def subsets(nums):
 #  [2], [2,3], [3]]
 ```
 
-Each element is either in or out, independently, so the number of subsets doubles with every extra element. Copying each finished subset into the result costs up to n steps:
-
-```formula
-N_sub = 2^n
-W = O(n 2^n)
-N_sub = 2^20 = 1,048,576
-N_sub = 2^40 ≈ 1.1 × 10^12
-where
-N_sub: the number of subsets of n distinct elements (including the empty set and the whole set)
-n: the number of distinct elements (or distinguished positions)
-2^n: n copies of 2 multiplied together
-W: the total work to generate and copy every subset
-O: Big-O, grows no faster than this up to a constant factor
-10^12: one trillion (a 1 followed by 12 zeros)
-≈: approximately equal to
-In words: every extra element doubles the number of subsets; 20 elements give about a million, 40 give over a trillion.
-```
+Each element is either in or out, independently, so the number of subsets **doubles with every extra element**: 2ⁿ subsets for n distinct elements, counting the empty set and the whole set. Twenty elements give about a million subsets; forty give over a trillion. Copying each finished subset into the result costs up to n steps, so generating them all is O(n·2ⁿ) work.
 
 With forty elements full materialisation is very expensive. Whether it is practical depends on the representation and resources.
+
+> [!analogy] Real-world analogy: a row of light switches
+> A panel of light switches, each on or off, can be set in many patterns. One switch gives 2 patterns, two give 4, three give 8: every switch you add doubles the number of patterns.
+>
+> **How it maps:** each switch is one element, "on" means the element is in the subset, and each pattern of switches is one subset. The include/skip recursion flips through the patterns one switch at a time, which is why the tree has one level per element and two branches at each node.
+>
+> **Where it stops:** flipping a switch costs nothing extra. The program also stores each subset as its own list, so every pattern costs memory and copying time proportional to its size.
 
 > [!warning] Append a copy, not the path
 > `res.append(path)` stores a reference to the one shared list. After the search finishes, every unchoose has run, `path` is empty, and `res` is a list of identical empty lists: `[[], [], [], []]`. Always append `path[:]` or `list(path)`.

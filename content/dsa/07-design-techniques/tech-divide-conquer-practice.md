@@ -19,25 +19,7 @@ The previous units analysed divide-and-conquer under explicit cost models. Here 
 ## Pitfalls
 
 - **Overlapping subproblems.** If the pieces share sub-pieces (naive Fibonacci), divide and conquer repeats work exponentially. That's a job for DP.
-- **Unbalanced splits.** Quicksort with a bad pivot leaves one non-empty subproblem with only one item removed. For n original items, recursion can then have linear depth instead of logarithmic depth:
-
-```formula
-T(n) = T(n − 1) + Θ(n)
-S(n) = n + (n − 1) + … + 1
-S(n) = (n(n + 1)) / 2
-T(n) = Θ(n^2)
-where
-T(n): the running time of quicksort on n items
-S(n): the sum of subproblem sizes, a scale expression rather than an exact timing
-Θ: Big-Theta, growth bounded above and below by constant multiples
-n: the number of items in the current call
-Θ(n): partitioning work proportional to the current subproblem size
-…: and so on, one less each time
-≈: approximately equal to (ignoring constant factors)
-O: Big-O, grows no faster than this, up to a constant factor
-n^2: n squared
-In words: peeling off one item per level costs n, then n − 1, and so on, which adds up to about n²/2 steps.
-```
+- **Unbalanced splits.** Quicksort with a bad pivot leaves one non-empty subproblem with only one item removed. For n original items, recursion can then have linear depth instead of logarithmic depth, and the partitioning work adds up to n, then n − 1, and so on: about n²/2 steps, so **Θ(n²)** instead of Θ(n log n).
 
 - **An expensive combine.** The combine step decides the complexity. Re-sorting inside the recursion, or copying large slices, can quietly add a log factor or worse.
 

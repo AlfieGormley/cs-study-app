@@ -20,44 +20,25 @@ for (uint32_t i = 0; i < count; i++)
     read_item(&arr[i]);
 ```
 
-Assume both `count` and `size_t` are 32-bit unsigned types, and `sizeof(item)` is 16. C's unsigned arithmetic does not fail when a result is too big: it keeps only the lowest 32 bits of the result (this is called modular arithmetic).
+Assume both `count` and `size_t` are 32-bit unsigned types, and `sizeof(item)` is 16. C's unsigned arithmetic does not fail when a result is too big: it keeps only the lowest 32 bits of the result and silently drops the rest (this is called modular arithmetic). With a hostile header the numbers look like this:
 
-```formula
-S = (ns) mod 2^32
-ns = 0x10000001 × 16 = 0x100000010
-ns = 268,435,457 × 16 = 4,294,967,312
-S = 4,294,967,312 − 4,294,967,296
-S = 16 B = 0x10 B
-where
-S: the byte count actually passed to malloc, in bytes (B)
-n: the item count read from the file header (count in the code); here 0x10000001, which is 268,435,457
-s: the size of one item in bytes, sizeof(item); 16 here
-mod: modulo, the remainder after dividing; a value mod 2^32 keeps only its lowest 32 bits
-2^32: 32 copies of 2 multiplied together, 4,294,967,296: the number of different values a 32-bit unsigned type can hold
-0x10000001: a hexadecimal (base-16) number, marked by the 0x prefix; each hex digit is 4 bits
-B: byte, 8 bits
-In words: the true product needs 33 bits, so the 32-bit size type drops the top bit (subtracting 2^32 once), and 268,435,457 items of 16 bytes become a request for just 16 bytes.
+```c
+/* 32-bit size_t, sizeof(item) == 16   */
+/* count       = 0x10000001            */
+/* true bytes  = 0x100000010 (33 bits) */
+/* malloc gets = 0x00000010 = 16 bytes */
 ```
 
-Only 16 bytes are requested. Allocation may fail; if it succeeds, attempting all those item writes exceeds the allocation and invokes undefined behaviour.
+About 268 million items should need about 4 GiB, but the 33rd bit is dropped and `malloc` is asked for just 16 bytes. Allocation may fail; if it succeeds, the loop's item writes run far past that 16-byte allocation, a heap overflow with undefined behaviour.
 
-The standard check avoids the multiplication altogether. The product fits only if it is no larger than `SIZE_MAX`, the largest value `size_t` can hold. Dividing both sides by the item size gives a test that cannot itself overflow:
+> [!analogy] Real-world analogy: a car odometer rolling over
+> A five-digit mileage counter that reads 99,990 shows 00,006 after another 16 miles. Nothing breaks and no warning appears: the counter simply has no digit for the carry.
+>
+> **How it maps:** The counter's digits are the 32 bits of `size_t`. The lost carry is the 33rd bit of `count * sizeof(item)`. A buyer trusting the low reading is `malloc` trusting the small wrapped size.
+>
+> **Where it stops:** An odometer counts in decimal and its rollover is obvious to a person; unsigned C arithmetic is binary, and nothing in the program notices unless the code checks before multiplying.
 
-```formula
-ns ≤ M
-n ≤ ⌊M / s⌋
-M = 2^32 − 1 = 4,294,967,295
-⌊M / s⌋ = ⌊4,294,967,295 / 16⌋
-⌊M / s⌋ = 268,435,455
-where
-n: the item count (count in the code)
-s: the size of one item in bytes, sizeof(item); 16 here
-M: SIZE_MAX, the largest value size_t can hold; 2^32 − 1 for a 32-bit size_t
-2^32: 32 copies of 2 multiplied together, 4,294,967,296
-⌊ ⌋: floor: round down to a whole number; C discards the fractional remainder for the non-negative values used here
-≤: less than or equal to
-In words: a count is safe only if it is at most SIZE_MAX divided by the item size, rounded down; with 16-byte items that is 268,435,455, so the count 268,435,457 above is rejected.
-```
+The standard check avoids the multiplication altogether. The product fits only if it is no larger than `SIZE_MAX`, the largest value `size_t` can hold. Dividing `SIZE_MAX` by the item size gives the largest safe count, and that division cannot itself overflow. With a 32-bit `size_t` and 16-byte items the largest safe count is 268,435,455, so the count 268,435,457 (`0x10000001`) above is rejected.
 
 Fixes:
 

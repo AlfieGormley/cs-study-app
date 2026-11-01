@@ -24,7 +24,7 @@ Joshua Bloch's well-known talk *How to Design a Good API and Why it Matters* lis
 
 ### Keyword-only arguments
 
-The first call below illustrates an older positional API, assuming a message and an existing send implementation. The keyword-only definition that follows is its replacement, with its body omitted for the signature example.
+The first line below is a call to an older, positional version of `send`. The definition after it replaces that version with keyword-only options (its body is omitted).
 
 ```python
 # Hard to read at the call site:
@@ -39,7 +39,7 @@ def send(msg, *, urgent=False,
 send(msg, urgent=True, timeout=10)
 ```
 
-Bare booleans and numbers in positional arguments are the "boolean trap": nobody can tell what `True, False` means. Keyword-only arguments allow reordering without changing ordinary keyword calls. Adding optional arguments can preserve existing behavior; required additions, subclasses, wrappers and introspection need an API compatibility review.
+Bare booleans and numbers in positional arguments are the "boolean trap": nobody can tell what `True, False` means. Because callers must name keyword-only options, you can later reorder them, or add a new optional one, without breaking any existing call. Subclasses that override the function and wrappers that copy its signature may still need updating.
 
 ### Positional-only arguments
 

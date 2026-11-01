@@ -37,21 +37,9 @@ def permutations(nums):
 # [1,2,3] -> 123 132 213 231 312 321
 ```
 
-For n distinct values, the tree has n choices at the root, n − 1 below that, and so on down to 1. Multiplying those choices together gives the number of leaves, **n factorial**:
+For n distinct values, the tree has n choices at the root, n − 1 below that, and so on down to 1. Multiplying those choices together gives the number of leaves, **n factorial** (written n!): about 3.6 million orderings for 10 values and over 6 billion for 13. Each finished permutation is copied in up to n steps, so storing them all is O(n·n!) work.
 
-```formula
-n! = n × (n − 1) × … × 2 × 1
-W = O(n^2!)
-10! = 3,628,800
-13! = 6,227,020,800
-where
-n: the number of distinct values to order
-n!: n factorial, the product of every whole number from 1 to n; the number of orderings of n distinct items (0! = 1)
-…: and so on, one less each time
-W: the total work to generate and copy every permutation (each copy costs up to n)
-O: Big-O, grows no faster than this up to a constant factor
-In words: n choices for the first position, n − 1 for the second, and so on, multiply to n factorial orderings: about 3.6 million for 10 values and over 6 billion for 13.
-```
+Factorial growth is even steeper than the doubling of subsets: adding one more value multiplies the number of orderings by the new count of values, so going from 10 to 11 values multiplies it by 11.
 
 Repeated input values produce duplicate value sequences unless separately handled.
 

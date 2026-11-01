@@ -28,24 +28,12 @@ void greet(const char *name) {
 
 With arguments that are valid and non-overlapping, `snprintf` bounds output by the supplied capacity and terminates it when that capacity is non-zero. Its non-negative return reports the required length excluding NUL; a negative return reports an error. The example rejects both errors and truncation. The source must itself be a valid NUL-terminated string.
 
-The truncation test `(size_t)n >= sizeof buf` comes from this condition for the whole output to fit:
+The truncation test `(size_t)n >= sizeof buf` follows from what the return value means. `snprintf` returns the length the *complete* text would have had, not counting the NUL. The complete text fits only if there is room for all of it plus one NUL byte, so a return value equal to or greater than the buffer's capacity means some text was cut off. A return value smaller than the capacity means everything fitted.
 
-```formula
-n + 1 ≤ C
-n < C
-where
-n: the non-negative value snprintf returned: the length the full output would have, in bytes, not counting the NUL
-1: the byte needed for the terminating NUL
-C: the destination's capacity in bytes, sizeof buf; 16 here
-≤: less than or equal to
-<: less than
-In words: the full text plus its NUL must fit in the buffer, which is the same as the returned length being less than the capacity. A return equal to or above the capacity means the text was cut short.
-```
-
-For example, formatting the 11-character `"hello world"` into an 8-byte buffer returns 11. Since 11 is not less than 8, the output was truncated: the buffer holds the first 7 characters (8 − 1) and the NUL.
+For example, formatting the 11-character `"hello world"` into an 8-byte buffer returns 11. Since 11 is at least 8, the output was truncated: the buffer holds the first 7 characters, `hello w`, then the NUL. In the `greet` function above, a 15-character name passes and a 16-character name is rejected.
 
 > [!warning] strncpy is not a safe strcpy
-> `strncpy(dst, src, n)` stops at `n` bytes, but if the source is `n` bytes or longer it does **not** write a terminating NUL. An unbounded string operation on that unterminated destination violates its input requirements and can read past the end. Prefer `snprintf`, or `strlcpy` where available.
+> `strncpy(dst, src, n)` stops at `n` bytes, but if the source is `n` bytes or longer it does **not** write a terminating NUL. An unbounded string operation on that unterminated destination violates its input requirements and can read past the end. Prefer `snprintf`, or `strlcpy` where available (it was added to POSIX in the 2024 edition and, like `snprintf`, returns the full source length so you can detect truncation).
 
 ## Key takeaways
 - Check snprintf for a negative error before interpreting its non-negative required length.
@@ -55,3 +43,4 @@ For example, formatting the 11-character `"hello world"` into an 8-byte buffer r
 ## Further reading
 - [C11 committee draft: objects and library contracts](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf)
 - [Source fortification — glibc](https://sourceware.org/glibc/manual/latest/html_node/Source-Fortification.html)
+- [strlcpy — POSIX](https://pubs.opengroup.org/onlinepubs/9799919799/functions/strlcpy.html)

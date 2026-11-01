@@ -7,7 +7,7 @@ minutes: 4
 summary: Explain a partially initialized Python import and enforce real dependency boundaries.
 ---
 
-Acyclic package design helps both reasoning and Python initialization. This unit traces one import failure, then turns chosen boundaries into checks run in CI.
+A dependency cycle is not only a design smell; in Python it can also stop a program starting. This unit traces one import failure, then turns chosen boundaries into checks that run in CI.
 
 ## Import cycles in Python
 
@@ -31,16 +31,18 @@ def invoice_for(order: Order):
     ...
 ```
 
-`import orders` starts executing `orders.py`, which imports `billing`, which runs `from orders import Order`. `orders` is in `sys.modules` but only partly executed, and `Order` isn't defined yet. Python raises `ImportError: cannot import name 'Order' from partially initialized module 'orders'` (exact wording varies by version).
+`import orders` starts executing `orders.py`, which imports `billing`, which runs `from orders import Order`. `orders` is in `sys.modules` but only partly executed, and `Order` isn't defined yet. Python raises `ImportError: cannot import name 'Order' from partially initialized module 'orders' (most likely due to a circular import)`.
 
-Deferring an import or deferring access after import orders can avoid some initialization failures. Merely changing the import style does not help if Order is still accessed before it is defined, but the **design** cycle remains. Real fixes:
+The wording varies. Since Python 3.13, if these files sit in the same folder as the script you run, the message may instead suggest renaming `orders.py`, as though it shadowed a library. Same `ImportError`, same cause: the circular import.
+
+You can often make the error go away by moving the import inside a function, or by writing `import orders` and reading `orders.Order` only later. That changes *when* the name is looked up: if it is still read before `Order` is defined, it still fails. Either way, the **design** cycle remains. Real fixes:
 
 1. **Extract the shared concept.** If both need `Order`, perhaps `Order` belongs in a lower module both can import.
 2. **Invert a dependency.** `billing` defines a `Billable` Protocol; `Order` satisfies it; `billing` no longer imports `orders`.
 3. **Use events.** `orders` publishes `OrderPlaced`; `billing` subscribes. `orders` doesn't know `billing` exists.
 4. **Merge.** If two modules can't be understood apart, they may be one module.
 
-For type-only dependencies, TYPE_CHECKING can avoid executing imports. Annotation evaluation must also be handled: older Python versions may need quoted/postponed annotations, and runtime get_type_hints still needs the referenced names. Python 3.14 defers annotations by default. This can be an appropriate type-only solution; it does not remove genuine runtime coupling.
+When one module needs another *only for type hints*, `if TYPE_CHECKING:` lets the type checker see the import while it never runs at runtime. Annotations then need care: before Python 3.14 you quote them or add `from __future__ import annotations`, while 3.14 evaluates annotations lazily by default. Tools that read hints at runtime, such as `typing.get_type_hints`, still need the real names. This is a good fix for a type-only dependency; it does nothing about code that genuinely calls across.
 
 ## Enforcing boundaries
 
@@ -75,7 +77,7 @@ forbidden_modules =
 - Deferring access can avoid initialization failure while leaving the design cycle intact.
 - Extract concepts, invert dependencies, use events or merge inseparable modules to remove cycles.
 - Import Linter independence checks include indirect dependencies.
-- TYPE_CHECKING solves type-only import execution, with annotation-evaluation caveats.
+- `TYPE_CHECKING` fixes type-only imports; it does not remove runtime coupling.
 
 ## Further reading
 - [Import Linter: contract types](https://import-linter.readthedocs.io/en/stable/contract_types/)

@@ -7,13 +7,20 @@ sourceLesson: tech-divide-conquer
 summary: Compare the exponent of local work with the critical leaf-growth exponent.
 ---
 
-The previous unit defined a recurrence as the work of smaller calls plus the work outside them. Here n is input size, a is the fixed number of calls per split, and b is the fixed shrink factor. We now compare those calls with local work to solve this restricted recurrence family.
+The previous unit wrote a divide-and-conquer cost as the work of a smaller calls on inputs shrunk by a factor b, plus the work f(n) one call does itself. Here n is the input size. This unit compares those two effects to solve a restricted family of recurrences in one step.
+
+Going down the recursion tree, two things happen at once:
+
+- the **number of calls** multiplies by a at every level, so the bottom level ends up with a very large number of leaves;
+- the **work per call** shrinks, because each input is b times smaller.
+
+If the per-call work shrinks faster than the calls multiply, the root's own work dominates. If the calls multiply faster, the leaves dominate. If the two balance, every level costs about the same and you pay that once per level.
 
 ### The master theorem (simplified)
 
-The **master theorem** answers that race in one step for recurrences of this shape. It applies when a and b are fixed numbers, the base case costs a constant, and the work outside the recursion is a power of n. This simplified form ignores the rounding of subproblem sizes to whole numbers:
+The **master theorem** settles that race for recurrences of this shape. It applies when a and b are fixed numbers, the base case costs a constant, and the work outside the recursion is a power of n. This simplified form ignores the rounding of subproblem sizes to whole numbers:
 
-```formula
+```formula essential
 f(n) = Θ(n^d)
 c = log_b(a)
 T(n) = Θ(n^d)            if d > c
@@ -40,62 +47,26 @@ In words: if the root's own work grows faster than the number of leaves, the roo
 | exponents equal | every level equally |
 | leaf exponent bigger | the leaves |
 
-```formula
-a = 2, b = 2, d = 1
-c = log_2(2) = 1
-T(n) = Θ(n log(n))
-where
-a: the two recursive calls per split
-b: the shrink factor, two for halves
-d: the exponent of local work, one for linear merging
-c: the critical leaf-growth exponent
-n: the number of input items
-T(n): the unit-cost running time
-log_2: the base-two logarithm
-log: a logarithm of any fixed base greater than one
-Θ: Big-Theta, growth bounded above and below by constant multiples
-In words: The local-work and leaf-growth exponents match, so merge sort pays linear work at each logarithmically many levels.
-```
+You rarely need to compute anything beyond comparing two small numbers. The algorithms in the following units all fit this shape:
+
+| Algorithm | Calls × size, local work | Result |
+|---|---|---|
+| Binary search | 1 × half, constant | logarithmic |
+| Merge sort | 2 × half, linear | n log n |
+| Closest pair | 2 × half, linear | n log n |
+| Four-product multiply | 4 × half, linear | quadratic |
+| Karatsuba | 3 × half, linear | n to the 1.585 |
+
+Two patterns are worth remembering. Halving the input while keeping one call and constant work (binary search) is the equal case: constant work on each of about log n levels. Keeping linear work but adding more half-size calls pushes the recurrence into the leaves-dominate case, where the number of calls matters more than the combining.
 
 More general recurrences (uneven splits, or local work growing linearly times a logarithm) need other tools, such as the full master theorem or the Akra–Bazzi method.
 
-The algorithm names below are an overview; their implementations appear in later units. Each card uses input size n, counting unit-cost arithmetic operations or comparisons as appropriate.
-
-```formula
-T(n) = T(n / 2) + O(1)
-T(n) = O(log(n))
-where
-T(n): the algorithm’s running time on input size n
-n: the number of searchable items, sorted items, exponent value, digits or points for this named algorithm
-log_2: base-two logarithm; log_2(3) is about 1.585
-O: Big-O, an asymptotic upper bound
-log: logarithm of a fixed base greater than one
-In words: Binary search and fast power keep just one half-size subproblem.
-```
-
-```formula
-T(n) = 2T(n / 2) + O(n)
-T(n) = O(n log(n))
-where
-T(n): the algorithm’s running time on input size n
-n: the number of searchable items, sorted items, exponent value, digits or points for this named algorithm
-log_2: base-two logarithm; log_2(3) is about 1.585
-O: Big-O, an asymptotic upper bound
-log: logarithm of a fixed base greater than one
-In words: Merge sort and closest pair make two half-size calls with linear combination.
-```
-
-```formula
-T(n) = 3T(n / 2) + O(n)
-T(n) = O(n^{log_2(3)})
-where
-T(n): the algorithm’s running time on input size n
-n: the number of searchable items, sorted items, exponent value, digits or points for this named algorithm
-log_2: base-two logarithm; log_2(3) is about 1.585
-O: Big-O, an asymptotic upper bound
-log: logarithm of a fixed base greater than one
-In words: Karatsuba replaces four half-products with three; 1.585 is a rounded presentation of the exact critical exponent, whose derivation follows in its unit.
-```
+> [!analogy] Real-world analogy: who does most of the work in a company
+> A director splits a job among a few managers and spends some time coordinating; each manager splits their part among their own team and coordinates that; and so on down to front-line staff who just do a small task each.
+>
+> **How it maps:** each person is a call, the number of direct reports is a, how much smaller each person's share is gives b, and coordination time is the local work f(n). If coordination at the top is heavy and shares shrink quickly, the director's level costs the most (root dominates). If the organisation spreads out so fast that front-line staff vastly outnumber everyone else, their combined effort dominates (leaves dominate). If each layer's total effort is the same, the cost is that amount times the number of layers.
+>
+> **Where it stops:** real organisations are irregular. The theorem only applies when every call has exactly the same branching factor, the same shrink factor and local work that is a power of the input size.
 
 ## Key takeaways
 - Compare the exponent of local work with the critical leaf-growth exponent.

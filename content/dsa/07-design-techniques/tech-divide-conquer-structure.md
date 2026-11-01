@@ -9,26 +9,7 @@ summary: Independent smaller pieces can be solved separately and combined.
 
 **Divide and conquer** is recursion with a plan. You divide the input into smaller subproblems, solve them recursively, and combine their answers. Balanced pieces often give efficient recurrences, but unequal splits also count as divide and conquer.
 
-The payoff comes from the cutting. Halving an input of a million items takes only about 20 levels to reach size 1, so even if every level does work proportional to the input size, the total stays small. Compare that with an algorithm that pairs every item with every other item:
-
-```formula
-L = log_2(n) = log_2(1,000,000) ≈ 20
-W_dc = nL ≈ 1,000,000 × 20
-W_dc ≈ 20,000,000
-W_sq = n^2 = 1,000,000^2
-W_sq = 1,000,000,000,000
-where
-n: the number of input items, here one million
-L: the real-valued logarithmic scale for halving from n items to one; actual recursion levels are whole numbers
-log_2(n): the base-2 logarithm of n, the number of times you can halve n before reaching 1; log_2(1,000,000) ≈ 19.93
-W_dc: the rough work, in basic steps, of a divide-and-conquer algorithm that does about n steps on each level
-W_sq: the rough work, in basic steps, of a quadratic algorithm that compares every item with every other item
-n^2: n squared, n × n
-≈: approximately equal to
-In words: about 20 levels of a million steps each is about 20 million steps, against a trillion for the all-pairs approach: 50,000 times less work.
-```
-
-These growth expressions are scale estimates, not exact instruction counts or timings.
+The payoff comes from the cutting. Halving an input of a million items takes only about 20 levels to reach size 1. So even if every level does work proportional to the whole input, the total is about 20 million basic steps, against about half a trillion comparisons for an algorithm that compares every item with every other item. These are scale estimates, not exact instruction counts or timings.
 
 ## The three steps
 
@@ -38,11 +19,18 @@ These growth expressions are scale estimates, not exact instruction counts or ti
 
 The cleanest examples have **independent** subproblems that can be solved separately. Repeated equivalent subproblems can waste work; caching them leads toward dynamic programming. Independence alone neither guarantees balanced splits nor eliminates all coordination costs in parallel implementations.
 
+> [!analogy] Real-world analogy: counting votes in an election
+> Each polling district counts its own ballots, the districts report to their region, and the regions report to a national total. Nobody needs to see another district's ballots to do their part.
+>
+> **How it maps:** splitting the country into districts is the divide step; each district's count is an independent subproblem; adding the reported totals is the combine step. Because districts don't overlap, no ballot is counted twice, which is what "independent subproblems" means.
+>
+> **Where it stops:** an election splits the country once into fixed districts. A divide-and-conquer algorithm keeps splitting the same way until pieces are tiny, and its combine step can be much more expensive than adding two numbers, as merging sorted lists or checking a boundary strip shows.
+
 ## Analysing it: recurrences
 
-The cost of a divide-and-conquer algorithm is a **recurrence**: an equation that gives the running time on an input in terms of the running time on smaller inputs.
+The cost of a divide-and-conquer algorithm is a **recurrence**: an equation that gives the running time on an input in terms of the running time on smaller inputs. Its shape is the relationship the rest of this module reasons about:
 
-```formula
+```formula essential
 T(n) = aT(n / b) + f(n)
 where
 T(n): the running time on an input of size n, in basic steps
@@ -54,36 +42,9 @@ f(n): the work one call does itself, outside its recursive calls: dividing the i
 In words: one call costs the cost of its a smaller calls, plus the work it does itself to split and to combine.
 ```
 
-```formula
-a = 2, b = 2
-f(n) = Θ(n)
-where
-a: the number of recursive subproblems
-b: the factor by which each subproblem shrinks
-n: the number of input items
-f(n): the local splitting and merging work, in unit-cost steps
-Θ: Big-Theta, growth bounded above and below by constant multiples
-In words: Merge sort makes two half-size calls and combines their answers with linear work.
-```
+Merge sort, for example, makes two half-size calls and does linear work to merge their answers.
 
-Draw the recursion tree to see where the time goes:
-
-```formula
-N_k = a^k
-s_k = n / b^k
-where
-N_k: the number of calls (nodes) on level k of the recursion tree
-s_k: the input size of each call on level k
-k: the level number, 0 at the root (the first call)
-a: the number of subproblems per call
-b: the shrink factor per level
-n: the original input size
-a^k: k copies of a multiplied together
-b^k: k copies of b multiplied together
-In words: going down one level multiplies the number of calls by a and divides each call's input size by b.
-```
-
-Whether the total is dominated by the root, the leaves or spread evenly depends on how fast the number of calls grows compared with how fast the per-call work shrinks.
+Draw the recursion tree to see where the time goes. Going down one level multiplies the number of calls by a and divides each call's input size by b. Whether the total is dominated by the root, by the leaves or spread evenly depends on which of those two effects wins: how fast the number of calls grows compared with how fast the per-call work shrinks. The next unit turns that race into a rule.
 
 ## Key takeaways
 - Independent smaller pieces can be solved separately and combined.

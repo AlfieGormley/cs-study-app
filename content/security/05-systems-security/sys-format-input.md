@@ -20,6 +20,13 @@ An untrusted format can request conversions such as `%x` or `%n`. Missing or inc
 
 A format string is a small instruction language for output. Its directives tell the function which extra arguments to consume and what types they have. User text should be an argument to that language, not the language itself.
 
+> [!analogy] Real-world analogy: a mail-merge template
+> A mail merge fills a letter template such as "Dear {name}, your balance is {balance}". If a customer types "{balance} {account number}" as their name and the software uses the name *as the template*, the merge fills in those fields for them.
+>
+> **How it maps:** The template is the format string and the `{...}` fields are `%` directives. Passing user text as the template, as in `printf(user_input)`, lets the user choose which fields are filled. `printf("%s", user_input)` puts the text into a fixed slot, where braces or percent signs are just characters.
+>
+> **Where it stops:** A mail merge with a missing field usually prints a blank or an error. `printf` has no list of the arguments actually supplied, so a directive with no matching argument is undefined behaviour: it may print unrelated values, or with `%n`, attempt a write.
+
 For example, a message containing the literal characters `%x` should print those characters. `printf("%s", user_input)` and `fputs(user_input, stdout)` do that for a valid C string. Neither function makes an invalid pointer or an unterminated array safe.
 
 `%n` is different from ordinary output conversions: with a valid pointer argument it records how many characters have been emitted. When an untrusted format asks for arguments the caller never supplied, there is no portable output trace to predict. Test the fixed version for literal output, and use compiler diagnostics to reject the specific faulty call. Filtering newlines or enlarging the message buffer does not change which parameter is treated as the format.

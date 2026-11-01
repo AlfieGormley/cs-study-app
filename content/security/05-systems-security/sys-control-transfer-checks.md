@@ -25,6 +25,13 @@ A **shadow stack** keeps protected return-address copies. With x86 CET shadow-st
 
 **Pointer authentication** can protect selected Arm pointers with a keyed authentication code, incorporating contextual information. It authenticates rather than encrypts the pointer, and is not a general memory-safety check. Code generation, authentication policy and hardware support determine which pointers are protected.
 
+> [!analogy] Real-world analogy: a taxi with a sealed logbook and an approved list
+> A taxi firm worried about hijacked journeys adds two rules. When a passenger is picked up, the driver writes the pickup point in a sealed logbook; when the passenger later says "take me back", the driver checks the logbook rather than the scrap of paper the passenger hands over. And for new journeys, the driver will only go to addresses on the firm's approved list.
+>
+> **How it maps:** "Take me back" is a return, the passenger's scrap of paper is the return address in ordinary, writable stack memory, and the sealed logbook is the shadow stack: a backward-edge check. The approved list is forward-edge CFI for indirect calls. A list of "any building with a proper front door" is like IBT or BTI landing pads; a list of "only addresses of this kind of business" is like a type-based Clang CFI policy.
+>
+> **Where it stops:** An approved address can still be the wrong one for this journey, which is why type-based and landing-pad policies can permit unintended targets. And the rules only apply in taxis that have them: code built without the checks, or a system where enforcement is not enabled, is not protected.
+
 The permitted-target set depends on the CFI policy. Type-based schemes may still permit an unintended same-type target; landing-pad schemes can permit a broader set. Shadow stacks protect returns by a different check, so a same-type target is not itself a shadow-stack bypass.
 
 ## Key takeaways

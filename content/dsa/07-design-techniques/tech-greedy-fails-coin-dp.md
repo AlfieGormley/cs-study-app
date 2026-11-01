@@ -13,19 +13,18 @@ The previous unit showed largest-coin-first failing. Here coins remain positive 
 
 Instead of committing to one coin, consider *every* possible last coin and take the best. Whatever the last coin c is, the rest of the amount must itself be paid optimally:
 
-```formula
+```formula essential
 B(a) = 1 + min_{c ≤ a} B(a − c)
 B(0) = 0
-B(6) = 1 + min(B(5), B(3), B(2))
-B(6) = 1 + min(2, 1, 2) = 2
 where
 B(a): the fewest coins that make amount a (best[a] in the code); infinity if a can't be made
 a: the amount to make, a whole number of at least 0
 c: one coin denomination, a positive whole number
 min_{c ≤ a}: the smallest value over every coin c no bigger than a
-min: the smallest of its inputs
-In words: the best way to pay a is one coin plus the best way to pay what is left, tried for every coin that fits; for coins {1, 3, 4}, 6 is best paid as 3 + 3.
+In words: the best way to pay a is one coin plus the best way to pay what is left, tried for every coin that fits.
 ```
+
+For coins {1, 3, 4} and amount 6, the three possible last coins leave 5, 3 or 2 to pay, which need 2, 1 and 2 coins. The best route ends with a 3-coin and leaves 3, which one more 3-coin pays: 3 + 3, two coins. Greedy never looks at that option because it commits to the 4 first.
 
 ```python
 def min_coins(coins, amount):
@@ -51,21 +50,7 @@ def min_coins(coins, amount):
     return best[amount]
 ```
 
-For {1, 3, 4}, the table for amounts 0 to 6 is 0, 1, 2, 1, 1, 2, 2. The cost is one pass over the coins for each amount:
-
-```formula
-W = O(k + A(k + 1)) = O(Ak)
-M = O(A + k)
-W ≈ 1,000 × 8 = 8,000
-where
-W: the unit-cost work, in basic steps, including reading the coins and filling the table
-M: the storage used (the table plus the coin list)
-k: the number of coin denominations (8 in the last line)
-A: the target amount (1,000 in the last line); the simplified form assumes A and k are both at least 1
-O: Big-O, grows no faster than this up to a constant factor
-≈: approximately equal to
-In words: every amount from 1 to A tries every coin once, so the work is about A times k: 8 UK denominations and £10.00 (1,000 pence) take about 8,000 steps.
-```
+For {1, 3, 4}, the table for amounts 0 to 6 is 0, 1, 2, 1, 1, 2, 2. The cost is one pass over the coins for each amount: for a target amount A and k denominations, about A × k steps and a table of A + 1 entries. Eight UK denominations and £10.00 (1,000 pence) take about 8,000 steps. Note that the work grows with the *value* of the amount, not with the number of digits needed to write it.
 
 It is correct for the stated positive-integer, unlimited-supply domain. The dynamic programming module develops this way of thinking in depth; here the point is the contrast. Greedy keeps **one** candidate per step; DP compares the last-coin alternatives for each amount, retaining the best value for that state.
 

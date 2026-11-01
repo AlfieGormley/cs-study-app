@@ -123,10 +123,19 @@ def test_place_order_notifies():
     assert notifier.sent == [1]
 ```
 
-That test requires no database, network or mock library.
+That test requires no database, network or mock library, so it runs in memory and gives the same result every time.
 
-> [!note] Evidence gap
-> No fixed test-duration figure is asserted without a measured environment. Fake-based tests also need adapter contract/integration checks; they do not prove real transaction, missing-row or concurrency behavior. Fakes like these are often more robust than mocks, because they check *behaviour* (what ended up stored) rather than *which methods were called*.
+Fakes like these are often more robust than mocks, because the test checks *behaviour* (what ended up stored and sent) rather than *which methods were called*, so harmless refactors don't break it.
+
+> [!warning] What a fake can't tell you
+> A fake only behaves like the real adapter where you made it do so. It says nothing about real transactions, a missing row, a unique constraint or two requests racing. Keep a smaller set of integration or contract tests that run the real `SqlOrderRepository` against a real database.
+
+> [!analogy] Real-world analogy: a flight simulator
+> Pilots practise engine failures in a simulator. The cockpit controls are the same as the aircraft's, so the pilot's procedures carry over, but nothing can crash and an emergency can be repeated ten times in an afternoon.
+>
+> **How it maps:** The cockpit is the port: the same controls whether a real aircraft or a simulator is behind them. The simulator is the fake adapter, and the pilot's procedures are the core's business rules, exercised quickly and safely.
+>
+> **Where it stops:** A training simulator is built and checked against detailed data from the real aircraft. A hand-written fake is usually much simpler and only as faithful as you made it, which is why the real adapter still needs its own tests.
 
 ## Key takeaways
 - A Protocol checks compatible member types statically; type hints alone do not enforce behavior.

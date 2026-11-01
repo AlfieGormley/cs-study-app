@@ -3,27 +3,27 @@
     "id": "sys-memory-bugs-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "How much destination space does this copy require, and by how many bytes does that exceed `buf`? Executing the overflowing call has undefined behaviour.\n\n```c\nchar buf[8];\n/* BUG: ten letters plus NUL need 11. */\nstrcpy(buf, \"ABCDEFGHIJ\");\n```",
+    "prompt": "A reviewer adds a length check before this copy. Does it make the `strcpy` call valid for every accepted name?\n\n```c\nchar buf[16];\n/* Reject names that are too long. */\nif (strlen(name) > 16)\n    return;\nstrcpy(buf, name);\n```",
     "options": [
       {
-        "text": "10 bytes required, exceeding capacity by 2",
-        "explanation": "This forgets the NUL terminator. `strcpy` copies the string's characters *and* the terminating `\\0`."
+        "text": "Yes: every accepted name has at most 16 characters, and `buf` holds 16 bytes",
+        "explanation": "This forgets the terminating NUL. `strcpy` copies the characters *and* the zero byte that ends the string, so a 16-character name needs 17 bytes."
       },
       {
-        "text": "8 bytes required, fitting exactly",
-        "explanation": "The required destination capacity includes the entire source and its NUL. The API has no destination-capacity argument."
+        "text": "No: a 16-character name needs 17 bytes including its NUL, so the check must also reject length 16",
+        "explanation": "Correct. `strlen` does not count the NUL, but `strcpy` writes it. The longest name that fits is 15 characters, so the condition should reject any length of 16 or more (`>= sizeof buf`)."
       },
       {
-        "text": "11 bytes required, exceeding capacity by 3",
-        "explanation": "Ten single-byte letters plus NUL require 11 bytes; capacity is 8. This does not guarantee any particular overwrite when the invalid call executes."
+        "text": "No: `strcpy` also appends a newline, so the limit must be 14 characters",
+        "explanation": "`strcpy` copies the source bytes and one NUL; it adds no newline. The off-by-one is only the forgotten NUL."
       },
       {
-        "text": "It fails to compile because the string is too long",
-        "explanation": "A diagnostic may be issued or treated as a build error. The C language does not require a compiler to reject this library-precondition violation."
+        "text": "Yes: `strcpy` stops at the end of `buf` anyway, so the check only saves time",
+        "explanation": "`strcpy` is never told the destination size, so it cannot stop at the end of `buf`. That missing capacity argument is the root of the bug."
       }
     ],
-    "answer": 2,
-    "workedExample": "`strcpy` copies every character and then the terminating NUL (the zero byte ending a C string):\n\n```formula\nB_need = L + 1\nB_need = 10 B + 1 B = 11 B\nB_over = B_need − C\nB_over = 11 B − 8 B = 3 B\nwhere\nB_need: the destination space strcpy needs, in bytes (B)\nL: the source string's length in bytes, not counting the NUL; \"ABCDEFGHIJ\" has 10\n1: the one extra byte for the NUL\nB_over: how far the copy runs past the end of the destination, in bytes\nC: the destination's capacity; char buf[8] holds 8 B\nB: byte, 8 bits\nIn words: ten letters plus the NUL need 11 bytes, three more than the 8-byte buffer holds.\n```\n\nThe required capacity is 11 bytes, exceeding 8 by 3. The call is invalid; it might corrupt neighbouring state, abort or behave otherwise. Use a bounded API with correct arguments and check truncation/errors.",
+    "answer": 1,
+    "workedExample": "1. `strlen(name)` counts the characters before the terminating NUL.\n2. `strcpy` writes those characters and then the NUL, so it needs one byte more than `strlen` reports.\n3. The check accepts a 16-character name. That copy needs 17 bytes, one more than `buf[16]` holds, so the call is invalid and its behaviour is undefined: it might corrupt a neighbouring byte, abort under a hardening check, or appear to work.\n4. Fix the condition to reject `strlen(name) >= sizeof buf`, or better, use a bounded call such as `snprintf` and treat truncation as an error. Either way, the longest accepted name is 15 characters.",
     "link": {
       "title": "Primary reference for this example",
       "url": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"

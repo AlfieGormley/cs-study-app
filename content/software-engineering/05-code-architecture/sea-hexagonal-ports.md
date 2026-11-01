@@ -3,13 +3,13 @@ id: sea-hexagonal-ports
 sourceLesson: sea-hexagonal
 title: Ports, adapters and dependency inversion
 level: intermediate
-minutes: 3
+minutes: 4
 summary: Distinguish driving and driven ports and separate runtime calls from source dependencies.
 ---
 
-A conventional downward dependency from domain to infrastructure couples business code to storage; layered separation can instead use dependency inversion. In 2005 Alistair Cockburn proposed a different picture. Put the application in the **middle**, and treat the database, the web UI, the test suite and the message queue as interchangeable things plugged in around the edge.
+The layering units ended with a problem: if the domain depends "downwards" on storage, business rules come bundled with database code. In a 2005 article Alistair Cockburn proposed a different picture. His stated goal was an application that could run without either a UI or a database, so that automated regression tests could drive it. Put the application in the **middle**, and treat the database, the web UI, the test suite and the message queue as interchangeable things plugged in around the edge.
 
-He called it **hexagonal architecture**, or more descriptively **ports and adapters**. The hexagon shape has no meaning; it just gave him room to draw several ports.
+He called it **hexagonal architecture**, or more descriptively **ports and adapters**. Cockburn says the six sides have no meaning: the shape just leaves room to draw ports and adapters, unlike a one-dimensional stack of layers. He expected a small number of ports, typically two, three or four; four was the most he had met at the time.
 
 ## The picture
 
@@ -42,7 +42,7 @@ There are two kinds of port:
 | Driving (primary) | Outside calls core | Use case API |
 | Driven (secondary) | Core calls outside | Repository, mailer |
 
-A Flask view is a **driving adapter**: it turns an HTTP request into a call on the core. A Postgres repository is a **driven adapter**: it implements a port the core needs.
+A Flask view is a **driving adapter**: it turns an HTTP request into a call on the core. A Postgres repository is a **driven adapter**: it implements a port the core needs. Cockburn relates the distinction to use cases' primary and secondary actors: the question is who starts the conversation.
 
 ## The trick: dependency inversion
 

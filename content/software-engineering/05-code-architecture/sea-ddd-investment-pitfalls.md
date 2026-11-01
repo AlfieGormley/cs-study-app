@@ -3,7 +3,7 @@ id: sea-ddd-investment-pitfalls
 sourceLesson: sea-ddd
 title: Choosing where DDD earns its cost
 level: intermediate
-minutes: 3
+minutes: 4
 summary: Distinguish core, supporting and generic subdomains and avoid mechanical modelling.
 ---
 
@@ -11,13 +11,20 @@ Domain modelling costs time and coordination. After learning entities, aggregate
 
 ## Subdomains: where to spend effort
 
-Evans also distinguishes kinds of subdomain:
+Evans separates the **core domain** from **generic subdomains**. Later writers add a third category in between; Vaughn Vernon's *Implementing Domain-Driven Design* (2013), for example, describes core, supporting and generic subdomains:
 
-- **Core subdomain**: what makes the business distinctive (pricing for an insurer, routing for a logistics firm). Invest your best people and richest modelling here.
-- **Supporting subdomain**: needed and specific, but not a differentiator (internal approval workflows).
-- **Generic subdomain**: capabilities that do not differentiate this business and can be bought or reused. Authentication or payments may be generic here but core to another business.
+- **Core subdomain**: what makes the business distinctive (pricing for an insurer, routing for a logistics firm). Evans' advice is to keep it small, put your best people on it and spend your deepest modelling effort here.
+- **Supporting subdomain**: needed and specific to this business, but not a differentiator (internal approval workflows).
+- **Generic subdomain**: capabilities that do not differentiate this business. Evans suggests separating them and considering off-the-shelf solutions. Authentication or payments may be generic here but core to another business.
 
-Full tactical DDD is expensive. It pays off in the core domain and is usually overkill elsewhere.
+Full tactical DDD is expensive. It usually pays off in the core domain and is often overkill elsewhere.
+
+> [!analogy] Real-world analogy: a specialty coffee roaster
+> A small roaster's reputation rests on how it sources and roasts its beans, so the founders do that themselves and obsess over it. It runs wholesale orders on a simple in-house spreadsheet, and it pays staff with an off-the-shelf payroll service.
+>
+> **How it maps:** Roasting is the core subdomain, where expert attention creates the advantage. The order spreadsheet is a supporting subdomain: specific to this business, but good enough is fine. Payroll is generic: every business needs it, nobody chooses a roaster for its payroll, so buy it.
+>
+> **Where it stops:** A roaster can see at a glance which activity is its core. In software the line is often unclear and moves as the business changes, and something generic for one company (payments) is the core product of another.
 
 ## Pitfalls
 

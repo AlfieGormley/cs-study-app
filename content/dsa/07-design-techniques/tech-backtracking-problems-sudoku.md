@@ -24,6 +24,13 @@ Choose the empty cell with the **fewest remaining candidates**. Two reasons this
 - A cell with one candidate is a forced move: no branching at all.
 - A cell with zero candidates proves the current branch is dead, immediately.
 
+> [!analogy] Real-world analogy: a wedding seating plan
+> When seating guests, you place the awkward ones first: the guest who can only sit at one table because of who they must avoid, before the easy-going guest who is happy anywhere. If someone turns out to have no acceptable table at all, you find out straight away instead of after seating everyone else.
+>
+> **How it maps:** guests are empty cells, acceptable tables are each cell's candidate digits, and "awkward guest first" is MRV: branch on the variable with the fewest remaining values. A guest with one option is a forced move; a guest with none is an early dead end.
+>
+> **Where it stops:** the person doing the seating plan can rearrange the whole room at the end. The solver commits cell by cell and must undo assignments in reverse order when a branch fails, and recomputing every cell's candidates to find the smallest set has its own cost on each step.
+
 ```python
 def solve(grid):
     if (len(grid) != 9

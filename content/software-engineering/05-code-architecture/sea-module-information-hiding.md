@@ -3,7 +3,7 @@ id: sea-module-information-hiding
 sourceLesson: sea-modularity
 title: Information hiding and public interfaces
 level: advanced
-minutes: 4
+minutes: 5
 summary: Draw boundaries around changing decisions and expose a small Python package interface.
 ---
 
@@ -13,7 +13,7 @@ Every architecture style in this module comes down to the same two questions. **
 
 In 1972 David Parnas published *On the Criteria To Be Used in Decomposing Systems into Modules*. He compared two ways of splitting the same program. One followed the steps of processing (read input, shift lines, sort, print). The other gave each module one **design decision to hide**: how lines are stored, how they're sorted.
 
-When requirements changed, the step-based design needed edits everywhere, because every step knew the storage format. The decision-hiding design needed edits in one module.
+He then walked through a list of likely changes, such as storing the lines differently or packing characters another way. In the step-based design, each of those two storage changes meant editing every module, because every step knew the storage format. In the decision-hiding design, each was confined to the one module that owned that decision.
 
 The lesson still stands: **decompose around decisions likely to change, and hide each one behind an interface**. A good module boundary is one where the likely changes stay on one side.
 
@@ -38,6 +38,13 @@ John Ousterhout (*A Philosophy of Software Design*) frames module quality as the
 Python's `open()` is deep: one call hides buffering, encodings, operating-system file descriptors and platform differences. A class whose methods are `get_x`, `set_x`, `get_y`, `set_y` is shallow: the interface is as complicated as the implementation, so it hides nothing.
 
 Splitting code into many tiny classes and functions can *reduce* modularity if each piece is shallow, because readers must learn all the interfaces to understand any behaviour.
+
+> [!analogy] Real-world analogy: a car's pedals
+> A driver uses an accelerator, a brake and a steering wheel. Behind them, the car might have a petrol engine, a hybrid system or an electric motor, and manufacturers have switched between these while keeping the controls the same.
+>
+> **How it maps:** The pedals and wheel are a small, deep interface. The type of engine is the design decision most likely to change, so it is hidden behind them, exactly Parnas's criterion. A car that made the driver set the fuel-injection timing by hand would have a shallow interface: it exposes the decision instead of hiding it.
+>
+> **Where it stops:** Drivers still notice some differences, such as an electric car's regenerative braking or its silence. Software callers can likewise come to rely on behaviour the interface never promised, which a later lesson on Hyrum's law explores.
 
 ## Making the interface explicit in Python
 

@@ -3,27 +3,27 @@
     "id": "sys-memory-bugs-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Assume `size_t` and `count` are 32-bit unsigned types, `count = 0x10000001`, and an item needs 16 bytes. What byte count is passed to `malloc`? Allocation success is not assumed.\n\n```c\nitem *a = malloc(count * 16);\n```",
+    "prompt": "A fuzzer reports a heap overflow in `read_item` on a 32-bit build. The crashing file's header gives a count of `0x10000001`, `malloc` succeeded, and `sizeof(item)` is 16. `size_t` and `count` are 32-bit unsigned. What is the root cause, and which fix addresses it?\n\n```c\nitem *a = malloc(count * 16);\nfor (uint32_t i = 0; i < count; i++)\n    read_item(&a[i]);\n```",
     "options": [
       {
-        "text": "16 bytes requested",
-        "explanation": "The mathematical product is 0x100000010. Keeping only its lowest 32 bits leaves 0x10, or 16; attempting all intended item writes would exceed a successful allocation."
+        "text": "The product wrapped to a 16-byte request; reject `count > SIZE_MAX / sizeof(item)` (and apply a sane limit) before allocating",
+        "explanation": "Correct. 0x10000001 × 16 is 0x100000010, which needs 33 bits; keeping the low 32 bits leaves 0x10, so `malloc` returned a 16-byte block that the loop overran. Checking the count against `SIZE_MAX / sizeof(item)` before multiplying, or using `calloc`/`reallocarray`, which reject the overflow on glibc, removes the cause."
       },
       {
-        "text": "About 4 GB",
-        "explanation": "The true product is about 4 GB, but it cannot be represented in a 32-bit `size_t`, so it wraps."
+        "text": "An off-by-one in the loop; stop it one item earlier",
+        "explanation": "The loop visits indices from 0 up to one less than `count`, which matches the intended array. The allocation is what is too small: stopping one item earlier would still write about 268 million items into 16 bytes."
       },
       {
-        "text": "0 bytes, and malloc returns NULL",
-        "explanation": "The wrapped value is 0x10, not 0. Only the bits above bit 31 are lost."
+        "text": "Signed overflow is undefined; build with `-fwrapv`",
+        "explanation": "Both operands are unsigned, and C already defines unsigned wraparound. `-fwrapv` defines *signed* wrapping and would not make the 16-byte allocation large enough."
       },
       {
-        "text": "The multiplication traps and the program aborts",
-        "explanation": "For the specified unsigned operation the C language defines wraparound. Dedicated unsigned-overflow instrumentation may diagnose it; ordinary undefined-behaviour checks need not, because unsigned wraparound is defined."
+        "text": "`malloc` returned a fragmented block; check for `NULL` and retry",
+        "explanation": "A `NULL` check is still required, but here `malloc` succeeded and returned exactly the 16 bytes it was asked for. Retrying asks for the same wrong size."
       }
     ],
     "answer": 0,
-    "workedExample": "A 32-bit unsigned type keeps only the lowest 32 bits of a result:\n\n```formula\nS = (ns) mod 2^32\nns = 0x10000001 × 16\nns = 0x100000010\nns = 4,294,967,312\nS = 4,294,967,312 − 4,294,967,296\nS = 16 B\nwhere\nS: the byte count passed to malloc, in bytes (B)\nn: count, 0x10000001 = 268,435,457\ns: the item size, 16 B\nmod: modulo, the remainder after dividing; a value mod 2^32 keeps its lowest 32 bits\n2^32: 32 copies of 2 multiplied together, 4,294,967,296: how many values 32 bits can hold\n0x10000001: a hexadecimal (base-16) number, marked by the 0x prefix\nB: byte, 8 bits\nIn words: the true product needs 33 bits; dropping the top bit (subtracting 2^32 once) leaves a request for only 16 bytes.\n```\n\nCheck `count > SIZE_MAX / sizeof(item)` before multiplication, apply an application limit, and handle allocation failure. On implementations such as glibc, `calloc(count, sizeof(item))` rejects multiplication overflow, but its return must still be checked.",
+    "workedExample": "1. The fuzzer's crash is a write past the allocation, so ask why the allocation is smaller than the loop expects.\n2. The intended size is about 268 million items of 16 bytes, around 4 GiB. That needs 33 bits, but a 32-bit `size_t` keeps only the lowest 32: 0x100000010 becomes 0x10, a 16-byte request.\n3. Unsigned wraparound is defined C behaviour, so nothing traps; `malloc` succeeds and the loop writes far beyond it.\n4. The fix belongs before the multiplication: reject `count > SIZE_MAX / sizeof(item)`, apply an application limit on `count`, and still handle allocation failure. On implementations such as glibc, `calloc(count, sizeof(item))` and `reallocarray` perform the overflow check for you, but their return values must still be checked.",
     "link": {
       "title": "Primary reference for this example",
       "url": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"

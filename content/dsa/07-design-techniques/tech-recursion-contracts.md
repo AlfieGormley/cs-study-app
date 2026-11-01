@@ -45,6 +45,13 @@ Almost every recursive function follows the same recipe:
 
 The second step is the one beginners resist. When you write `digit_sum(n // 10)`, you should *not* try to trace every call in your head. Instead, trust that it returns the right digit sum for the shorter number, and only check that your combining step is correct.
 
+> [!analogy] Real-world analogy: asking the row in front
+> In a dark cinema you want to know your row number. You can't count the rows, so you ask the person in front. They ask the person in front of them, and so on, until someone in the front row answers "row 1". Each person then adds one to the answer they receive and passes it back.
+>
+> **How it maps:** each person is one recursive call. The front row is the base case, answered directly. Asking the person in front is the recursive call on a smaller input, and "add one" is the combining step. Nobody needs to know how the person in front got their answer: that is the leap of faith.
+>
+> **Where it stops:** people in a cinema eventually reach the front row without anyone checking. A program has no such guarantee: you must prove that every call moves towards a base case, and every pending call uses memory until the answers come back.
+
 This is exactly **proof by induction**:
 
 | Induction | Recursion |

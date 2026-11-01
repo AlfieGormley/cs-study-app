@@ -10,9 +10,9 @@ summary: One concrete counterexample disproves a rule; a clean random run does n
 ## Other places greedy breaks
 
 - **Dijkstra with negative edges.** The settling variant of Dijkstra refuses to improve finalised vertices, assuming no later path can be cheaper. With edges A→B 2, A→C 3, C→B −2, it finalises B at 2, but A→C→B costs 1.
-- **Nearest-neighbour TSP.** Always visiting the closest unvisited city produces tours that can be much longer than optimal.
+- **Nearest-neighbour TSP.** Always visiting the closest unvisited city produces tours that can be much longer than optimal; as the previous unit noted, it has no constant-factor guarantee.
 - **Weighted interval scheduling.** Earliest finish maximises the count, not the total value.
-- **Longest path.** Extending by the heaviest edge each step can walk into a dead end.
+- **Longest simple path.** Extending by the heaviest edge each step can walk into a dead end. In general graphs the longest simple path problem is NP-hard; on a directed acyclic graph it becomes easy by dynamic programming over a topological order.
 
 ## How to tell greedy from DP
 

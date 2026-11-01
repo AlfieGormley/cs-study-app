@@ -9,7 +9,14 @@ summary: Backtracking walks an implicit decision tree depth first.
 
 Some problems don't have a clever formula. You simply have to try possibilities: every subset, every ordering, every placement. **Backtracking** is the disciplined way to do that.
 
-Picture walking a maze with a piece of chalk. At each junction you pick a corridor and mark it. If you reach a dead end, you walk back to the last junction, rub out the mark and try the next corridor. With systematic choice enumeration and a mark for every cell on the current path, you can enumerate simple routes without following a cycle forever. The path is working search state; access to the maze and any extra constraints still requires storage.
+Backtracking makes one choice at a time, follows it as far as it can, and when it reaches a dead end it undoes the most recent choice and tries the next option. Marking everything on the current path stops it going round in circles.
+
+> [!analogy] Real-world analogy: a maze and a piece of chalk
+> Walking a maze, at each junction you pick a corridor and chalk a mark on it. At a dead end you walk back to the last junction, rub out the mark and try the next corridor.
+>
+> **How it maps:** a junction is a decision point; picking a corridor is "choose", walking on is "explore", and walking back and rubbing out the mark is "unchoose". The chalk marks are the shared path state, and trying every corridor in a fixed order makes the search systematic, so no route is missed or repeated.
+>
+> **Where it stops:** a maze is a fixed physical place. A backtracking search tree usually isn't stored anywhere: the next choices are generated on the fly, the tree can be astronomically large, and the program must also restore any extra bookkeeping (counters, sets of used values), not just the path.
 
 ## The state-space tree
 

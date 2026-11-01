@@ -34,44 +34,37 @@ def fib(n):
 fib(1) fib(0)
 ```
 
-`fib(4)` makes 9 calls, `fib(5)` 15, `fib(30)` over 2.6 million. Counting the calls gives a recurrence of its own, because each call is itself plus the calls its two children make:
+Count the boxes: `fib(4)` makes 9 calls, `fib(5)` makes 15 and `fib(30)` makes about 2.7 million, yet there are only n + 1 different arguments (0 to n). The same subproblems are solved again and again: `fib(2)` appears twice in the small tree above, and far more often in bigger ones.
 
-```formula
+The call count itself follows a Fibonacci-like pattern, because each call is one call plus all the calls its two children make. So each step up in the argument multiplies the number of calls by roughly 1.6 (the golden ratio): exponential growth.
+
+```formula reference
 C(n) = 1 + C(n − 1) + C(n − 2)
-C(0) = C(1) = 1
-C(n) = 2 × F(n + 1) − 1 = Θ(φ^n)
-C(30) = 2 × F(31) − 1
-C(30) = 2 × 1,346,269 − 1 = 2,692,537
+C(n) = 2F(n + 1) − 1
 where
-C(n): the total number of calls that fib(n) makes, including itself
-n: a non-negative integer argument passed to fib; the recursive recurrence applies from two upwards
+C(n): the total number of calls that fib(n) makes, including itself, for n of at least 2; C(0) = C(1) = 1
+n: the non-negative whole number passed to fib
 F(n): the nth Fibonacci number (F(0) = 0, F(1) = 1, each later one the sum of the previous two)
-φ: phi, the golden ratio, (1 + √5) / 2 ≈ 1.618
-φ^n: n copies of φ multiplied together
-Θ: Big-Theta, grows at exactly this rate up to a constant factor (here C(n) is about 1.45 × φ^n)
-In words: the call count follows the Fibonacci pattern itself, so each extra 1 on the argument multiplies the work by about 1.6.
+In words: a call is itself plus the calls of its two children, which makes the call count about twice a Fibonacci number, growing by a factor of about 1.6 per step.
 ```
 
-The total grows that fast because the same subproblems are solved again and again. Caching results (memoisation) reduces this to O(n) additions; integer bit costs grow with n, so this is not an O(n) bit-time claim; that idea is the heart of the dynamic programming module.
+Caching results (memoisation) removes the repetition: each argument is computed once, so the number of additions drops to O(n). The integers still get longer as n grows, so this is not an O(n) bit-cost claim. That idea is the heart of the dynamic programming module.
 
-> [!warning] Hidden O(n) work per call
-> Here n is the original list length. `return xs[0] + total(xs[1:])` looks linear, but each slice copies the list. Because every frame holds its slice until it returns, memory grows the same way. Pass an index instead of slicing.
+> [!analogy] Real-world analogy: a family tree of questions
+> Imagine a family-history volunteer who, asked about a person, must separately research both parents, and for each parent research both of theirs, without keeping notes. When distant cousins have married, the same people appear on several branches and get researched again every time they turn up.
+>
+> **How it maps:** each research job is a call; the two parents are the two recursive calls; a person who appears on several branches is a repeated subproblem such as `fib(2)`. Keeping a notebook of finished answers is memoisation.
+>
+> **Where it stops:** in a real family tree, people shared between branches turn up irregularly and the records eventually run out. Naive Fibonacci repeats in a perfectly regular way and always ends at the base cases 0 and 1, which is what makes its call count follow its own Fibonacci pattern.
 
-Adding up the copies on a list of n items:
+## Hidden O(n) work per call
 
-```formula
-S = (n − 1) + (n − 2) + … + 1 + 0
-S = (n(n − 1)) / 2 = O(n^2)
-S = 1000 × 999 / 2 = 499,500
-where
-S: the total number of list references copied by all the slices
-n: the length of the original list; 1000 in the last line
-…: and so on, one fewer each time
-O(n^2): grows in proportion to n squared (n × n)
-In words: the slices copy n − 1, then n − 2, and so on, which adds up to about n²/2 copies; 1000 items cost about half a million copies instead of 1000.
-```
+Here n is the original list length. `return xs[0] + total(xs[1:])` looks linear, but each slice copies the rest of the list:
 
-That gives O(n²) time (assuming constant-cost element addition) and, because the slices are all alive at the deepest point, O(n²) memory at its peak.
+- The first call copies n − 1 references, the next n − 2, and so on down to 0. Those copies add up to about half of n squared, so the running time is **O(n²)**, assuming constant-cost element addition.
+- Every frame keeps its slice alive until it returns, and at the deepest point all of the frames are still waiting. So peak memory is **O(n²)** as well, not just O(n) for the frames.
+
+A thousand-item list makes about half a million reference copies instead of a thousand additions. The fix is to pass an index (`total(xs, i + 1)`) so each call does constant work, or, in Python, to use a loop.
 
 ## Key takeaways
 - A recursion tree counts repeated work, not just distinct arguments.

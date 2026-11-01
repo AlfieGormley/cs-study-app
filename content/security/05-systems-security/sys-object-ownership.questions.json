@@ -3,30 +3,30 @@
     "id": "sys-memory-bugs-q3",
     "level": "basic",
     "type": "single",
-    "prompt": "Which of these is a **temporal** memory-safety bug rather than a spatial one?",
+    "prompt": "A team rewrites a C session handler in safe Rust, with no `unsafe` blocks and no C libraries. Which problem from the C version can **still** occur?",
     "options": [
       {
-        "text": "Writing `arr[10]` into a 10-element array",
-        "explanation": "That is spatial: the address is outside the object's bounds, even though the object is alive."
+        "text": "Reading `s->name` after the session was freed and its storage reused",
+        "explanation": "That is a temporal (lifetime) error. Safe Rust's ownership rules and borrow checker reject use of a value after it has been moved or dropped at compile time, so this C use-after-free cannot be written in safe code."
       },
       {
-        "text": "Heartbleed's over-long `memcpy` read",
-        "explanation": "Also spatial: an out-of-bounds read past the end of a live buffer."
+        "text": "Writing index 16 of a 16-element buffer and silently changing the next variable",
+        "explanation": "That is a spatial (bounds) error. Rust checks indexing: an out-of-range index causes a panic instead of touching neighbouring bytes. The program may still stop, but it does not silently corrupt memory."
       },
       {
-        "text": "Reading `s->name` after `free(s)`",
-        "explanation": "Correct. The address was once valid, but the object's lifetime has ended. That is a use-after-free, a temporal bug."
+        "text": "Granting admin access to a session whose expiry the code never checks",
+        "explanation": "Correct. This is a logic and authorisation bug, not a memory-safety bug. A memory-safe language guarantees that `is_admin` is read from a live, valid object; it cannot know that the object should no longer be trusted."
       },
       {
-        "text": "A `malloc` size that wrapped round to a small number",
-        "explanation": "Wrapping can produce an undersized request; later accesses beyond the actual allocation are spatial errors. The arithmetic alone is not a temporal error."
+        "text": "Freeing the same session twice and corrupting the allocator",
+        "explanation": "Double free is a temporal error. Each Rust value has one owner that drops it once, and the compiler rejects code that would use or drop a moved value, so safe code cannot free it twice."
       }
     ],
     "answer": 2,
-    "workedExample": "Spatial checks concern object boundaries; temporal checks concern lifetime. In the selected option the session has been freed, so accessing its former member is invalid even though that member belonged to the original layout. A wrapped allocation can lead to spatial errors when code later exceeds the actual allocation.",
+    "workedExample": "1. Sort the options into memory-safety classes. Writing past a buffer is **spatial** (is the address inside the object?). Use-after-free and double free are **temporal** (is the object still alive?).\n2. Safe Rust removes both classes: indexing is bounds-checked at run time (a panic instead of corruption), and ownership with the borrow checker rejects use-after-move and double drop at compile time.\n3. What remains is behaviour the program was *allowed* to do: reading a valid session's `is_admin` field and acting on it. If the code never checks expiry, that authorisation flaw survives any language change.\n4. `unsafe` code and foreign C libraries are excluded by the prompt; with them, memory bugs could return in that code.",
     "link": {
-      "title": "CWE-416: Use After Free — MITRE",
-      "url": "https://cwe.mitre.org/data/definitions/416.html"
+      "title": "What is ownership? — The Rust Programming Language",
+      "url": "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html"
     }
   },
   {

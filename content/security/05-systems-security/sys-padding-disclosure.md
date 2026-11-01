@@ -13,6 +13,14 @@ An uninitialised automatic value is indeterminate in C11/C17, and many uses have
 
 Consider a structure with a one-byte flag followed by an eight-byte integer. Under an ABI that aligns the integer at offset eight and gives the whole structure sixteen bytes, offsets one through seven are padding. Writing both members establishes their values; it does not establish a portable representation for those seven extra bytes. That layout is an explicit example, not a promise about every platform.
 
+Under that ABI the 16 bytes are used like this:
+
+| Bytes | Contents |
+|---|---|
+| 0 | `flag` |
+| 1–7 | padding: unspecified values |
+| 8–15 | `value` |
+
 A safe interface defines which fields leave the component and how each is encoded. Copy the named values into a byte format with documented sizes and byte order; do not use the compiler's whole structure layout as the protocol. This also avoids exposing layout changes when the compiler, architecture or type definitions change.
 
 A kernel-to-user copy is a useful example of a trust boundary: user-space code should receive only the documented response, not incidental internal bytes. User-address checking and memory initialisation solve different problems. A valid destination address does not make unintended source padding safe to disclose.

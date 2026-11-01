@@ -50,24 +50,21 @@ def exist(board, word):
 - **Unchoose** = restore the letter. Forget this and a failed path permanently blocks cells that a later path needs.
 - **Prune** = the letter mismatch check, which can reject a branch immediately; its effectiveness depends on the grid and word.
 
-Complexity: count the paths the search can try. Every cell is a possible start; the first step has 4 directions and every later step at most 3 (you can't go back the way you came):
+Complexity: count the paths the search can try. Every cell is a possible start; the first step has 4 directions and every later step at most 3, because the cell you came from is already on the path. So every extra letter in the word can multiply the number of paths by up to 3.
 
-```formula
+```formula reference
 P ≤ 4RC 3^{L − 2}
-P = O(RC 3^L)
-P ≤ 12 × 4 × 3^8 = 314,928
 where
 P: the number of paths the search may explore, an upper bound
 R: the number of rows in the grid
 C: the number of columns in the grid
-L: the length of the word, in letters (at least 2 for the first line)
+L: the length of the word, in letters (at least 2)
 3^{L − 2}: L − 2 copies of 3 multiplied together
-O: Big-O, grows no faster than this up to a constant factor
 ≤: at most
-In words: R × C starting cells, 4 choices for the first step and at most 3 for each later one; a 3 × 4 grid and a 10-letter word allow at most about 315,000 paths.
+In words: every cell can start a path, the first step has up to 4 directions and each later step at most 3; a 3 × 4 grid and a 10-letter word allow at most about 315,000 paths.
 ```
 
-So the worst case is **O(R·C·3ᴸ)** for a word of length L. Mismatches and boundaries can reduce this upper bound, but no reduction is guaranteed for every input.
+So for an R-row, C-column grid the worst case is **O(R·C·3ᴸ)** for a word of length L. Mismatches and boundaries can reduce this upper bound, but no reduction is guaranteed for every input.
 
 ## Key takeaways
 - Mark the current path without losing original letters, then restore on both success and failure.

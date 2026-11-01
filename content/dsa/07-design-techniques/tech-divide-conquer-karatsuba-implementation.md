@@ -7,7 +7,7 @@ sourceLesson: tech-divide-conquer
 summary: Binary splits implement the same three-product algebra.
 ---
 
-The previous unit derived Karatsuba: combine the high-half product, low-half product and one product of half-sums. Here we implement that algebra with binary splits and compare it with another three-dimensional product problem: square matrix multiplication.
+The previous unit derived Karatsuba: combine the high-half product, low-half product and one product of half-sums. Here we implement that algebra with binary splits, then see the same "fewer multiplications" idea in square matrix multiplication.
 
 The preceding algebra unit uses decimal blocks for readability. This implementation splits at powers of two, avoiding decimal string conversion and its input-size limit. Its recurrence counts bit operations on linearly sized additions/splits.
 
@@ -37,22 +37,7 @@ def karatsuba(x, y):
     return sign * mul(abs(x), abs(y))
 ```
 
-In practice the additions and subtractions make Karatsuba slower than schoolbook for small numbers. In CPython 3.14, ordinary multiplication uses Karatsuba only when both operands exceed 70 internal digits; the squaring cutoff is 140. Internal digits have 15 or 30 bits depending on the build (`sys.int_info.bits_per_digit`). Libraries such as GMP go further with Toom–Cook and FFT-based methods for very large numbers. The same "fewer multiplications" idea gives **Strassen's** matrix multiplication: 7 half-size products instead of 8.
-
-```formula
-T(n) = 7T(n / 2) + O(n^2)
-c = log_2(7) ≈ 2.807 > 2
-T(n) = Θ(n^{log_2(7)})
-where
-T(n): the number of arithmetic operations to multiply two n × n matrices
-n: the number of rows (and columns) of each square matrix
-O(n^2): the work of the 18 additions and subtractions of (n / 2) × (n / 2) blocks, each touching n^2 / 4 entries
-c: the critical exponent, log_2 of the number of subproblems
-log_2(7): the base-2 logarithm of 7, about 2.80735
-≈: approximately equal to
-Θ: Big-Theta, grows at exactly this rate up to constant factors
-In words: seven half-size products put Strassen in the "leaves dominate" case, about n^2.807 work instead of the n^3 of the schoolbook method.
-```
+In practice the additions and subtractions make Karatsuba slower than schoolbook for small numbers. In CPython 3.14, ordinary multiplication uses Karatsuba only when both operands exceed 70 internal digits; the squaring cutoff is 140. Internal digits have 15 or 30 bits depending on the build (`sys.int_info.bits_per_digit`). Libraries such as GMP go further with Toom–Cook and FFT-based methods for very large numbers. The same "fewer multiplications" idea gives **Strassen's** matrix multiplication. Splitting two square matrices into quarter blocks naively needs 8 half-size block products; Strassen (1969) needs only 7, at the price of 18 block additions and subtractions. The additions cost work proportional to the number of entries, which is quadratic in the matrix side n, while the seven recursive products put the recurrence in the "leaves dominate" case. The result grows like n to the power log₂7, about n to the power 2.807, instead of the n³ of the schoolbook method. As with Karatsuba, practical libraries switch to it only above a size cutoff, if at all.
 
 ## Key takeaways
 - Binary splits implement the same three-product algebra.

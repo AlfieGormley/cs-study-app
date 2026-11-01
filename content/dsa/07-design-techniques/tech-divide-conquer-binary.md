@@ -11,42 +11,36 @@ Here n is the number of sorted items. The previous unit compared local work with
 
 ### Binary search
 
-Compare the target with the middle element and discard the half that can't contain it. That is one subproblem of half the size, with a constant amount of work per call:
+Compare the target with the middle element and discard the half that can't contain it. That leaves **one** subproblem of half the size, and each call does only a constant amount of work: one probe and comparison.
 
-```formula
-T(n) = T(n / 2) + O(1)
-a = 1,  b = 2,  d = 0
-c = log_2(1) = 0 = d
-T(n) = Θ(n^0 log(n)) = Θ(log(n))
-where
-T(n): the worst-case running time of binary search on n sorted items
-n: the number of items still in the search range
-O(1): a constant amount of work (one probe and comparison), however large n is
-a: the number of subproblems per call; 1, because one half is thrown away
-b: the shrink factor; 2, because the range halves
-d: the exponent of the per-call work; 0, because n^0 = 1 is constant
-c: the critical exponent, log_2(a)
-log_2(1): the base-2 logarithm of 1, which is 0 because 2^0 = 1
-n^0: n to the power 0, which is 1
-log: logarithm (the base only changes a constant)
-Θ: Big-Theta, grows at exactly this rate up to constant factors
-In words: d equals the critical exponent, so this is the "every level equal" case: a constant amount of work on each of about log n levels.
-```
+In master-theorem terms there is a single call (so the number of calls never grows) and constant local work, which is the "every level equal" case. Constant work on each of about log₂ n levels gives a **logarithmic** running time.
 
-```formula
+What that means in practice:
+
+- A billion sorted items need at most **30** midpoint probes: each probe halves the remaining range, and 2 to the power 30 is just over a billion.
+- **Doubling** the data adds just **one** more probe: the first comparison cuts the doubled range back to the old size.
+- Ten halvings shrink the range about a thousandfold, so every factor of a thousand in data costs about ten more probes.
+
+```formula reference
 p_max = floor(log_2(n)) + 1
-p_max = floor(log_2(10^9)) + 1 = 30
 where
-p_max: the maximum midpoint probes of ordinary binary search on a non-empty sorted range
-n: the number of items, one billion here
-floor: round down to the nearest integer
-log_2: the base-two logarithm
-In words: Binary search on a billion items needs at most thirty midpoint probes.
+p_max: the maximum number of midpoint probes ordinary binary search makes on a non-empty sorted range
+n: the number of items in the range
+floor: round down to the nearest whole number
+log_2: the base-two logarithm: the number of times you can halve a number before reaching 1
+In words: the worst case is one probe per halving, plus the final probe on a single remaining item; a billion items need at most thirty.
 ```
 
 A three-way comparator can classify a probe in one comparison; separate equality and ordering tests may perform more.
 
 Binary search is the degenerate case where "combine" is free and one half is thrown away entirely. Some people call this *decrease and conquer*.
+
+> [!analogy] Real-world analogy: finding a name in a printed phone book
+> You open the book near the middle, see whether the name you want comes before or after that page, and ignore the other half of the book. Then you repeat with the half you kept.
+>
+> **How it maps:** opening a page is a midpoint probe; alphabetical order is the sorted-input requirement that makes discarding half safe; each look roughly halves what is left, so even a huge book needs only a couple of dozen looks.
+>
+> **Where it stops:** people jump closer to the right letter (for "W" they open near the back), which is closer to interpolation search. Binary search always probes the exact middle, and it only works when the data really is sorted by the same key you compare.
 
 ## Key takeaways
 - A midpoint comparison discards one half and leaves no costly combination.

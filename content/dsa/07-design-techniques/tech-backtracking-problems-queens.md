@@ -21,21 +21,7 @@ Place n queens on an n × n board so that no two share a row, column or diagonal
 
 ### Modelling shrinks the tree
 
-For an eight-by-eight board, compare three ways of framing the search. Each extra piece of structure you build into the model shrinks the number of candidate placements:
-
-```formula
-N_any = C(64, 8) = 4,426,165,368
-N_row = 8^8 = 16,777,216
-N_perm = 8! = 40,320
-where
-N_any: placements choosing any 8 of the 64 squares
-C(64, 8): "64 choose 8", the number of ways to pick 8 squares from 64 when order doesn't matter
-N_row: placements with exactly one queen in each row (8 column choices for each of 8 rows)
-8^8: 8 copies of 8 multiplied together
-N_perm: placements with one queen per row and per column (each row takes a different column)
-8!: 8 factorial, 8 × 7 × … × 1
-In words: one queen per row cuts 4.4 billion candidates to 16.8 million, and one per column as well cuts them to 40,320.
-```
+For an eight-by-eight board, compare three ways of framing the search. Each extra piece of structure you build into the model shrinks the number of candidate placements: any 8 of the 64 squares, then exactly one queen per row (8 column choices in each of 8 rows), then one per row and per column (each row takes a different column, so the placements are orderings of the columns).
 
 | Model | Candidates |
 |---|---|
@@ -49,17 +35,18 @@ Backtracking row by row, rejecting a column the moment it's attacked, makes only
 
 Every square on the same down-right diagonal has the same `row − col`; every square on the same down-left (anti-) diagonal has the same `row + col`. Moving one step down-right adds 1 to both row and column, so their difference stays the same; moving down-left adds 1 to the row and takes 1 from the column, so their sum stays the same:
 
-```formula
+```formula reference
 r_1 − c_1 = r_2 − c_2
 r_1 + c_1 = r_2 + c_2
-1 + 2 = 3 + 0 = 3
 where
 r_1: the row number of the first square, counting from 0 at the top
 c_1: the column number of the first square, counting from 0 at the left
 r_2: the row number of the second square
 c_2: the column number of the second square
-In words: the first line holds exactly when two squares share a down-right diagonal (row minus column matches); the second holds exactly when they share an anti-diagonal (row plus column matches); squares (1, 2) and (3, 0) both have sum 3.
+In words: two squares share a down-right diagonal exactly when their row-minus-column values match, and share an anti-diagonal exactly when their row-plus-column values match.
 ```
+
+For example, squares (1, 2) and (3, 0) both have row-plus-column sum 3, so they share an anti-diagonal. Because a diagonal is identified by one number, a set of "used" differences and a set of "used" sums let the solver test both diagonals with two lookups instead of scanning the board.
 
 ```
 row-col on a 4x4      row+col on a 4x4

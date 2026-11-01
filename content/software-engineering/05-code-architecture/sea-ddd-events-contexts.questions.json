@@ -57,7 +57,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Identify the direction: the CRM is **upstream**, you are **downstream**.\n2. You can't change the CRM, and its model is poor, so you don't want to conform.\n3. Build an **anti-corruption layer**: a translation module at your edge.\n\nThe partial mapper assumes a local Customer type with an active field and a record with the documented CRM keys.\n\n```python\ndef to_customer(rec):\n    return Customer(\n        customer_id=rec[\"CUST_NO\"],\n        name=rec[\"NM_FULL\"],\n        # Map the documented active\n        # statuses.\n        active=rec[\"STAT\"] in (1, 2),\n    )\n```\n\n4. Preserve personal names rather than applying lossy title casing. This snippet assumes a local Customer type with an active field. Replacing the CRM may remain adapter-local only if the new source provides compatible semantics.",
+    "workedExample": "1. Identify the direction: the CRM is **upstream**, you are **downstream**.\n2. You can't change the CRM, and its model is poor, so you don't want to conform.\n3. Build an **anti-corruption layer**: a translation module at your edge.\n\nThis partial mapper assumes your shipping context has a `Customer` type with an `active` field, and that CRM records use the documented keys, including `STAT` for the status.\n\n```python\ndef to_customer(rec):\n    return Customer(\n        customer_id=rec[\"CUST_NO\"],\n        name=rec[\"NM_FULL\"],\n        # Map the documented active\n        # statuses.\n        active=rec[\"STAT\"] in (1, 2),\n    )\n```\n\n4. Only this mapper knows `CUST_NO`, `NM_FULL` or what status 2 means. If the CRM is replaced, the change can stay in the ACL, provided the new source can supply the same meanings.",
     "link": {
       "title": "Anti-corruption Layer pattern — Azure Architecture Center",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer"
@@ -75,7 +75,7 @@
       },
       {
         "text": "`order.place()` records an `OrderPlaced` event; after the database commit a handler reserves stock in its own transaction, accepting cross-aggregate eventual consistency and adding compensation for failures",
-        "explanation": "This is a common design when temporary pending status and compensation are acceptable. Use reliable event publication and idempotent handlers; separating transactions does not eliminate hot-stock contention."
+        "explanation": "Correct. Each aggregate gets its own transaction, linked by a reliably delivered event, and you accept a window where the order is placed but stock isn't yet reserved, plus compensation if reservation fails. Handlers must be idempotent because delivery can repeat. It narrows each transaction, though a very popular item can still see contention on its own stock row."
       },
       {
         "text": "Use a distributed two-phase commit between the two aggregates",

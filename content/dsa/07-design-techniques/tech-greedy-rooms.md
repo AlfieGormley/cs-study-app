@@ -24,7 +24,6 @@ def min_rooms(intervals):
         # The earliest-free room can be
         # reused now.
         if ends and ends[0] <= s:
-            # reuse the earliest-free room
             # Keep one finish time per
             # allocated room.
             heapq.heapreplace(ends, e)
@@ -33,9 +32,9 @@ def min_rooms(intervals):
     return len(ends)
 ```
 
-Why is it optimal? The number of meetings running at the same moment is a hard floor: they each need their own room.
+Why is it optimal? The number of meetings running at the same moment is a hard lower bound: they each need their own room. If three meetings are all running at 10:15, no schedule can manage with fewer than three rooms.
 
-```formula
+```formula reference
 R_min ≥ D
 D = max_t m(t)
 where
@@ -45,10 +44,10 @@ t: a moment in time
 m(t): the number of meetings in progress at moment t
 max_t: the largest value over all moments t
 ≥: is at least
-In words: if 3 meetings are all running at 10:15, no schedule can manage with fewer than 3 rooms.
+In words: the minimum number of rooms is at least the largest number of meetings in progress at any single moment.
 ```
 
-Greedy opens another room only when every room already allocated is busy at the new meeting’s start. The number of simultaneous meetings then equals the room count, so that count cannot exceed the maximum overlap. It therefore matches the lower bound. This is how calendar systems and some schedulers allocate resources, in O(n log n) time for n meetings.
+Greedy opens another room only when every room already allocated is busy at the new meeting’s start. The number of simultaneous meetings then equals the room count, so that count cannot exceed the maximum overlap. It therefore matches the lower bound, in O(n log n) time for n meetings. The same pattern fits any pool of identical reusable resources, such as machines or worker slots, when every job must be served and a resource can be reused once its current job ends.
 
 ## Key takeaways
 - Process meetings by start time and reuse the earliest-free room.

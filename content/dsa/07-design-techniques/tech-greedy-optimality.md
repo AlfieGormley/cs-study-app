@@ -7,8 +7,6 @@ sourceLesson: tech-greedy
 summary: Huffman is optimal among binary prefix codes for the supplied symbol frequencies.
 ---
 
-For example, earliest-finish accepts (0, 2) and (3, 4), two meetings. If each is worth 2 while a conflicting (1, 5) is worth 9, the two-meeting answer is worth only 4. Maximising value requires considering the single valuable meeting instead. This is why the objective belongs in the correctness proof.
-
 The previous unit constructed a Huffman prefix tree from positive symbol frequencies. We now justify its greedy merge and identify the specific objective it optimises, then contrast that with greedy rules for other problems.
 
 ### Why it's optimal
@@ -34,7 +32,7 @@ Problems where greedy is always optimal often have **matroid** structure, a form
 - **Trusting intuition.** Three of the four interval rules above sound reasonable and are wrong. Always try to break your rule with a small counterexample, then prove it.
 - **The wrong sort key.** Sorting meetings by start instead of end silently gives wrong answers on some inputs.
 - **Boundary conditions.** Decide whether touching intervals overlap (`>` versus `>=`).
-- **Changing the objective.** Add weights to interval scheduling (maximise total value, not count) and earliest-finish greedy fails; that version has an efficient DP solution; earliest-finish greedy alone is insufficient.
+- **Changing the objective.** Add weights to interval scheduling (maximise total value, not count) and earliest-finish greedy fails. For example, earliest-finish accepts (0, 2) and (3, 4), two meetings. If each is worth 2 while a conflicting (1, 5) is worth 9, the two-meeting answer is worth only 4. The exchange argument only ever protected the *count*. Weighted interval scheduling has an efficient DP solution instead.
 
 ## Key takeaways
 - Huffman is optimal among binary prefix codes for the supplied symbol frequencies.

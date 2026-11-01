@@ -3,27 +3,27 @@
     "id": "sys-mitigations-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "In a simplified MTE model, an eligible freed granule is retagged independently and uniformly over all 16 four-bit values. A stale pointer retains its old tag. What is the probability that this one tag comparison matches? Do not infer a real exploit success rate.",
+    "prompt": "A team tests an Android app on MTE hardware in synchronous mode. Their use-after-free test is reported on most runs, but on a few runs the stale access is not reported at all. The allocator retags freed memory with a random tag. What is the most likely explanation?",
     "options": [
       {
-        "text": "None; MTE always detects use-after-free",
-        "explanation": "Tags are only 4 bits, so a reallocated chunk can by chance get the same tag as the stale pointer."
+        "text": "MTE is broken on that device, because it always detects use-after-free",
+        "explanation": "MTE tags are only 4 bits, so detection is probabilistic. Missing some runs is expected behaviour, not a hardware fault."
       },
       {
-        "text": "About 1 in 4 (25%)",
-        "explanation": "This confuses the number of tag bits with the number of tag values; 4 bits give 16 values."
+        "text": "Asynchronous reporting delayed the report until after the test finished",
+        "explanation": "The prompt says synchronous mode, where a mismatch is reported at the faulting access. Delayed reporting is a property of asynchronous mode."
       },
       {
-        "text": "About 1 in 16 (6.25%)",
-        "explanation": "Exactly one of 16 equally likely tags matches the old tag: 1/16 = 6.25%. This arithmetic does not establish how many real attempts crash or succeed."
+        "text": "With only 16 possible tags, the reused memory sometimes received a tag equal to the stale pointer's old one, so the access matched",
+        "explanation": "Correct. Four-bit tags give 16 values. If retagging picks among them at random, the new tag occasionally equals the old one, and a matching access is not reported. Under a uniform model that is about one comparison in 16."
       },
       {
-        "text": "About 1 in 65,536",
-        "explanation": "That would need 16-bit tags. MTE stores 4 bits in the pointer's top byte."
+        "text": "MTE checks only the stack, not heap allocations",
+        "explanation": "Heap memory is MTE's main use on Android: the heap allocator adds tags to each allocation. The scenario is a heap use-after-free that is usually reported, which shows the heap is checked."
       }
     ],
     "answer": 2,
-    "workedExample": "Under the specified independent uniform model, exactly one of the possible tags matches the stale one:\n\n```formula\nT = 2^4 = 16\nP_match = 1 / T\nP_match = 1 / 16 = 6.25%\nwhere\nT: the number of distinct tag values\n2^4: 4 copies of 2 multiplied together, because a tag is 4 bits\nP_match: the probability that the new tag equals the stale pointer's tag, so the comparison does not catch the access\n%: per cent, parts per hundred\nIn words: one tag out of 16 equally likely tags matches, a 1-in-16 (6.25%) chance per comparison.\n```\n\nReal allocator policies can exclude values or retag differently; unchecked accesses and same-granule overflows also affect protection. A mismatch report is immediate only in synchronous mode; asynchronous mode may report later.",
+    "workedExample": "1. MTE gives each 16-byte granule a 4-bit allocation tag and each pointer a 4-bit tag; a checked access reports a mismatch.\n2. After `free` and reuse, the allocator gives the granule a new tag, while the stale pointer keeps the old one. Usually they differ, so the access is reported.\n3. Four bits allow only 16 tag values. If the new tag is chosen at random, it sometimes equals the old one; then the stale access matches and nothing is reported. In a uniform independent model that is 1 time in 16, about 6%, per comparison. Real allocators can exclude values or retag differently, so treat that as a model, not a measured rate.\n4. Synchronous mode reports at the access, so a missing report is not a reporting delay. Same-granule overflows and unchecked accesses are other reasons MTE can miss bugs.\n5. MTE finds and blunts many bugs but does not fix them. Repeat the test, or use AddressSanitizer as well, and fix the lifetime bug.",
     "link": {
       "title": "Memory Tagging Extension — Android",
       "url": "https://source.android.com/docs/security/test/memory-safety/arm-mte"

@@ -7,11 +7,11 @@ minutes: 5
 summary: Protect an aggregate’s rules through its root and use optimistic locking to detect concurrent changes.
 ---
 
-Entities and value objects describe individual concepts. An aggregate adds a boundary around the objects whose rules must hold together. The Money value object and dataclass import come from the preceding unit.
+Entities and value objects describe individual concepts. An aggregate adds a boundary around the objects whose rules must hold together. The code below reuses `Money` and the dataclass import from the preceding unit.
 
 ## Aggregates: consistency boundaries
 
-Some rules involve several objects at once: "an order can have at most 50 lines". Customer-wide credit is a separate cross-order invariant unless the model explicitly includes credit reservations. An **aggregate** is a cluster of entities and values treated as one unit for changes, with a single **aggregate root** that outsiders talk to.
+Some rules involve several objects at once: "an order can have at most 50 lines". An **aggregate** is a cluster of entities and values treated as one unit for changes, with a single **aggregate root** that outsiders talk to. A rule that spans many orders, such as a customer-wide credit limit, is *not* protected by one order aggregate; the next unit covers rules like that.
 
 ```
  +--------- Order aggregate ----------+
@@ -28,8 +28,8 @@ Some rules involve several objects at once: "an order can have at most 50 lines"
 The rules:
 
 1. **Only the root is referenced from outside.** Code calls `order.add_line(...)`, never `order.lines.append(...)`. The root enforces the invariants.
-2. **One aggregate, one transaction.** A common DDD guideline is to modify one aggregate per transaction; consciously chosen exceptions exist, and required invariants still need a correct atomic protocol. That aggregate is the unit of consistency and of locking.
-3. **Reference other aggregates by id.** `Order` holds `customer_id`, not a `Customer` object, so loading an order need not traverse the customer graph; code must still deliberately respect transaction boundaries.
+2. **One aggregate, one transaction.** A widely used guideline is to change one aggregate per transaction (in Fowler's summary, "transactions should not cross aggregate boundaries"), so the aggregate is the unit of consistency and of locking. Teams do break it deliberately, for example when a rule genuinely needs two aggregates to change together.
+3. **Reference other aggregates by id.** `Order` holds `customer_id`, not a `Customer` object, so loading an order doesn't drag in the customer and it's harder to change both by accident.
 4. **Keep aggregates small.** Vaughn Vernon's advice: design small aggregates, and include something only if a rule demands it be consistent *immediately*.
 
 ```python
@@ -80,19 +80,18 @@ class Order:
             raise EmptyOrder(self.id)
         # Record the valid state transition.
         self.status = "placed"
-        # Record intent; durable delivery
-        # needs
-        # an outbox in the saving
-        # transaction.
+        # Record the fact. Durable delivery
+        # needs an outbox written in the
+        # same transaction as the order.
         self.events.append(
             OrderPlaced(self.id))
 ```
 
-There is **one repository per aggregate** (`OrderRepository`, not `OrderLineRepository`), so domain changes go through its consistency boundary; optimized queries or persistence need not literally hydrate and rewrite every row.
+There is **one repository per aggregate** (`OrderRepository`, not `OrderLineRepository`), so changes always go through the root and its checks. Behind that repository, the storage code can still load or write individual rows efficiently.
 
 ### Concurrency: the version number
 
-If two requests load the same order and both add a line, one change could overwrite the other. The usual fix is **optimistic locking** on the aggregate root:
+If two requests load the same order and both add a line, one change could overwrite the other. The usual fix is **optimistic locking** on the aggregate root: each save says "only if nobody has saved since I loaded version 7".
 
 ```sql
 UPDATE orders
@@ -102,13 +101,20 @@ WHERE id = 42 AND version = 7;
 -- Reload and retry, or report a conflict.
 ```
 
-Because the aggregate is the consistency boundary, one root version can protect child changes only if every writer checks/advances it and writes all related changes in one database commit.
+Because the aggregate is the consistency boundary, one version number on the root can protect the lines too. That only works if every writer checks and advances the root's version, and saves the line changes in the same database transaction.
+
+> [!analogy] Real-world analogy: a wiki edit conflict
+> Two people open the same Wikipedia article and start editing. The first saves. When the second presses save, the wiki notices that the article has changed since they opened it. If it can't reconcile the two edits itself, it shows an edit-conflict page instead of silently overwriting the first person's work.
+>
+> **How it maps:** The revision the editor started from is the `version` they loaded. Saving is the version-checked `UPDATE`, and the edit-conflict screen is the application seeing 0 rows updated. Nobody locks the article while you type, which is why this is called *optimistic*: conflicts are assumed to be rare and are detected at save time.
+>
+> **Where it stops:** The wiki sometimes merges the two edits for you, and otherwise shows both versions so you can merge them by hand. A version-checked `UPDATE` merges nothing; your code must reload the aggregate and decide whether to retry the change or report the conflict.
 
 ## Key takeaways
 - An aggregate groups objects that must obey immediate aggregate invariants.
 - Outside callers change it through its root rather than mutable child collections.
 - Small aggregates reduce unnecessary loading and contention.
-- An optimistic locking check protects child writes only when every writer advances the root version atomically with them.
+- An optimistic locking check detects a conflicting save; it protects the lines only when every writer advances the root version in the same transaction.
 
 ## Further reading
 - [Domain-Driven Design Reference — Eric Evans](https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf)

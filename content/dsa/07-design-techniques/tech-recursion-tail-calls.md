@@ -28,6 +28,13 @@ def fact_acc(n, acc=1):
     return fact_acc(n - 1, acc * n)
 ```
 
+> [!analogy] Real-world analogy: passing on an enquiry
+> At a help desk, one clerk takes your question, adds a note to your file and sends you to the next desk, then forgets about you: the next desk will give you the final answer. Another clerk sends you to the next desk but insists you come back so they can add a fee to whatever that desk tells you.
+>
+> **How it maps:** the first clerk is making a tail call: nothing is left to do after handing you on, so their desk (the frame) can be reused at once. The note in your file is the accumulator carrying the partial result forward. The second clerk is a non-tail call such as `n * fact(n - 1)`: their desk must stay occupied until the answer comes back.
+>
+> **Where it stops:** a clerk can always walk away. Whether a program actually frees the frame depends on the language implementation: Scheme guarantees it, C compilers may do it, and CPython never does.
+
 Why care? Because a tail call needs nothing from the current frame afterwards, so a language can **reuse the frame** instead of pushing a new one. This is **tail-call optimisation (TCO)**, and it turns tail recursion into a loop with O(1) stack space. The Scheme programming language requires it by its standard; many functional language implementations rely on it; C compilers such as GCC and Clang often perform it at higher optimisation levels, but the C standard doesn't guarantee it.
 
 ### Python does not do TCO

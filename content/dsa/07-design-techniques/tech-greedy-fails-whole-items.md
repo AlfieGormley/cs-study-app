@@ -29,24 +29,28 @@ fractional: A + B + 2/3 of C
 
 Greedy's high-ratio choice, A, wastes capacity that couldn't be filled afterwards. With whole items, *how well the pieces fit together* matters, and the value/weight rule does not capture that interaction.
 
-0/1 knapsack is **NP-hard**: at least as hard as every problem in NP, so no algorithm is known that solves every instance in time polynomial in the size of the input (and none exists unless P = NP). The standard DP fills one table entry per capacity value for each item:
+> [!analogy] Real-world analogy: packing a car boot
+> Packing for a holiday, you load the bag that is most useful for its size first, then the next. Soon a gap is left that none of the remaining bags will fit, although a different combination of bags would have filled the boot completely.
+>
+> **How it maps:** the boot is the capacity, each bag is an item that must go in whole, and "most useful for its size" is ratio greedy. The leftover gap is the 20 kg greedy wastes in the table above; the better combination is the 0/1 optimum.
+>
+> **Where it stops:** a real boot has shape as well as volume, so even a combination with the right total size might not fit. The knapsack model only tracks one number, total weight, which is why an exact DP over that number is possible at all.
 
-```formula
-T = O(nW)
-T ≈ 100 × 50 = 5,000
-T ≈ 100 × 5 × 10^9 = 5 × 10^11
-where
-T: the number of table updates the DP performs
-n: the number of items (100 in the examples)
-W: the capacity, as a number (50, then 5 × 10^9 in the examples)
-O: Big-O, grows no faster than this up to a constant factor
-≈: approximately equal to
-10^9: one billion
-10^11: one hundred billion
-In words: the work grows with the capacity's numeric value, not with the number of digits needed to write it, so a capacity of 5 billion makes the table impractically large.
-```
+### How hard is 0/1 knapsack?
 
-That makes it **pseudo-polynomial**: its storage and work depend on W’s numeric value, so whether it is practical depends on both n and W and the available resources.
+No algorithm is known that solves every 0/1 knapsack instance in time polynomial in the size of the input. Precisely:
+
+- The **decision version**, "can a value of at least V be reached without exceeding capacity W?", is **NP-complete**. A knapsack problem is one of **Karp's 21 NP-complete problems** (1972); his version asks for a subset of numbers with an exact total, what is now usually called subset sum.
+- Finding the best value, the **optimisation problem**, is **NP-hard**: a fast optimiser would answer the decision version just by comparing its best value with V.
+- Hardness is shown by a **polynomial-time reduction** from a known NP-complete problem *to* knapsack: a fast knapsack solver would then give a fast solver for that problem too. A reduction in the other direction, from knapsack to some other problem, would prove nothing about knapsack's difficulty.
+- The chain starts with the **Cook–Levin theorem**: Stephen Cook (1971) and, independently, Leonid Levin (published 1973, framed in terms of search problems) showed that the Boolean satisfiability problem (SAT) is NP-complete. Karp then built a tree of reductions outward from SAT; his knapsack proof reduces exact cover to knapsack.
+- Whether P = NP is still unresolved. So "NP-hard" means "no polynomial-time algorithm unless P = NP", not "proved impossible".
+
+### Why the DP doesn't contradict this
+
+The standard DP updates one table entry per whole-number capacity for each item, so its work is the number of items times the capacity. A hundred items with capacity 50 take about 5,000 updates; the same items with a capacity of five billion take about half a trillion.
+
+That makes it **pseudo-polynomial**: its storage and work depend on the capacity's numeric value, while the input only needs about 33 bits to write that capacity down. The running time is exponential in the length of the capacity's binary representation, so it does not count as polynomial time. Problems like this, hard in general but solvable in time polynomial in the numeric values, are called **weakly NP-hard**. Whether the DP is practical depends on the number of items, the capacity and the available resources.
 
 ```python
 def knapsack01(items, cap):

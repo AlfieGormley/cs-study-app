@@ -17,12 +17,12 @@ Hyrum Wright, a Google engineer, named this after years of large-scale changes a
 
 - Code that parses your error *message text* breaks when you fix a typo.
 - Tests that assert on the iteration order of a set break when the hash function changes.
-- In CPython 3.6, dicts happened to preserve insertion order as an implementation detail. Python 3.7 subsequently made insertion order a language guarantee; this fact alone does not establish a single historical cause for the decision.
+- In CPython 3.6, dicts happened to preserve insertion order, and the release notes warned that this was an implementation detail that "should not be relied upon". Python 3.7 then made insertion order an official part of the language.
 
 What to do about it:
 
 - Keep observable surface small: fewer public names, fewer documented fields.
-- Make unspecified behaviour visibly unspecified. Go randomises map iteration order deliberately to discourage reliance on one stable order; this does not logically prevent callers from depending on observed behavior.
+- Make unspecified behaviour visibly unspecified. Before Go 1, map iteration order was undefined but in practice differed between hardware platforms, so a test that relied on it could always pass on one machine and fail on another. Go 1 made the order deliberately unpredictable, even between two loops over the same map, so such code breaks early in testing instead.
 - Treat *any* behaviour change as potentially breaking for someone, and release accordingly.
 
 ## Versioning
@@ -35,7 +35,7 @@ What to do about it:
 | MINOR 1.4.3 → 1.5.0 | Backwards-compatible addition |
 | MAJOR 1.5.0 → 2.0.0 | Incompatible change |
 
-Versions `0.y.z` are for initial development: "anything may change at any time". SemVer itself does not promise public-API stability during 0.x. Projects can document stricter compatibility policies; no particular maintainer motive or prevalence is inferred here.
+Versions `0.y.z` are for initial development: "anything MAY change at any time" and the public API should not be considered stable. A project can promise more in its own documentation, but SemVer itself doesn't.
 
 Some projects use **calendar versioning** instead (pip uses `YY.N`, such as 24.0). CalVer says *when* a release happened, not how compatible it is.
 
@@ -66,5 +66,5 @@ Changing a default is behaviour change for every caller who relied on it. Raisin
 ## Further reading
 - [Hyrum’s Law — Hyrum Wright](https://www.hyrumslaw.com/)
 - [Semantic Versioning 2.0.0](https://semver.org/)
-- [Go language specification](https://go.dev/ref/spec)
+- [Go 1 release notes: iterating in maps](https://go.dev/doc/go1#iteration)
 - [Python 3.7: dictionary insertion order](https://docs.python.org/3/whatsnew/3.7.html)

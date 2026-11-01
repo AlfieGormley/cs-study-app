@@ -18,7 +18,7 @@ The standard proof technique for greedy is the **exchange argument**: take any o
 3. Since g finishes earliest of all, it ends no later than o.
 4. Replace o with g. Every other meeting in O starts at or after the end of o, which is at or after the end of g, so none of them overlap g:
 
-```formula
+```formula reference
 e_g ≤ e_o ≤ s_x
 where
 e_g: the end time of g, the meeting that finishes first overall

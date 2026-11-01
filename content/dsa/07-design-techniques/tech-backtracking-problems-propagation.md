@@ -18,6 +18,13 @@ MRV picks good cells; **propagation** goes further by deducing values before gue
 
 Each assignment can trigger more eliminations, which trigger more assignments. Many easy puzzles are solved by propagation alone, with no search at all. When propagation stalls, the solver picks the MRV cell, guesses, propagates again, and backtracks if any cell's set becomes empty.
 
+> [!analogy] Real-world analogy: filling in a crossword
+> Writing in one answer fixes letters in every answer that crosses it. Those letters often leave only one possible word for a crossing clue, which fixes more letters, and so on. You only start guessing when no clue is forced any more.
+>
+> **How it maps:** each crossword entry is a variable, the dictionary words that still fit are its domain, and crossing squares are constraints. Writing in an answer and updating the crossing entries is propagation; an entry with exactly one fitting word is a naked single.
+>
+> **Where it stops:** a person solving a crossword can rub out answers in any order. A propagating solver must record every elimination it made after a guess so it can restore exactly those candidates when the guess fails.
+
 ## Constraint propagation in general
 
 All of this generalises to CSPs: variables, domains and constraints. Solvers combine backtracking with:
@@ -32,16 +39,7 @@ All of this generalises to CSPs: variables, domains and constraints. Solvers com
 
 **Forward checking** looks one step ahead. **Arc consistency** propagates further: removing a value from one domain can remove values from others, and so on, until nothing changes. Propagation has a per-node cost and can reduce the search tree; whether it improves running time depends on the instance and implementation.
 
-**Exact cover** is the problem of choosing rows of a 0/1 table so that every column has exactly one 1 among the chosen rows. Sudoku fits it directly:
-
-```formula
-N_rows = 81 × 9 = 729
-N_cols = 4 × 81 = 324
-where
-N_rows: candidate rows, one per (cell, digit) pair: 81 cells times 9 digits
-N_cols: constraint columns: each cell filled once, each digit once per row, once per column and once per box, 81 of each kind
-In words: a 9 × 9 Sudoku becomes a 729 × 324 exact-cover table before the givens remove candidates.
-```
+**Exact cover** is the problem of choosing rows of a 0/1 table so that every column has exactly one 1 among the chosen rows. Sudoku fits it directly: each row of the table is one possible (cell, digit) placement, 81 cells times 9 digits = 729 rows, and each column is one rule that must be satisfied exactly once. There are four kinds of rule with 81 of each: every cell is filled, and every digit appears once in every row, once in every column and once in every box, giving 324 columns before the givens remove candidates.
 
 Knuth’s **Algorithm X** can be implemented with **dancing links** (DLX): restoring an individual removed link/node takes O(1), while undoing a whole choice may restore many nodes. N-Queens uses exactly-one row/column constraints and **at-most-one diagonal** constraints, so the direct formulation needs optional secondary columns (generalised exact cover) or another encoding.
 

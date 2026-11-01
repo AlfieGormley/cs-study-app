@@ -9,23 +9,18 @@ summary: Merge the two lowest-frequency trees until one remains.
 
 ## Huffman coding
 
-Text is stored as bits. A **fixed-length code** gives every symbol the same length, enough bits to give each symbol a different pattern:
-
-```formula
-b = ⌈log_2(k)⌉
-b = ⌈log_2(6)⌉ = ⌈2.58⌉ = 3 bits
-where
-b: the number of bits each symbol needs in a fixed-length code
-k: the number of different symbols, here 6
-log_2(k): the base-2 logarithm of k, the power you raise 2 to in order to get k
-⌈ ⌉: ceiling: round up to the next whole number
-bits: binary digits, each 0 or 1
-In words: 2 bits give only 4 patterns, too few for 6 symbols, so each symbol takes 3 bits (8 patterns, 2 unused).
-```
+Text is stored as bits. A **fixed-length code** gives every symbol the same length, enough bits to give each symbol a different pattern. Six symbols need 3 bits each: 2 bits give only 4 patterns, too few, while 3 bits give 8, leaving 2 unused.
 
 If some symbols are much more common, a **variable-length code** can do better by giving them shorter codewords.
 
 For immediate symbol-by-symbol decoding without separators, a **prefix code** is sufficient: no codeword is a prefix of another. Prefix codes correspond to binary trees with symbols at the leaves; the code for a symbol is its path (0 = left, 1 = right).
+
+> [!analogy] Real-world analogy: Morse code
+> Morse code gives the most common English letter, E, a single dot and T a single dash, while rare letters such as Q get four symbols. Operators send common letters quickly and pay extra only for rare ones.
+>
+> **How it maps:** letters are symbols, dots and dashes are bits, and "brief codewords for frequent letters" is exactly what a variable-length code like Huffman's exploits to lower the average length.
+>
+> **Where it stops:** Morse is not a prefix code: E (one dot) is the start of I (two dots), so operators need a pause between letters to tell them apart. Huffman codes need no separator, and Huffman's algorithm chooses lengths that are provably optimal for the given frequencies rather than by hand.
 
 ### The greedy algorithm
 
@@ -74,7 +69,7 @@ def huffman(freq):
     return codes
 ```
 
-The function accepts string symbols with positive integer frequencies and returns an empty mapping for an empty alphabet. For one symbol it uses the non-empty code "0"; a format with a known message length could instead use an empty codeword. Tree construction uses O(k log k) heap operations for k symbols; materialising all code strings adds their total length, which can be Θ(k²). Integer arithmetic and string costs are additional to unit-cost heap analysis.
+The function accepts string symbols with positive integer frequencies and returns an empty mapping for an empty alphabet. For one symbol it uses the non-empty code "0"; a format with a known message length could instead use an empty codeword. Tree construction uses O(k) heap operations for k symbols, each costing O(log k), so O(k log k) time; materialising all code strings adds their total length, which can be Θ(k²). Integer arithmetic and string costs are additional to unit-cost heap analysis.
 
 The tie counter matters: without it, two entries with equal frequency make `heapq` compare the third elements, and comparing a string with a tuple raises `TypeError`.
 
@@ -102,24 +97,17 @@ The resulting tree (0 = left branch, 1 = right branch):
                 f5   e9
 ```
 
-The cost of a code is each symbol's frequency times its code length, added up:
+The cost of a code is each symbol's frequency times its code length, added up. Here the Huffman code needs 224 bits for the 100 characters, against 300 bits for a fixed 3-bit code: about a quarter fewer payload bits, excluding codebook and framing overhead. The saving comes from giving `a`, almost half the text, a 1-bit code.
 
-```formula
+```formula reference
 B = Σ f_i ℓ_i
-B = 45×1 + 13×3 + 12×3 + 16×3 + 9×4 + 5×4
-B = 45 + 39 + 36 + 48 + 36 + 20 = 224 bits
-B_fixed = 100 × 3 = 300 bits
-(300 − 224) / 300 ≈ 0.253
 where
-B: the total bits to encode the 100 characters with the Huffman code
+B: the total payload bits to encode the text with a given code
 Σ: sum: add up the term for every symbol i
-i: one of the six symbols a to f
+i: one symbol of the alphabet
 f_i: how many times symbol i occurs (its frequency)
 ℓ_i: the length of symbol i's codeword, in bits
-B_fixed: the bits needed with a fixed 3-bit code
-≈: approximately equal to
-bits: binary digits
-In words: the Huffman code needs 224 bits instead of 300, about 25.3% fewer payload bits, excluding codebook and framing overhead.
+In words: the encoded size is every symbol's count times its code length, added up; Huffman's tree makes this total as small as any prefix code can.
 ```
 
 ## Key takeaways

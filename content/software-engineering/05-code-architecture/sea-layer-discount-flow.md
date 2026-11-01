@@ -7,9 +7,7 @@ minutes: 4
 summary: Follow one discount request through a domain rule, repository, application service and HTTP translator.
 ---
 
-The previous unit mixed HTTP, pricing and SQL in one view. These connected teaching fragments separate those concerns; they are not a complete web application.
-
-The following teaching fragments split the feature into layers; module imports and app wiring are omitted. Assume decimal totals are stored as text in the SQLite example. A real endpoint also needs authorization, input validation, an explicit transaction/concurrency policy and a decision about repeated discount requests.
+The previous unit mixed HTTP, pricing and SQL in one view. The four fragments below split the same feature into layers. They are teaching fragments, not a complete web application: module imports and app wiring are left out, and totals are stored as decimal text in SQLite. A real endpoint would also need authorization, input validation, a transaction and concurrency policy, and a decision about what a repeated discount request should do.
 
 ```python
 # domain/order.py
@@ -108,16 +106,16 @@ def discount_view(oid):
 Now the batch job calls `services.apply_discount` directly. The rule in `Order` can be tested with no database at all. The view is a thin translator between HTTP and a use case.
 
 > [!warning] Spot the awkward arrow
-> The repository builds `Order` objects, so `data` imports `domain`, an arrow pointing *up* the diagram. That conflicts with a literal source-import ordering of this particular diagram. Layered separation can use mappers or dependency inversion; it does not require domain objects to inherit an ORM. The ports-and-adapters units develop dependency inversion explicitly.
+> The repository builds `Order` objects, so `data` imports `domain`: an arrow pointing *up* the diagram from the previous unit. Teams usually resolve this in one of two ways. Some list the domain *below* data in their dependency rules, so the repository may import `Order` but `Order` never imports SQL (a later unit shows this with Import Linter). Others have the domain define a repository interface that the data layer implements, which is dependency inversion; the ports-and-adapters units develop that idea.
 
 > [!note] Application layer vs domain layer
-> The domain holds rules that would exist even without software: "a closed order can't be discounted". The application layer orchestrates a use case: load, call the domain, save, finish with a database commit, perhaps send an email. Fowler calls the latter a **service layer**. In a rich domain-model design, repeated business decisions in application services suggest missing domain behavior. Conditional orchestration is not itself a violation, and transaction-script designs deliberately organize logic differently.
+> The domain holds rules that would exist even without software: "a closed order can't be discounted". The application layer orchestrates a use case: load, call the domain, save, finish with a database commit, perhaps send an email. Fowler calls this a **service layer**. In a rich domain model, business decisions that keep appearing in application services suggest behaviour missing from the domain. An `if` in a service is not automatically wrong, though: deciding *which steps to run* is orchestration, and a transaction-script design deliberately keeps simple logic in procedures.
 
 ## Key takeaways
 - The domain owns discount eligibility and valid percentage rules.
 - The application orchestrates loading, domain behavior and saving.
 - Views translate errors to HTTP; production transactions and authorization need explicit policies.
-- A repository importing a domain object needs an import ordering compatible with that dependency.
+- A repository that builds domain objects makes data depend on the domain; the layer rules must allow that, or an interface must invert it.
 
 ## Further reading
 - [Service Layer — Martin Fowler](https://martinfowler.com/eaaCatalog/serviceLayer.html)

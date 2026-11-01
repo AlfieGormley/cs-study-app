@@ -7,13 +7,13 @@ minutes: 4
 summary: Write a small decision record that preserves context, accepted trade-offs and superseded history.
 ---
 
-Two years into a project, a new engineer asks: "Why do we use an event bus between orders and billing? It makes everything harder." Nobody remembers. The person who decided has left. The team either keeps a design it doesn't understand, or rips it out and rediscovers the problem it solved.
+Two years into a project, a new engineer asks: "Why do we use an event bus between orders and billing? It makes everything harder." Nobody remembers. The person who decided has left. As Michael Nygard put it, the newcomer can only blindly accept the decision or blindly reverse it: keep a design nobody understands, or rip it out and rediscover the problem it solved.
 
 These neighbouring units cover two complementary habits. **Architecture decision records** preserve the *why* behind structural choices. **Evolutionary architecture** treats structure as something you change continually and safely, rather than something you get right once.
 
 ## Architecture decision records
 
-An **ADR** is a short document recording one architecturally significant decision: its context, the choice made and its consequences. Michael Nygard popularised the format in a 2011 blog post, and it's now widely used. Thoughtworks' Technology Radar placed lightweight ADRs in its *Adopt* ring.
+An **ADR** is a short document recording one architecturally significant decision: its context, the choice made and its consequences. Nygard popularised the format in a 2011 blog post, and it's now widely used; Thoughtworks' Technology Radar placed lightweight ADRs in its *Adopt* ring in November 2017.
 
 Nygard's template has five parts:
 

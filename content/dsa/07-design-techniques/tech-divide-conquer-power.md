@@ -11,7 +11,7 @@ summary: Compute the half-power once, then square it.
 
 To raise a number x to a non-negative whole-number power n, straightforward powering multiplies by x one time after another, which is O(n) multiplications. The bounds here count arithmetic operations; large-integer bit costs are additional. Divide and conquer notices that a power splits into two equal halves:
 
-```formula
+```formula essential
 x^n = (x^{n/2})^2        if n mod 2 = 0
 x^n = (x^{⌊n/2⌋})^2 x  if n mod 2 = 1
 where
@@ -24,13 +24,7 @@ mod: the remainder after division (Python's %); n mod 2 is 0 when n is even and 
 In words: to get x to the n, compute x to half of n once and square it; if n is odd, the rounding down lost one factor of x, so multiply it back in.
 ```
 
-```formula
-x^7 = (x^3)^2 x
-x^3 = (x^1)^2 x
-where
-x: the number being raised to a non-negative integer power
-In words: An odd exponent leaves one extra factor after squaring the half-power.
-```
+For example, x to the 7 is x cubed squared, times one more x; and x cubed is x squared times x. Each step halves the exponent.
 
 ```python
 def power(x, n):
@@ -48,44 +42,12 @@ def power(x, n):
     return half * half * x
 ```
 
-Each call halves n, so there are about log₂n calls, each doing at most two multiplications:
-
-```formula
-T(n) = T(n / 2) + O(1) = O(log(n))
-M = floor(log_2(1,000,000)) + 1 = 20
-where
-T(n): the number of multiplications `power` performs for exponent n
-n: the exponent
-O(1): a constant amount of work per call (at most two multiplications)
-O(log n): grows in proportion to the logarithm of n
-O: Big-O, "grows no faster than, up to a constant factor"
-log: logarithm (base 2 here)
-M: the exact number of squarings in the displayed recursive routine for exponent one million
-floor: round down to the nearest integer
-log_2(1,000,000): the base-2 logarithm of one million, about 19.93: the number of halvings from 1,000,000 down to 1
-≈: approximately equal to
-In words: halving the exponent each time means x to the millionth power needs about 20 squarings (plus a few extra multiplications for odd steps) instead of 999,999 multiplications.
-```
+Each call halves n, so there are about log₂n calls, each doing at most two multiplications: one half-size call with constant work, the logarithmic case of the master theorem. Raising x to the millionth power takes 20 squarings plus a few extra multiplications for odd steps, instead of 999,999 multiplications.
 
 > [!warning] Compute the half once
 > Writing `return power(x, n // 2) * power(x, n // 2)` makes two recursive calls instead of one. You've rebuilt the slow algorithm with extra overhead.
 
-The recurrence shows why: two calls on half the exponent, with constant work each, is the "leaves dominate" case.
-
-```formula
-T(n) = 2T(n / 2) + O(1)
-c = log_2(2) = 1 > d = 0
-T(n) = Θ(n^1) = Θ(n)
-where
-T(n): the number of multiplications for exponent n
-n: the exponent
-O(1): constant work per call
-c: the critical exponent, log_2(a) with a = 2 subproblems
-log_2(2): the base-2 logarithm of 2, which is 1
-d: the exponent of the per-call work; 0 for constant work
-Θ: Big-Theta, grows at exactly this rate up to constant factors
-In words: the call tree doubles at every level, so it ends with about n leaves, and the total is linear in n: no better than multiplying n times.
-```
+The recurrence shows why: two calls on half the exponent, with constant work each, is the "leaves dominate" case. The call tree doubles at every level for about log₂n levels, so it ends with about n leaves, and the total is linear in n: no better than multiplying n times.
 
 The iterative version reads the bits of n from least significant upwards: square x at every step and multiply it into the result when the bit is 1.
 
@@ -109,19 +71,17 @@ def power_iter(x, n):
     return result
 ```
 
-With a modulus applied after every multiplication, this is **modular exponentiation**, the workhorse of RSA and Diffie–Hellman. Taking the remainder after each step keeps the numbers small, and it gives the same final remainder:
+With a modulus applied after every multiplication, this is **modular exponentiation**, the workhorse of RSA and Diffie–Hellman. Taking the remainder after each step keeps the numbers small, and it gives the same final remainder as computing the huge power first. For example, three to the 13th is 1,594,323, which leaves remainder 3 when divided by 7; the loop reaches the same 3 without ever holding a number bigger than 36.
 
-```formula
+```formula reference
 (ab) mod m
   = ((a mod m) × (b mod m)) mod m
-3^13 mod 7 = 3
 where
 a: one number being multiplied
 b: the other number being multiplied
 m: the modulus, a positive whole number
 mod: the remainder after dividing by m (Python's %); 17 mod 7 = 3
-3^13: 3 raised to the power 13, which is 1,594,323
-In words: you can reduce each factor to its remainder before multiplying and still get the right remainder at the end, so products of already-reduced non-negative residues are smaller than the square of the modulus. Reduce an initially large base before relying on that product-size bound.
+In words: you can reduce each factor to its remainder before multiplying and still get the right remainder at the end. So every intermediate product stays below the square of the modulus, once the starting base has been reduced too.
 ```
 
 Python’s built-in `pow(base, exp, mod)` performs efficient modular powering; CPython 3.14 uses binary powering and a sliding-window method depending on exponent size. It is not literally this loop. Fixed-size matrix powering can compute the nth Fibonacci number using O(log n) matrix multiplications, with growing integer bit costs.

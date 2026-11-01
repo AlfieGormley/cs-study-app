@@ -7,7 +7,7 @@ sourceLesson: sys-memory-bugs
 summary: A C buffer has an object boundary even when adjacent bytes are mapped and writable.
 ---
 
-C and C++ provide pointer operations without universal run-time bounds or lifetime checks. Accessing an object outside its bounds or lifetime can cause **undefined behaviour**: the language does not promise a clean crash, a particular overwrite, or access to arbitrary addresses. Operating-system mappings and permissions still constrain hardware accesses. The C examples below use the C11/C17 model.
+C and C++ provide pointer operations without universal run-time bounds or lifetime checks. Accessing an object outside its bounds or lifetime can cause **undefined behaviour**: the language does not promise a clean crash, a particular overwrite, or access to arbitrary addresses. Operating-system mappings and permissions still constrain hardware accesses. The C examples below use the C11/C17 model. Memory-safe languages add those bounds and lifetime checks for you; a later lesson in this module covers what that changes and what it leaves.
 
 These bugs can expose secrets or alter decisions as well as crash programs. Chromium reports that memory unsafety accounted for around 70% of a sample of 912 high/critical Stable-channel security bugs since 2015. This is a historical, project-specific sample, not a current universal percentage.
 
@@ -36,6 +36,13 @@ The security concern is proximity: a buffer can share an allocation or stack fra
 
 So a bug that writes past the end of a buffer does not just corrupt "some data". It can overwrite something that decides **what the program does next**. That is the step from crash to compromise, and it is why the defences later in this module focus on protecting that control data.
 
+> [!analogy] Real-world analogy: a paper form with fixed boxes
+> A form has a box of 16 squares for your name, and right next to it a small box marked "Staff use: approved". Nothing about paper stops a pen at the edge of a box, so a very long name can run on into the approval box.
+>
+> **How it maps:** The boxes are neighbouring objects in a stack frame or allocation. The pen is `strcpy`, which keeps writing until the source ends, because it is never told where the box ends. Text spilling into "approved" is an overflow changing a nearby authorisation flag or control pointer.
+>
+> **Where it stops:** A C string also needs one square for its terminating NUL, so 16 bytes hold only 15 letters. On a form everyone can see which box comes next. In memory the compiler, ABI and allocator decide what is adjacent, and the C standard promises no particular result for the invalid write: it may corrupt data, crash or appear to work.
+
 Two important families are spatial errors and temporal errors. This two-family split does not describe every issue below; uninitialised-value use also needs separate attention.
 
 | Family | Question it breaks | Examples |
@@ -57,24 +64,9 @@ void greet(const char *name) {
 }
 ```
 
-`strcpy` requires enough destination space for all source bytes and the terminating NUL, the zero byte that marks the end of a C string. It is never told the destination's size, so it cannot check. The space needed, and how far a copy goes past the end, are:
+`strcpy` requires enough destination space for all source bytes and the terminating NUL, the zero byte that marks the end of a C string. It is never told the destination's size, so it cannot check. A string therefore needs one byte more than its length: the longest name that fits in `buf[16]` is 15 characters, and a 40-character name needs 41 bytes, 25 more than `buf` holds.
 
-```formula
-B_need = L + 1
-B_over = B_need − C
-B_need = 40 B + 1 B = 41 B
-B_over = 41 B − 16 B = 25 B
-where
-B_need: the destination space strcpy needs, in bytes (B)
-L: the length of the source string in bytes, not counting its NUL; 40 B for this name
-1: the one extra byte for the terminating NUL
-B_over: how many bytes the copy needs beyond the destination's capacity; anything above 0 means the call is invalid
-C: the destination's capacity in bytes; buf is declared char buf[16], so 16 B
-B: byte, a unit of 8 bits of memory
-In words: strcpy needs the string's length plus one byte for the NUL, so a 40-byte name needs 41 bytes, 25 more than the 16-byte buf holds.
-```
-
-So a valid 40-byte name exceeds `buf` by 25 bytes, and the longest name that fits is 15 bytes (15 + 1 = 16). Calling it here violates that requirement; a neighbouring-data overwrite is one possible result, not a guaranteed execution trace. Include `<string.h>` and `<stdio.h>` when compiling these function fragments.
+Calling it with such a name violates that requirement; a neighbouring-data overwrite is one possible result, not a guaranteed execution trace. A common review mistake is a length check that accepts names of up to 16 characters: it forgets the NUL, so a 16-character name still writes one byte too many. Include `<string.h>` and `<stdio.h>` when compiling these function fragments.
 
 ### Off-by-one errors
 

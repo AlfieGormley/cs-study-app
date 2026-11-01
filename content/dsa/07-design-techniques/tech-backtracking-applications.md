@@ -13,6 +13,7 @@ summary: Regex backtracking can explore super-linear or exponential alternatives
 
 > [!note] Measure rejection time separately
 > The grouping count explains the growth risk. Seconds depend on the regex engine version, input and machine; measure those explicitly before quoting a runtime.
+
 - **Dependency resolvers.** pip's resolver backtracks: it picks candidate versions and, after a conflict, undoes choices and tries alternative compatible versions; those need not always be older.
 - **SAT and constraint solvers** (next lesson), Prolog's execution model, parsers with alternatives, and puzzle solvers.
 

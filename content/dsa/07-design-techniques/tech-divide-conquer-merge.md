@@ -42,25 +42,18 @@ level 2:  [8] [3]  [5] [1]     n work
           3 levels, all 4 items each
 ```
 
-Each level does linear work in total (every item is merged once per level), and there are about log₂n + 1 levels:
+Each level does linear work in total (every item is merged once per level), and there are about log₂n + 1 levels. In master-theorem terms, two half-size calls balance a linear merge exactly: the "every level equal" case.
 
-```formula
+```formula reference
 T(n) = 2T(n / 2) + Θ(n)
-a = 2,  b = 2,  d = 1
-c = log_2(2) = 1 = d
 T(n) = Θ(n log(n))
 where
 T(n): the running time of merge sort on n items
 n: the number of items to sort
 Θ(n): work proportional to n, here the merge, which touches every item once
-a: the number of subproblems per call; 2 halves
-b: the shrink factor; 2, because each half has n / 2 items
-d: the exponent of the merge work; 1, because it is linear (n^1 = n)
-c: the critical exponent, log_2(a)
-log_2(2): the base-2 logarithm of 2, which is 1
 log: logarithm (the base only changes a constant)
 Θ: Big-Theta, grows at exactly this rate up to constant factors
-In words: d equals the critical exponent, so every level does the same n work, and there are about log n levels.
+In words: two half-size sorts plus a linear merge cost the same on every level, and there are about log n levels, so the total grows like n log n.
 ```
 
 For a million items, the linear-times-logarithm scale is roughly twenty million. This is neither an exact element-move count nor a timing; copied slices and concatenations also contribute work. The `<=` ensures a **stable sort** (equal keys stay in their original order). The price is O(n) extra memory for merging.

@@ -24,7 +24,6 @@ def combine(n, k):
             res.append(path[:])
             return
         need = k - len(path)
-        # stop if too few numbers remain
         # Leave enough later values to
         # finish a result.
         for i in range(start, n - need + 2):
@@ -40,11 +39,10 @@ def combine(n, k):
 #                  [2,3] [2,4] [3,4]
 ```
 
-The number of results is the **binomial coefficient**, "n choose k":
+The number of results is the **binomial coefficient**, "n choose k": the number of orderings of all n items, with the orderings inside the chosen group and inside the left-out group divided out, because rearranging them doesn't make a different combination.
 
-```formula
+```formula reference
 C(n, k) = n! / (k! (n − k)!)
-C(4, 2) = 24 / (2 × 2) = 6
 where
 C(n, k): the number of ways to choose k items from n distinct items when order doesn't matter
 n: the number of items to choose from
@@ -55,7 +53,7 @@ k!: k factorial, the number of orderings of the k chosen items
 In words: count the orderings of all n items, then divide out the orderings inside the chosen group and inside the left-out group, because they don't make a different combination.
 ```
 
-That matches the six pairs returned by `combine(4, 2)`; the comment shows the result without printing it. The loop bound `n - need + 2` is already a small piece of **pruning**: if you need 2 more numbers, there's no point starting at n.
+For four items choosing two, that gives six, matching the six pairs returned by `combine(4, 2)`; the comment shows the result without printing it. The loop bound `n - need + 2` is already a small piece of **pruning**: if you need 2 more numbers, there's no point starting at n.
 
 ## Key takeaways
 - A start index prevents reordered copies of the same combination.

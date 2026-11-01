@@ -1,6 +1,6 @@
 # Concept-first library review
 
-Status: **in progress**. 45/60 modules and 1305/1845 active lessons have current independent editorial reviews.
+Status: **in progress**. 48/60 modules and 1385/1845 active lessons have current independent editorial reviews.
 
 This report counts only active lesson IDs from module.json. Retired subjects (os, architecture, theory, languages; see `content/retired-subjects.json`) are excluded. Pending modules have not been certified by keyword scans or by renderer tests.
 
@@ -25,7 +25,7 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | [dsa / Trees & Heaps](../content/dsa/04-trees/verification.json) | Reviewed | 35 | 80 | 38 → 15 | 5 / 10 | 37 → 0 | 170 | 207 | 12 |
 | [dsa / Sorting & Searching](../content/dsa/05-sorting-searching/verification.json) | Reviewed | 46 | 96 | 53 → 30 | 6 / 24 | 42 → 0 | 195 | 270 | 7 |
 | [dsa / Graphs](../content/dsa/06-graphs/verification.json) | Reviewed | 37 | 82 | 58 → 33 | 8 / 25 | 57 → 0 | 177 | 236 | 7 |
-| dsa / Recursion, Backtracking & Greedy | Pending review | 40 | — | — | — | — | — | — | — |
+| [dsa / Recursion, Backtracking & Greedy](../content/dsa/07-design-techniques/verification.json) | Reviewed | 40 | 71 | 49 → 19 | 5 / 14 | 57 → 2 | 149 | 227 | 7 |
 | dsa / Dynamic Programming | Pending review | 46 | — | — | — | — | — | — | — |
 | dsa / Problem-Solving Patterns | Pending review | 42 | — | — | — | — | — | — | — |
 | dsa / Advanced Structures & Algorithms | Pending review | 49 | — | — | — | — | — | — | — |
@@ -49,13 +49,13 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | [security / Cryptography Basics](../content/security/02-crypto-basics/verification.json) | Reviewed | 37 | 72 | 55 → 25 | 9 / 16 | 66 → 3 | 251 | 243 | 8 |
 | [security / Applied Cryptography & PKI](../content/security/03-applied-crypto/verification.json) | Reviewed | 39 | 71 | 24 → 14 | 8 / 6 | 25 → 3 | 276 | 171 | 6 |
 | [security / Web Application Security](../content/security/04-web-security/verification.json) | Reviewed | 14 | 33 | 4 → 1 | 0 / 1 | 3 → 0 | 219 | 132 | 6 |
-| security / Systems Security | Pending review | 15 | — | — | — | — | — | — | — |
+| [security / Systems Security](../content/security/05-systems-security/verification.json) | Reviewed | 15 | 23 | 13 → 4 | 2 / 2 | 8 → 0 | 218 | 71 | 4 |
 | security / Security Engineering in Practice | Pending review | 23 | — | — | — | — | — | — | — |
 | [software-engineering / Design Principles & Clean Code](../content/software-engineering/01-principles/verification.json) | Reviewed | 26 | 69 | 4 → 1 | 1 / 0 | 4 → 0 | 294 | 98 | 5 |
 | [software-engineering / Design Patterns](../content/software-engineering/02-design-patterns/verification.json) | Reviewed | 28 | 66 | 4 → 0 | 0 / 0 | 9 → 0 | 284 | 116 | 9 |
 | [software-engineering / Testing](../content/software-engineering/03-testing/verification.json) | Reviewed | 22 | 68 | 10 → 1 | 0 / 1 | 5 → 0 | 197 | 120 | 8 |
 | [software-engineering / Version Control & CI/CD](../content/software-engineering/04-git-cicd/verification.json) | Reviewed | 26 | 69 | 8 → 5 | 1 / 4 | 7 → 0 | 279 | 155 | 7 |
-| software-engineering / Software Architecture at the Code Level | Pending review | 25 | — | — | — | — | — | — | — |
+| [software-engineering / Software Architecture at the Code Level](../content/software-engineering/05-code-architecture/verification.json) | Reviewed | 25 | 67 | 7 → 4 | 0 / 4 | 3 → 0 | 171 | 178 | 12 |
 | software-engineering / Engineering Practices | Pending review | 24 | — | — | — | — | — | — | — |
 | [synth / Sound & Digital Audio](../content/synth/01-sound-sampling/verification.json) | Reviewed | 32 | 69 | 52 → 23 | 1 / 22 | 60 → 0 | 297 | 128 | 24 |
 | [synth / Synthesis & DSP](../content/synth/02-synthesis-dsp/verification.json) | Reviewed | 44 | 82 | 56 → 18 | 4 / 14 | 60 → 0 | 112 | 234 | 18 |
@@ -607,6 +607,56 @@ None recorded in this editorial review.
 - medium confidence, graph-mst-clustering-tours: 1926 Moravian power-network history Original archive bibliographic entry and translated original paper/history by Nešetřil and Nešetřilová were read. The Czech original itself was not translated independently.
 - medium confidence, graph-dijkstra-assumptions: Lazy re-inserting Dijkstra with negative edges (no negative cycles) can re-process vertices an exponential number of times on adversarial graphs (Johnson 1973) Confirmed from the publisher's abstract (O(n2^n)-step networks for Dijkstra adapted to negative arcs); the full paper text could not be fetched, so the exact correspondence of Johnson's adapted algorithm to this heap-based lazy variant rests on the abstract. Wording stays hedged ('can grow exponentially').
 - medium confidence, graph-matrices-csr: Neo4j relationship layout depends on store format Unchanged from the earlier verification; product documentation is time-sensitive and no Neo4j benchmark was run.
+
+
+## dsa / Recursion, Backtracking & Greedy
+
+37 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- tech-divide-conquer-structure: "roughly a trillion" steps for all-pairs comparison of a million items -> "about half a trillion comparisons" (n(n - 1)/2 = 4.99999 x 10^11).
+- tech-divide-conquer-karatsuba-implementation: integer multiplication described as "another three-dimensional product problem" -> "the same fewer-multiplications idea in square matrix multiplication".
+- tech-greedy-huffman: "Tree construction uses O(k log k) heap operations" -> O(k) heap operations of O(log k) each, O(k log k) time.
+- tech-greedy-fails-approximation: nearest-neighbour bullet gave only the arbitrary-distance worst-tour result (Gutin, Yeo and Zverovich) in a metric context -> adds the metric logarithmic factor (Rosenkrantz, Stearns and Lewis 1977) and scopes the worst-tour claim to arbitrary distance tables.
+- tech-divide-conquer-q4 option "6": explanation said adding the bit contributions gives 6 (it gives 2) -> names the slip that does give 6 (base never squared: 3 x 3 x 3 = 27, remainder 6).
+- tech-backtracking-q1: correct-option explanation and worked example said longer subsets add only "a little" beyond a thousandfold -> states the prompt's equal-cost assumption and that real copying growth is about 30 x 2^30 / (20 x 2^20), about 1,500 times.
+- Glossary polynomial-time-reduction: aliases "many-one reduction(s)" captured a broader computability notion (many-one reductions need not be polynomial-time) -> aliases removed; the definition says it is the polynomial-time many-one (Karp) kind.
+
+**Scope gaps and exclusions:**
+
+- As before, AC-3, Algorithm X/DLX, CDCL SAT, multi-word trie search and direct N-Queens constructions are explained but not each given a full implementation; this module focuses on reusable search and greedy design principles.
+- The next dynamic-programming module develops the table/state formulations further. These units preserve the contrast examples without duplicating that module.
+- No hardware benchmark establishes a regex duration, MRV call-count improvement, bitmask runtime, large-integer crossover time, or practical item-count limit. Operation and output counts are not timings.
+- Closest-pair code uses floating-point hypot and expected hash lookup, not exact geometric predicates or a worst-case dictionary implementation. Finite meaningful coordinates are an input assumption.
+- The fast-power routines are instructional arithmetic examples, not constant-time cryptographic implementations.
+- NP-completeness is taught inside tech-greedy-fails-whole-items; no reduction is worked through and there is no dedicated lesson (lesson ids are fixed).
+- No dedicated lessons on randomised algorithms, amortised analysis or branch and bound beyond brief mentions.
+- General (non-metric) TSP inapproximability is not stated.
+- No 390 px render or offline check was run in this pass (scoped build, link, lint, glossary and code checks only).
+- Several lessons grew (for example whole-items 247 -> 676 words, approximation 173 -> 732, including collapsed analogy text); frontmatter minutes are frozen, and estimated reading times stay within about one minute of the stated values.
+- Formula lint: 44 heuristic hits in active files remain, all Rule 6 Big-O prose with n defined in context, code identifiers or traces; archival originals untouched.
+- Glossary coverage: 127 candidates, mostly analogy labels ("How it maps", "Where it stops"), emphasis phrases, numbers and code; bare "canonical" is defined in place rather than aliased (it has other DSA senses).
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, tech-backtracking-problems-sudoku: MRV/propagation improvement on an arbitrary puzzle Heuristic improvement depends on the instance and implementation. Only correctness on an explicit puzzle and invalid grid, not a universal speedup, is tested.
+- medium confidence, tech-backtracking-problems-masks: Performance of mask search versus set search on arbitrary board sizes Both actual algorithms are checked against solution counts, but no relative-timing or constant-word-cost guarantee for growing Python integers is asserted.
+- medium confidence, tech-divide-conquer-closest-code: Exact geometric correctness for extreme floating-point inputs The geometric proof assumes exact distances; implementation uses floating point and explicitly states its numeric limitation. Bounded integer-coordinate differential tests are not a proof for all floating-point magnitudes.
+- medium confidence, tech-divide-conquer-practice: Hybrid cutoffs or parallel decomposition improve every workload Primary implementations/framework docs support the mechanisms, not a universal measured advantage. Scheduling and representation overhead remain explicit.
+- medium confidence, tech-backtracking-applications: Rejected regex elapsed time at thirty input letters Combinatorial growth and bounded native rejection cases are checked. The thirty-letter attack example is deliberately not benchmarked to completion, and no runtime is claimed.
+- medium confidence, tech-backtracking-problems-propagation: Implementation/default-dependent facts in this unit Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
+- medium confidence, tech-divide-conquer-karatsuba-implementation: Implementation/default-dependent facts in this unit Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
+- medium confidence, tech-divide-conquer-power: Implementation/default-dependent facts in this unit Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
+- medium confidence, tech-greedy-optimality: Implementation/default-dependent facts in this unit Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
+- medium confidence, tech-recursion-frames: Implementation/default-dependent facts in this unit Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
+- medium confidence, tech-recursion-iteration: Implementation/default-dependent facts in this unit Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
+- medium confidence, tech-recursion-tail-calls: Implementation/default-dependent facts in this unit Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
+- medium confidence, tech-greedy-fails-whole-items: Karp's 1972 knapsack is the exact-total form and was proved NP-complete by reducing exact cover to it Confirmed from Wikipedia's listing of Karp's reductions and Springer/Crossref metadata; Karp's paper text was not read (no legitimate full copy was used).
+- medium confidence, tech-greedy-fails-whole-items: Levin (published 1973) independently showed SAT NP-complete, framed in terms of search problems Mathnet confirms the 1973 paper ('Universal sequential search problems'); its content (six universal search problems) is taken from Wikipedia's Cook-Levin article, not read directly.
+- medium confidence, tech-greedy-fails-approximation: Karlin, Klein and Oveis Gharan gave the first ratio below 1.5 for general metric TSP The ratio (randomised, 3/2 - epsilon, epsilon > 10^-36) is from the arXiv abstract; "first" rests on Wikipedia (Christofides algorithm; TSP: the 2011 improvement covered only graphic TSP). "Theoretical breakthrough rather than practical improvement" is an inference from the size of epsilon.
+- medium confidence, tech-greedy-fails-approximation: For every number of cities there are (arbitrary) distance tables on which nearest neighbour returns the worst tour Gutin, Yeo and Zverovich 2002 via Wikipedia (Nearest neighbour algorithm; TSP); the paper itself was not read. The metric logarithmic bound is confirmed from the Rosenkrantz-Stearns-Lewis 1977 abstract.
+- medium confidence, tech-greedy-fails-canonical: Pearson (2005) canonicity test runs in time polynomial in the number of denominations Title and bibliographic data confirmed via Crossref; the paper body was not read.
 
 
 ## dsp / Samples, Signals and Levels
@@ -1596,6 +1646,52 @@ None recorded in this editorial review.
 - medium confidence, web-csp-script-trust: Google's 2016 CSP study figures (about 26,000 policies, 14 of 15 hosts, about three-quarters bypassable via allowlists). Figures match the paper's own text exactly, but they are a 2016 snapshot, as the lesson states.
 
 
+## security / Systems Security
+
+12 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- sys-elf-hardening: 'at -O0 the tested glibc 2.39 and 2.41 headers silently leave fortification off' (implied glibc is silent) -> upstream glibc headers warn that _FORTIFY_SOURCE requires optimisation (since 2.16, still in 2.42/master); Debian and Ubuntu packages remove that warning, so there the checks are silently absent.
+- sys-mitigations-q7 workedExample: same claim (silent with glibc 2.39/2.41 headers) -> upstream warns, Debian/Ubuntu remove the warning; the -O0 binary calls plain strcpy either way. The author had removed '(and recent versions warn)', which was in fact correct for upstream glibc.
+- sys-elf-hardening: 'In a GCC 14 test on Linux, the fragment's flags produced both' -> GCC 13 on x86-64 produced both with the full fragment; GCC on 64-bit Arm rejects -fcf-protection=full, and a GCC 14 Arm build without it also produced both.
+- sys-object-ownership: 'Java's garbage collector reclaims objects automatically and never explicitly frees them' (self-contradictory) -> Java programs never free objects explicitly; a garbage collector reclaims only objects nothing can still reach. Borrow-checker sentence widened to include references that outlive their value (E0597).
+- sys-stack-canaries: unqualified 'With glibc the process prints *** stack smashing detected ***: terminated' -> 'With glibc 2.31 or later ... (older versions also printed the program name)'; tests named as GCC 13 and GCC 14.
+- glossary sys-sigabrt example hedged to glibc 2.31 or later.
+- sys-buffer-bounds analogy: '16-letter box' could suggest 16 characters fit -> box of 16 squares, and the limit now says the NUL needs one square so 16 bytes hold only 15 letters.
+
+**Scope gaps and exclusions:**
+
+- No substantive source topic, C example, drawing, formula model or original question was dropped. The two original lessons are now fifteen separately completed focused units.
+- Linux arm64 GCC 14.2/glibc 2.41 fixtures cannot establish a full 32-bit allocator ABI or physical CET/IBT/BTI/PAC/MTE enforcement. The 32-bit size arithmetic is tested with real uint32_t and exact arithmetic.
+- Kernel copy_to_user is modelled by a local memcpy layout fixture; no actual driver or kernel/user copy is exercised. No remote exploitation, deployed vulnerability scanning, throughput guarantee, universal deployment rate, continuous fuzzing or full Valgrind campaign was attempted.
+- Apple Clang sanitizer startup stalled in the author run and was stopped; this independent review deliberately did not retry that hang. Linux sanitizer fixtures completed.
+- Glossary entries retaining secondary reference pages have medium confidence where primary checks are conceptual rather than a complete platform-specific implementation audit.
+- Sandboxing (seccomp-bpf), privilege separation and Linux capabilities are not taught in this module or elsewhere in the security subject; question ids cannot be added, so this remains a gap.
+- MTE, CET/IBT, BTI, PAC enforcement, Windows CFG and Clang CFI were not exercised on hardware/toolchains; those claims rest on official documentation (x86 IBT/SHSTK ELF properties were observed with readelf -n only).
+- Valgrind, MSan and fuzzers were not run; slowdown figures are the tools' own documented typical values.
+- The June 2025 CISA/NSA guide PDF (media.defense.gov) returned 403; only CISA's landing page was read, and the lesson cites only its existence, date and co-authors.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, sys-buffer-bounds: Implementation/version/configuration-dependent examples and protection coverage The central claim is checked against fetched primary language, protocol, toolchain or platform sources and bounded local fixtures; target-specific generated layouts, library/tool versions or enabled hardware enforcement remain conditional. No full 32-bit allocator ABI, real CET/BTI/PAC/MTE enforcement, production exploit, Valgrind run or long fuzzing campaign is claimed.
+- medium confidence, sys-heartbeat-lengths: Implementation/version/configuration-dependent examples and protection coverage The central claim is checked against fetched primary language, protocol, toolchain or platform sources and bounded local fixtures; target-specific generated layouts, library/tool versions or enabled hardware enforcement remain conditional. No full 32-bit allocator ABI, real CET/BTI/PAC/MTE enforcement, production exploit, Valgrind run or long fuzzing campaign is claimed.
+- medium confidence, sys-allocation-arithmetic: Implementation/version/configuration-dependent examples and protection coverage The central claim is checked against fetched primary language, protocol, toolchain or platform sources and bounded local fixtures; target-specific generated layouts, library/tool versions or enabled hardware enforcement remain conditional. No full 32-bit allocator ABI, real CET/BTI/PAC/MTE enforcement, production exploit, Valgrind run or long fuzzing campaign is claimed.
+- medium confidence, sys-finding-memory-bugs: Implementation/version/configuration-dependent examples and protection coverage The central claim is checked against fetched primary language, protocol, toolchain or platform sources and bounded local fixtures; target-specific generated layouts, library/tool versions or enabled hardware enforcement remain conditional. No full 32-bit allocator ABI, real CET/BTI/PAC/MTE enforcement, production exploit, Valgrind run or long fuzzing campaign is claimed.
+- medium confidence, sys-stack-canaries: Implementation/version/configuration-dependent examples and protection coverage The central claim is checked against fetched primary language, protocol, toolchain or platform sources and bounded local fixtures; target-specific generated layouts, library/tool versions or enabled hardware enforcement remain conditional. No full 32-bit allocator ABI, real CET/BTI/PAC/MTE enforcement, production exploit, Valgrind run or long fuzzing campaign is claimed.
+- medium confidence, sys-nx-code-reuse: Implementation/version/configuration-dependent examples and protection coverage The central claim is checked against fetched primary language, protocol, toolchain or platform sources and bounded local fixtures; target-specific generated layouts, library/tool versions or enabled hardware enforcement remain conditional. No full 32-bit allocator ABI, real CET/BTI/PAC/MTE enforcement, production exploit, Valgrind run or long fuzzing campaign is claimed.
+- medium confidence, sys-aslr-guess-models: Implementation/version/configuration-dependent examples and protection coverage The central claim is checked against fetched primary language, protocol, toolchain or platform sources and bounded local fixtures; target-specific generated layouts, library/tool versions or enabled hardware enforcement remain conditional. No full 32-bit allocator ABI, real CET/BTI/PAC/MTE enforcement, production exploit, Valgrind run or long fuzzing campaign is claimed.
+- medium confidence, sys-aslr-pointer-leaks: Implementation/version/configuration-dependent examples and protection coverage The central claim is checked against fetched primary language, protocol, toolchain or platform sources and bounded local fixtures; target-specific generated layouts, library/tool versions or enabled hardware enforcement remain conditional. No full 32-bit allocator ABI, real CET/BTI/PAC/MTE enforcement, production exploit, Valgrind run or long fuzzing campaign is claimed.
+- medium confidence, sys-elf-hardening: Implementation/version/configuration-dependent examples and protection coverage The central claim is checked against fetched primary language, protocol, toolchain or platform sources and bounded local fixtures; target-specific generated layouts, library/tool versions or enabled hardware enforcement remain conditional. No full 32-bit allocator ABI, real CET/BTI/PAC/MTE enforcement, production exploit, Valgrind run or long fuzzing campaign is claimed.
+- medium confidence, sys-control-transfer-checks: Implementation/version/configuration-dependent examples and protection coverage The central claim is checked against fetched primary language, protocol, toolchain or platform sources and bounded local fixtures; target-specific generated layouts, library/tool versions or enabled hardware enforcement remain conditional. No full 32-bit allocator ABI, real CET/BTI/PAC/MTE enforcement, production exploit, Valgrind run or long fuzzing campaign is claimed.
+- medium confidence, sys-tagging-layers: Implementation/version/configuration-dependent examples and protection coverage The central claim is checked against fetched primary language, protocol, toolchain or platform sources and bounded local fixtures; target-specific generated layouts, library/tool versions or enabled hardware enforcement remain conditional. No full 32-bit allocator ABI, real CET/BTI/PAC/MTE enforcement, production exploit, Valgrind run or long fuzzing campaign is claimed.
+- medium confidence, sys-elf-hardening: Debian and Ubuntu remove the upstream -O0 _FORTIFY_SOURCE warning Confirmed from the Ubuntu noble patch series and any/local-revert-bz13979.diff (Launchpad) and observed in Debian 13 glibc 2.41 and Ubuntu 24.04 glibc 2.39 headers; Debian's own salsa repository was behind an anti-bot challenge, and future distro releases may drop the patch.
+- high confidence, sys-stack-canaries: glibc 2.31+ message wording '*** stack smashing detected ***: terminated' / '*** buffer overflow detected ***: terminated' Read in glibc debug/fortify_fail.c at 2.30, 2.31 and master and observed on 2.39 and 2.41; distribution backports could differ.
+- medium confidence, sys-tagging-layers: Android documents ~93% detection for randomized tags Fetched 2026-11-01 from source.android.com (M_MEMTAG_TUNING_UAF); product documentation can change.
+- medium confidence, sys-object-ownership: June 2025 CISA/NSA joint guidance Only CISA's landing page (dated June 24, 2025, CISA and NSA) could be read; the PDF returned 403.
+- medium confidence, sys-finding-memory-bugs: ASan ~2x, MSan ~3x, Memcheck 20-30x Quoted from each tool's own documentation as typical figures; not measured here; the lesson states they are not guarantees.
+
+
 ## software-engineering / Design Principles & Clean Code
 
 9 question objects changed. Every changed question has a specific independent-review reason in the linked record.
@@ -1753,6 +1849,45 @@ None recorded in this editorial review.
 - medium confidence, git-ci-feedback: actions/checkout and actions/setup-python current major version v7 True on 2026-10-30 (GitHub releases API); dated in the text; hosted run not executed.
 - medium confidence, git-progressive-rollouts: git-cd-release-q7 noise reasoning (sqrt of expected count; a 3-error gap about one stage in four) Stated as an assumption of rare, independent (Poisson) errors; real error streams can be correlated. Implies ~3,000 canary requests per stage.
 - medium confidence, all analogy lessons: 10 analogy callouts Teaching aids reviewed for mapping and limit against the lesson's sources; not evidence.
+
+
+## software-engineering / Software Architecture at the Code Level
+
+24 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- {"lesson":"sea-adr-records","before":"Radar placed lightweight ADRs in Adopt in 2018","after":"in November 2017","reason":"Radar blip history: Trial Nov 2016, Mar 2017; Adopt Nov 2017 and May 2018."}
+- {"lesson":"sea-module-dependency-stability","item":"sea-modularity-q4","before":"experiments imports five other packages (not money); option explanation 'There's no cycle here'","after":"none of the five depends on money; explanation says not every import creates a cycle","reason":"With twelve packages importing money, an unconstrained 'five other packages' could create an indirect cycle, making the explanation false."}
+- {"lesson":"sea-ddd-language-values","before":"Passport analogy: the passport stays yours after renewal 'with a new photo and address'; limit contrasted people changing with immutable values","after":"The person the passport office tracks is the entity; limit: in code identity is just an id field, so duplicate records for one person must be prevented","reason":"A renewal issues a new document, so the mapping conflated document and entity; the old limit was not a limit of the comparison."}
+- {"lesson":"sea-ddd-investment-pitfalls","before":"'practitioners commonly add a third category'","after":"attributed: Vernon's Implementing Domain-Driven Design (2013), for example, describes core, supporting and generic subdomains","reason":"Evans's DDD Reference has only core domain and generic subdomains; IDDD's publisher index lists 'Supporting Subdomains ... defined, 52'."}
+- {"lesson":"glossary","item":"supporting-subdomain, subdomain","before":"Sourced to / implied by Evans's DDD Reference","after":"States Evans names core and generic only; supporting from later writers such as Vernon; supporting-subdomain re-sourced to the IDDD publisher page","reason":"Evans's reference does not define a supporting subdomain."}
+- {"lesson":"sea-module-abstractness-metrics","item":"lesson and glossary zone-of-pain, zone-of-uselessness","before":"'Martin's later books'; glossary sourced to the 1994 paper and kept the unattributed string-library example","after":"'Martin's later writing, including his 2017 book Clean Architecture'; glossary re-sourced to the book's publisher page; string-library example replaced with a general statement","reason":"The names are not in the 1994 paper; the publisher's table of contents (Italian edition) lists 'Zona di dolore (zone of pain)' and 'Zona di inutilità (zone of uselessness)'."}
+- {"lesson":"sea-hexagonal-ports","before":"'Cockburn took the distinction from use cases' primary and secondary actors'; 'two to four ports were enough'","after":"'relates the distinction to'; 'typically two, three or four; four was the most he had met'","reason":"Cockburn: 'This is related to the idea from use cases'; 'two, three, or four (four is most I have encountered to date)'."}
+- {"lesson":"sea-layer-tradeoffs","before":"'opening some layers (or a simpler design) is often better'","after":"Richards suggests considering opening some layers, noting change becomes harder to control","reason":"Matches the O'Reilly report, which carries that caveat and does not suggest 'a simpler design'."}
+- {"lesson":"sea-module-information-hiding","before":"'several of them meant editing every module'","after":"'each of those two storage changes meant editing every module'","reason":"Parnas: changes 2 and 3 'would result in changes in every module'."}
+- {"lesson":"sea-module-monolith-dependencies","before":"'rules pushed without explaining the reasons mostly added friction'","after":"an early push for consistent patterns, without explaining the reasons well enough, added rules and friction without making hard problems easier","reason":"Matches the 2020 Shopify post's wording, which also notes some patterns helped."}
+- {"lesson":"sea-adr-evolution-teams-toggles","before":"'His explanation is...' after a Tilkov sentence","after":"'Fowler's explanation is...'","reason":"The boundary argument is Fowler's (MonolithFirst); Tilkov argues the opposite."}
+- {"lesson":"sea-layer-responsibilities","before":"'* 0.9 stores the new total as a float'","after":"'* 0.9 produces a float, an inexact type for money, which is then written back'","reason":"Executed: SQLite NUMERIC affinity stored 90.0 as integer 90; the float is the Python value, the stored type depends on the column."}
+
+**Scope gaps and exclusions:**
+
+- Teaching fragments retain explicit production gaps: HTTP authorization/input validation, transaction/idempotency and retry policies, complete notification/outbox relay, currency/rounding rules and full import resolution.
+- PostgreSQL Read Committed behavior source-checked against current official docs; SQL executed in SQLite, with no PostgreSQL server started.
+- Some general glossary entries retain secondary attached links. Each was reviewed; medium confidence is retained for crm, cross-functional-team, deep-module, distributed-transaction, facade, getters-and-setters, kilobyte, load-test, multitier-architecture, osi-model, serializer, shallow-module, sku, tcp-ip-model, two-phase-commit, typosquatting, zone-of-pain. Related primary supplements do not establish every example/attribution.
+- No source substantive section, original executable statement, formula equation or drawing intentionally omitted; archive and AST/equation parity independently checked.
+- Refactoring and technical debt are not in this module; they are taught in software-engineering/06-practices (sepr-refactoring-*, sepr-debt-*). No question ids could be added here (integration lead only).
+- Teaching fragments deliberately omit production concerns (authorization, input validation, transactions, outbox relay, currency rounding); the discount flow's Decimal totals accumulate decimal places (90.000, 81.0000) without a rounding policy, as the lesson states.
+- Agile Software Development (Martin, 2002) and the English text of Clean Architecture were not read; zone names rest on the publisher's table of contents.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, sea-module-information-hiding: Deep/shallow terminology and open() example. Author’s official scanned chapter excerpt was freshly fetched and visually read (pages 39–41); it supports general-purpose/deeper design and shallow interface examples, but the exact introductory definition is outside this free extract. open() behavior independently checked in Python docs. Never presented as an empirically universal quality guarantee.
+- medium confidence, sea-module-abstractness-metrics: Rarely changing string-library exception in the zone of pain. Primary Martin papers support the corner, metric and non-universal caveat; the specific string-library example lacks direct primary corroboration in the fetched papers.
+- medium confidence, sea-module-abstractness-metrics: 'Zone of pain' and 'zone of uselessness' are Martin's names in his later writing, including Clean Architecture (2017). Verified from the publisher's table of contents of the Italian edition (English names in parentheses, pp. 103-104); the English text itself was not read and Agile Software Development (2002) was not checked.
+- medium confidence, sea-module-abstractness-metrics: Martin's original distance divides by the square root of 2 (maximum about 0.707). The fetched 1994 PDF's extracted text reads '|(A+I-1)÷ 2|' with an apparently lost glyph, while stating the range [0, ~0.707], which only the square-root form gives.
+- medium confidence, sea-hexagonal-composition-clean: How much Clean Architecture structure to adopt is debated among practitioners. A characterisation of practitioner opinion; no single primary source beyond Martin's 'circles are schematic'.
+- medium confidence, sea-hexagonal-costs-pitfalls: Netflix post details (2 hours, one-line change). netflixtechblog.com returns 403 to scripted requests; verified via an Internet Archive capture dated 2025-01-05, not the live page.
 
 
 ## synth / Sound & Digital Audio

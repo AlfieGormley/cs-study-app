@@ -3,27 +3,27 @@
     "id": "sys-mitigations-q3",
     "level": "basic",
     "type": "single",
-    "prompt": "What is ASLR's main contribution against a memory-corruption attack?",
+    "prompt": "An attacker can overwrite a function pointer in a PIE program running with ASLR, NX and no other bugs. They have no way to read the process's memory. Why is turning the overwrite into useful code execution hard, and what would most change that?",
     "options": [
       {
-        "text": "It encrypts memory so stolen bytes are useless",
-        "explanation": "ASLR does not encrypt anything; memory contents are unchanged, only their location varies."
+        "text": "They don't know where useful code is loaded this run; a leaked pointer into that mapping would let them calculate it",
+        "explanation": "Correct. ASLR hides *where* things are, not what they are. Without a leak the attacker must guess an address, and a wrong guess usually crashes. One leaked pointer at a known offset in a known build reveals that mapping's base."
       },
       {
-        "text": "It makes selected mapping addresses harder to predict without additional information",
-        "explanation": "Random placement makes a useful target harder to predict. Effectiveness depends on entropy, leaks and other context; failure or a crash is possible rather than guaranteed."
+        "text": "ASLR encrypts the pointer, so any value they write is decrypted into garbage",
+        "explanation": "ASLR encrypts nothing. Memory contents are unchanged; only the load addresses vary between runs."
       },
       {
-        "text": "It prevents buffer overflows from happening",
-        "explanation": "ASLR does nothing to stop the overflow itself; it makes using it harder."
+        "text": "ASLR stops the overwrite from happening, so a second write bug would be needed",
+        "explanation": "ASLR does nothing to prevent memory corruption. The overwrite succeeds; the problem is choosing a value that leads somewhere useful."
       },
       {
-        "text": "It stops the CPU executing data pages",
-        "explanation": "That is NX/DEP, a different mitigation."
+        "text": "NX prevents any jump into the program's code, so only a JIT region would help",
+        "explanation": "NX blocks execution of data pages. The program's own code and libraries are executable by design, which is what code-reuse attacks target once they know the addresses."
       }
     ],
-    "answer": 1,
-    "workedExample": "ASLR varies selected mapping bases under the OS policy. A known-offset leak can reveal a mapping base; a fork may inherit it. With no useful disclosure, an attacker may need to guess. Incorrect guesses can fail or crash, but ASLR does not stop all pointer corruption or data-only attacks.",
+    "answer": 0,
+    "workedExample": "1. The overwrite gives control of *where* the program jumps, but the attacker must supply an address that points at something useful, such as a library function.\n2. ASLR places libraries, the stack and (for PIE) the main program at addresses that vary between runs, so the attacker does not know those addresses in advance.\n3. Without a leak, the attacker must guess; a wrong address usually crashes, and with enough entropy that is expensive and noisy.\n4. An information leak changes everything: one pointer into a known build at a known offset lets the attacker compute that mapping's base and every other address in it. That is why exploits against ASLR often pair a read bug with a write bug.\n5. ASLR does not stop the corruption itself, encrypt anything or replace NX; it removes the attacker's knowledge of addresses.",
     "link": {
       "title": "Primary reference for this example",
       "url": "https://docs.kernel.org/admin-guide/sysctl/vm.html"
@@ -33,27 +33,27 @@
     "id": "sys-mitigations-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A teaching model has 256 equally likely library bases (eight bits of entropy). Forked workers keep the same unknown base after crashes. Each wrong guess crashes a worker. Trying each possible base only once, approximately how many attempts are needed on average?",
+    "prompt": "Two services use the same teaching model of ASLR: 256 equally likely library bases. An attacker has no leak and each wrong guess crashes only the process that handled it.\n\n- Service A forks every worker from one long-lived parent, so all workers share the parent's layout.\n- Service B starts a newly executed process, with a fresh random layout, for every connection.\n\nWhich comparison is right?",
     "options": [
       {
-        "text": "About 8",
-        "explanation": "8 is the number of *bits*, not the number of possibilities. Each bit doubles the search space."
+        "text": "Both need about 8 attempts, one per bit of entropy",
+        "explanation": "8 is the number of bits, not the number of possible bases. Each bit doubles the possibilities, giving 256."
       },
       {
-        "text": "About 128",
-        "explanation": "For 256 equally likely fixed bases, trying each base once gives expected position (256 + 1)/2 = 128.5, approximately 128. Elapsed time is not specified."
+        "text": "On A each wrong guess rules a base out, so about 128 attempts on average and at most 256; on B nothing is ruled out, so about 256 on average with no upper limit",
+        "explanation": "Correct. A's fixed base can be searched systematically, finishing halfway through on average. B gives a fresh 1-in-256 chance on every attempt, so the average is 256 attempts and no number of tries guarantees success."
       },
       {
-        "text": "About 268 million",
-        "explanation": "That is the size of a hypothetical 28-bit search space (268,435,456 values), not this eight-bit model."
+        "text": "B is easier, because a fresh layout might land on the address the attacker already guessed",
+        "explanation": "Each attempt on B has the same 1-in-256 chance whatever was guessed before, so the attacker cannot benefit from earlier tries. A lets the attacker benefit, because ruled-out bases stay ruled out."
       },
       {
-        "text": "It cannot be brute-forced because the base changes after each crash",
-        "explanation": "The prompt fixes the base. With independent uniform rerandomisation each time, success probability would instead be 1/256 per trial, with expectation 256; neither model supplies a duration."
+        "text": "Neither can be attacked by guessing, because each crash re-randomises the layout",
+        "explanation": "Crashing a forked worker does not change the parent's layout, so on A the next worker has the same base. Only B gives each attempt a new layout, and even then guessing remains possible."
       }
     ],
     "answer": 1,
-    "workedExample": "For a fixed base and distinct guesses, the successful position is equally likely to be any of 1 to 256, so the average is the midpoint:\n\n```formula\nN = 2^b = 2^8 = 256\nE_fixed = (N + 1) / 2\nE_fixed = (256 + 1) / 2 = 128.5\nwhere\nN: the number of equally likely bases\nb: the bits of entropy, 8 here\n2^b: b copies of 2 multiplied together\nE_fixed: the expected (average) number of attempts when the base stays fixed and no base is tried twice\n1: added because positions run from 1 to N, whose average is (1 + N) / 2\nIn words: 8 random bits give 256 possible bases, and working through them finds the right one about halfway, after 128.5 attempts on average.\n```\n\nIndependent uniform rerandomisation instead gives a fresh 1-in-256 chance each time. The number of tries then follows a geometric distribution, whose mean is 256 attempts. Request rate, restart costs and defences determine elapsed time, which is not given.",
+    "workedExample": "1. 8 random bits give 256 equally likely bases; the difference between the services is whether the base changes between attempts.\n2. **Service A:** fork copies the parent's address space, so every worker has the same unknown base. A crash only kills one worker. The attacker can try each base once, crossing off wrong ones. The right base is equally likely to be anywhere in that list, so on average it turns up halfway through, about 128 attempts, and never after more than 256.\n3. **Service B:** each connection gets a newly executed process with a fresh layout. A wrong guess teaches nothing, so every attempt is a new 1-in-256 chance. The average is 256 attempts, and there is no guaranteed finish.\n4. Neither number is a time. Request rate, restart cost and monitoring decide how long either attack takes, and an information leak would make guessing unnecessary on both.",
     "link": {
       "title": "Primary reference for this example",
       "url": "https://www.scs.stanford.edu/brop/bittau-brop.pdf"

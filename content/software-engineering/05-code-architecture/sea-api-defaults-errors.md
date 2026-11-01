@@ -3,7 +3,7 @@ id: sea-api-defaults-errors
 sourceLesson: sea-api-design
 title: Safe defaults and useful exceptions
 level: advanced
-minutes: 4
+minutes: 5
 summary: Avoid shared mutable defaults and expose stable return types and semantically useful library errors.
 ---
 
@@ -24,7 +24,16 @@ print(tag("a"))  # ['a']
 print(tag("b"))  # ['a', 'b']
 ```
 
-This prints `['a']` and then `['a', 'b']`. The default list is created **once**, when the function is defined, and shared by calls that omit the tags argument. Use `None` and create a fresh object inside:
+This prints `['a']` and then `['a', 'b']`. The default list is created **once**, when the function is defined, and shared by calls that omit the tags argument.
+
+> [!analogy] Real-world analogy: the notebook in the hotel lobby
+> A hotel leaves one notebook in the lobby "for guests who didn't bring their own". It was put there on opening day. Every guest who uses it writes in the same book, and the next guest sees everything earlier guests wrote.
+>
+> **How it maps:** The lobby notebook is the default list, created once when `def` runs. Guests who don't bring a notebook are calls that omit `tags`, and writing in it is `append`. The surprise in `tag("b")` is the second guest reading the first guest's note.
+>
+> **Where it stops:** Guests can see the old entries before writing. Code gets no warning: the shared list silently carries state between unrelated calls. Defaults that can't be written in, such as numbers, strings or `None`, are safe to share.
+
+The fix is to use `None` as the default and create a fresh object inside:
 
 ```python
 def tag(item, tags=None):

@@ -49,7 +49,7 @@ layers =
     shop.domain
 ```
 
-The `layers` contract lists layers top to bottom and forbids any import from a lower layer to a higher one. Higher layers importing lower ones is allowed, whether or not they skip a level. Notice that `domain` is listed *last* here, below `data`, so the repository may import `Order` but `Order` may never import SQL code. Many Python teams end up with this order, which is already the hexagonal idea in disguise.
+The `layers` contract lists layers top to bottom and forbids any import from a lower layer to a higher one. Higher layers importing lower ones is allowed, whether or not they skip a level. Notice that `domain` is listed *last* here, below `data`, so the repository may import `Order` but `Order` may never import SQL code. That puts the business rules at the bottom, depending on nothing, which is a first step towards the ports-and-adapters idea later in this module.
 
 ## Key takeaways
 - Package by feature keeps related vertical changes near each other.

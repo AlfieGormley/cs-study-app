@@ -7,15 +7,15 @@
     "options": [
       {
         "text": "Authorisation codes are encrypted with the user's password",
-        "explanation": "Codes are opaque random strings; they aren't encrypted with anything the attacker lacks. The protection comes from what the token exchange requires."
+        "explanation": "OAuth does not require codes to be encrypted with the user's password. In this scenario, protection comes from the matching verifier required at the token exchange."
       },
       {
         "text": "The code expires after one second",
-        "explanation": "Codes are short-lived (often around a minute) and single-use, but an attacker can act within that window. Expiry alone isn't the defence PKCE provides."
+        "explanation": "Codes are short-lived and single-use, but an attacker can act before expiry. OAuth specifies no universal one-second lifetime; expiry alone is not the defence PKCE provides."
       },
       {
         "text": "Exchanging the intercepted code requires the original code_verifier; with S256 the server hashes the verifier and compares it with the saved challenge",
-        "explanation": "Correct. The challenge went out through the browser, but the verifier never did. Without it, the stolen code is useless."
+        "explanation": "Correct. The front-channel authorisation request exposes the challenge, not the verifier. A public browser client can hold the verifier itself, but intercepting this code alone does not reveal it."
       },
       {
         "text": "The authorisation server checks the attacker's IP address",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Legit app generates a random verifier and computes the challenge from it:\n\n```formula\nc = BASE64URL(SHA256(v))\nwhere\nc: the code challenge, sent through the browser\nv: the code verifier, a random string of 43 to 128 characters that stays inside the app\nSHA256: the SHA-256 hash function: a 32-byte fingerprint that cannot feasibly be reversed\nBASE64URL: base64url encoding without padding, which writes the bytes as URL-safe text\nIn words: the challenge is a one-way fingerprint of the verifier.\n```\n\n2. Redirect to `/authorize?code_challenge=c&code_challenge_method=S256`.\n3. User logs in; auth server stores `c` with the code.\n4. Attacker intercepts `code=xyz`.\n5. Attacker calls `/token` with `code=xyz` but doesn't know `v`. Without the high-entropy verifier, finding any other string whose hash matches `c` is computationally infeasible → **rejected**.\n6. Legit app sends `code=xyz&code_verifier=v` → matches → tokens issued.\n\nSHA-256 is one-way, so seeing `c` doesn't reveal `v`.",
+    "workedExample": "Before redirection, the client stores a secret verifier and sends only its one-way S256 challenge. On redemption the server hashes the supplied verifier and compares it with that stored challenge. The intercepted code alone lacks the matching verifier. Keep TLS, redirect validation and any required client authentication: PKCE protects this code-binding step.",
     "link": {
       "title": "oauth.net: PKCE",
       "url": "https://oauth.net/2/pkce/"

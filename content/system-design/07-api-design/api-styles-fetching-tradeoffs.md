@@ -36,19 +36,9 @@ GET /posts/1/comments  -> 20 more
 
 Counting them shows where the number comes from:
 
-```formula
-R = 1 + P + A + K
-R = 1 + 20 + 20 + 20
-R = 61
-where
-R: the total number of HTTP requests the screen needs
-P: requests for the posts themselves, one per post, here 20
-A: requests for authors, at most one per post (fewer if two posts share an author), here up to 20
-K: requests for the comments, one per post, here 20
-In words: one request fetches the list, then every post costs up to three more, so 20 posts need up to 61 requests.
-```
+One list request plus up to three requests per post means up to 61 requests for this screen. Repeated authors or compound endpoints can reduce that fan-out.
 
-That's up to 61 requests, not necessarily 61 sequential round trips. On a 4G link at 100 ms RTT, even with HTTP/2 multiplexing it's several dependent waves. And each response contains fields the screen doesn't need.
+That's up to 61 requests, not necessarily 61 sequential round trips. On an illustrative mobile link with 100 ms RTT, even with HTTP/2 multiplexing it's several dependent waves. And each response contains fields the screen doesn't need.
 
 - **Under-fetching**: one call doesn't return enough, so you make more.
 - **Over-fetching**: each call returns more than you need, wasting bandwidth and battery.

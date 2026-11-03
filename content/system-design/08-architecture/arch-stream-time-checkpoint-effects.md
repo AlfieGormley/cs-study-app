@@ -11,7 +11,7 @@ A stream has no natural end at which to run a final batch. This unit defines whe
 
 ## Stream processing
 
-A stream processor runs continuously over an **unbounded** sequence of events, usually read from a log like Kafka, and emits results as events arrive. Examples: Apache Flink, Kafka Streams, Spark Structured Streaming, Google Dataflow (Apache Beam).
+A stream processor runs continuously over an **unbounded** sequence of events, usually read from a log like Kafka, and emits results as events arrive. Examples include Apache Flink, Kafka Streams, Spark Structured Streaming and Google Dataflow. Apache Beam supplies a programming model and SDKs whose pipelines run on a supported runner, such as Dataflow.
 
 Concepts you can't avoid:
 
@@ -48,3 +48,5 @@ A ten-minute sliding (hopping) window advancing each minute overlaps neighbourin
 
 ## Further reading
 - [Apache Flink: Timely stream processing](https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/)
+- [Apache Flink: Stateful stream processing](https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/stateful-stream-processing/)
+- [Apache Flink: JDBC sink guarantees](https://nightlies.apache.org/flink/flink-docs-stable/docs/connectors/datastream/jdbc/)

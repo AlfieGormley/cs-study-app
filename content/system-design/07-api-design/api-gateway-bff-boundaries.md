@@ -83,6 +83,11 @@ GraphQL can be an alternative or a complement: clients select response fields th
 
 They usually coexist: the gateway handles TLS, auth and rate limits at the edge, then routes to the right BFF.
 
+> [!analogy] Real-world analogy: Reception and department assistants
+> **How it maps:** Reception applies common entry rules and directs visitors. A department assistant gathers the information that department needs. This resembles an API gateway and a client-specific BFF.
+>
+> **Where it stops:** The comparison does not decide deployment topology or authorisation scope. Core services still enforce their domain rules and object access checks.
+
 ## Key takeaways
 - Gateways centralise routing, identity checks, limits, TLS and observability.
 - A BFF is owned with its frontend and aggregates or trims responses for that experience.

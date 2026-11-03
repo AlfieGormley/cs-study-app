@@ -3,27 +3,27 @@
     "id": "rel-timeouts-retries-q2",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A request passes through 4 layers: client → gateway → service A → service B → database. Each of the four callers makes up to **3 attempts** (1 try + 2 retries). The database is completely down. How many attempts reach the database for one user request?",
+    "prompt": "A request crosses four services. Every caller retries its downstream operation, and the database keeps failing. Why can a small original request rate become a retry storm?",
     "options": [
       {
-        "text": "12",
-        "explanation": "12 = 3 × 4, which adds the attempts per layer. Retries multiply, because every attempt at one layer triggers a full set of attempts at the next."
+        "text": "Each retry layer adds only one fixed extra database call",
+        "explanation": "A retry above another retry loop can rerun that entire lower loop."
       },
       {
-        "text": "27",
-        "explanation": "27 = 3³, the answer for three retrying layers. Here there are four callers, each retrying, so there is one more factor of 3."
+        "text": "Only the outermost loop can issue retries",
+        "explanation": "Independent retry loops can all execute unless policy coordinates them."
       },
       {
-        "text": "81",
-        "explanation": "Correct. Each of the 4 retrying layers multiplies by 3: 3⁴ = 81 database attempts per user request."
+        "text": "Upper-layer attempts rerun lower retry loops, multiplying calls at the failing dependency",
+        "explanation": "Correct. Nested loops amplify the same logical request; choose one retry layer and bound extra traffic."
       },
       {
-        "text": "3",
-        "explanation": "3 would be true only if a single layer retried and all others failed fast, which is the recommended fix but not this configuration."
+        "text": "The database generates the extra requests by sending errors",
+        "explanation": "The callers generate retries in response to errors; the database does not originate those attempts."
       }
     ],
     "answer": 2,
-    "workedExample": "Track attempts layer by layer:\n\n| Caller | Attempts it makes | Cumulative at next hop |\n|---|---|---|\n| Client → gateway | 3 | 3 |\n| Gateway → A | 3 each | 9 |\n| A → B | 3 each | 27 |\n| B → DB | 3 each | 81 |\n\nEach retrying layer multiplies by its attempts:\n\n```formula\nM = n^L\nM = 3^4 = 3 × 3 × 3 × 3 = 81\nwhere\nM: the attempts reaching the database per user request\nn: the maximum attempts each caller makes, here 3\nL: the number of callers that retry, here 4\n^: \"to the power of\"\nIn words: four layers each making three attempts multiply to 81 database attempts for one user request.\n```\n\nAt 1,000 user requests/s, the database would receive **81,000 attempts/s** while it's trying to recover. Fix: retry at one layer only (so the DB sees 3), and add a retry budget.",
+    "workedExample": "Trace one upper-layer retry: it invokes the next service again, which repeats its own attempts. Further layers repeat the pattern. Centralise retry responsibility at the appropriate layer and use an aggregate budget; jitter alone changes timing.",
     "link": {
       "title": "Timeouts, retries and backoff with jitter (AWS Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
@@ -33,27 +33,27 @@
     "id": "rel-timeouts-retries-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A service sends 5,000 req/s to a dependency, retrying failed attempts up to a total of **3 attempts** at this one layer only. The dependency starts failing **20%** of attempts, independently. Roughly how many attempts per second does the dependency now receive?",
+    "prompt": "Only the service directly above a dependency retries, with at most three total attempts. As more first attempts fail, what happens without an aggregate retry budget?",
     "options": [
       {
-        "text": "5,000/s, because only one layer retries",
-        "explanation": "Retrying at one layer stops the *multiplicative* storm, but that layer's own retries still add load whenever attempts fail."
+        "text": "Dependency traffic stays equal to the original request rate",
+        "explanation": "One retry layer still adds its own retries."
       },
       {
-        "text": "About 6,000/s",
-        "explanation": "This counts only the first retry (5,000 + 20% × 5,000). Retries that fail are retried again: another 20% of the 1,000."
+        "text": "Every original request always makes exactly two attempts",
+        "explanation": "Successful first attempts stop; failed retries may make a third attempt."
       },
       {
-        "text": "About 6,200/s",
-        "explanation": "Correct. Independent 20% failure produces an average 1.24 attempts per request. At 5,000 original requests per second that means 6,200 attempts per second, about 24% extra load; the worked formula includes both retry opportunities."
+        "text": "Retry traffic grows, potentially worsening the failure that caused it",
+        "explanation": "Correct. A per-request cap bounds one operation but can still add substantial aggregate work during broad failure."
       },
       {
-        "text": "15,000/s, three attempts for every request",
-        "explanation": "That's the worst case, when every attempt fails (100% failure). At 20%, most requests succeed on the first try."
+        "text": "Retrying at one layer guarantees the dependency recovers",
+        "explanation": "It avoids nested multiplication but does not create capacity or fix persistent faults."
       }
     ],
     "answer": 2,
-    "workedExample": "1. Every request makes a first attempt: `5,000/s`.\n2. 20% fail and retry: `5,000 × 0.2 = 1,000/s`.\n3. 20% of those fail and retry once more: `1,000 × 0.2 = 200/s`.\n4. Total: `5,000 + 1,000 + 200 = 6,200/s`.\n\nGeneral form for up to 3 attempts:\n\n```formula\nE = 1 + p + p^2\nE = 1 + 0.2 + 0.2^2 = 1.24\nL = NE\nL = 5,000 /s × 1.24 = 6,200 /s\nwhere\nE: the expected (average) attempts per request\np: the chance one attempt fails, here 0.2 (20%), assumed independent\np^2: p squared, the chance the first two attempts both fail\nL: attempts per second at the dependency\nN: original requests per second, here 5,000\n/s: per second\nIn words: at 20% failure each request averages 1.24 attempts, so 5,000 req/s becomes 6,200 attempts/s.\n```\n\nWith independent failure probabilities of 50% and 100%, the same formula gives average attempt counts of 1.75 and three respectively.\n\nThe extra load grows as the dependency gets worse, which is why a retry budget (e.g. ≤10% extra) is added on top of the per-request cap.",
+    "workedExample": "Some first attempts fail and retry; some of those retries fail again. As failures spread, more operations use their full allowance. An aggregate budget limits extra work across operations, while backoff and jitter spread its timing.",
     "link": {
       "title": "Timeouts, retries and backoff with jitter (AWS Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
@@ -71,11 +71,11 @@
       },
       {
         "text": "Retry only in the layer directly above the database; every other layer fails fast",
-        "explanation": "Correct. One retrying layer caps the factor at 3 instead of 3⁴ = 81."
+        "explanation": "Correct. One retry layer prevents outer retries from rerunning entire inner retry loops."
       },
       {
         "text": "Add a per-client retry budget so retries stay below 10% of requests",
-        "explanation": "Correct. A budget caps retry traffic as a fraction of requests, at any failure rate: about 1.1× instead of up to 3× per layer."
+        "explanation": "Correct. An aggregate budget limits extra retry traffic across requests; define its accounting window and denominator explicitly."
       },
       {
         "text": "Have the database return an \"overloaded; don't retry\" error that upper layers pass up without retrying",
@@ -91,7 +91,7 @@
       2,
       3
     ],
-    "workedExample": "Separate *how many* retries from *when* they happen:\n\n| Change | Attempts at DB per request |\n|---|---|\n| Today | 3⁴ = 81 |\n| One retrying layer | 3 |\n| Plus 10% budget | ~1.1 |\n| Jitter only | still 81, spread out |\n\nJitter and timeouts shape the timing; retry placement, budgets and don't-retry signals control the volume. Both offered volume and synchronization matter; this example holds failure probability at 100% to compare maximum attempt counts.",
+    "workedExample": "Separate how much extra work is permitted from when it arrives. Retry placement, aggregate budgets and explicit do-not-retry signals reduce the maximum offered work. Jitter and timeouts change timing; smoothing can improve real success, but this scenario holds all attempts failing.",
     "link": {
       "title": "Handling overload (Google SRE book)",
       "url": "https://sre.google/sre-book/handling-overload/"

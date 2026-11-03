@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. On the wire, each field is a key followed by the value. No names:\n\n```formula\nK = (n << 3) | w\nK = n × 8 + w\nK = 3 × 8 + 0 = 24\nwhere\nK: the field key written before each value\nn: the field's tag number from the .proto file\nw: the wire type, a small code for how the value is encoded: 0 for varints (integers), 2 for length-delimited data (strings, bytes, nested messages)\n<<: shift left: move the bits of n three places left, which is the same as multiplying by 8\n|: bitwise OR: combine the bits; here it just puts w into the three low bits, the same as adding it\nIn words: the key packs the tag number and the wire type into one number; for the new field (tag 3, a varint) it is 24.\n```\n\n2. New message: tag 3, wire type 0 (varint), value e.g. 1200.\n3. Old client's protobuf schema: tag 3 = `string` (wire type 2, length-delimited).\n4. Wire type mismatch → a normal generated reader treats it as unknown, and `email` remains unset/default.\n\nCorrect evolution:\n\n```proto\nmessage User {\n  // Removed identity stays unavailable.\n  reserved 3;\n  reserved \"email\";\n  int64 loyalty_points = 7;\n}\n```",
+    "workedExample": "The old protobuf schema expects tag 3 with the length-delimited wire type used for a string. The new message uses the varint wire type for int64. A conforming reader normally treats that incompatible field as unknown, leaving email unset. Reusing a tag remains forbidden: a different same-wire-type replacement could silently reinterpret data. Reserve deleted field numbers and names.",
     "link": {
       "title": "Protocol Buffers: Language guide (proto3)",
       "url": "https://protobuf.dev/programming-guides/proto3/"
@@ -61,7 +61,7 @@
       1,
       3
     ],
-    "workedExample": "Remember what's on the wire: a key, then the value. No names.\n\n```formula\nK = (n << 3) | w\nK = n × 8 + w\nwhere\nK: the field key written before each value\nn: the field's tag number from the .proto file\nw: the wire type, a small code for how the value is encoded: 0 for varints (integers), 2 for length-delimited data (strings, bytes, nested messages)\n<<: shift left: move the bits of n three places left, which is the same as multiplying by 8\n|: bitwise OR: combine the bits; here it just puts w into the three low bits, the same as adding it\nIn words: only the tag number and the wire type identify a field on the wire, so a change is safe if both still mean the same thing to old readers.\n```\n\n| Change | Tag | Wire type | Safe? |\n|---|---|---|---|\n| Add tag 9 | new | - | Yes |\n| Rename | same | same | Yes |\n| int32→string | same | 0→2 | No |\n| Delete + reserve | gone | - | Yes |\n| Reuse 3 | reused | same | No |\n\nThe reuse case is nastier than the type change: with matching wire types nothing fails at all, and the data is simply wrong.",
+    "workedExample": "Binary protobuf identifies a field by number and wire type. A fresh unused number can be ignored by old readers. Renaming a field preserves binary identity but can break generated source or JSON clients. Reserve deleted numbers and names; do not reuse them. Changing int32 to string changes the wire type and is not the safe migration described here.",
     "link": {
       "title": "Protocol Buffers: Language guide (proto3)",
       "url": "https://protobuf.dev/programming-guides/proto3/"

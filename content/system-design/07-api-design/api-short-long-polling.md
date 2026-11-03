@@ -34,21 +34,19 @@ It's trivially simple and uses ordinary HTTP infrastructure. But it's wasteful a
 
 Both follow from the poll interval:
 
-```formula
+```formula reference
 D_avg = I / 2
-D_avg = 5 s / 2 = 2.5 s
 R = N / I
-R = 1,000,000 / 5 s = 200,000 per s
 where
 D_avg: the average wait between an update happening and the next poll seeing it, in seconds (s)
 I: the poll interval, the time between one client's polls, in seconds
-R: the total request rate the server receives
+R: the total request rate the server receives, in requests per second
 N: the number of clients polling
 s: seconds
 In words: an update lands at a random point in the interval, so on average it waits half of it; and every client sends one request per interval, so halving the delay doubles the load.
 ```
 
-These assume updates arrive at random times and every poll goes out on schedule; network time comes on top of D_avg.
+These assume updates arrive at random times and every poll goes out on schedule; network and server time add to this scheduling delay.
 
 Short polling is fine for dashboards that refresh every 30–60 s, or job-status checks. It's the right default when updates are rare and a delay is acceptable.
 
@@ -79,26 +77,11 @@ Drawbacks:
 
 ## Estimating long-poll completions
 
-For independent Poisson message arrivals, the gap is exponentially distributed. A poll ends at the first arrival or its timeout. With two million clients, a 30-second timeout and a mean gap of 120 seconds:
+A held-open request saves empty responses, but does not remove request processing:
 
-```formula
-D = M × (1 − e^{−T / M})
-D = 120 s × (1 − e^{−0.25}) ≈ 26.5 s
-R_B = N / D
-R_B = 2,000,000 / 26.5 s ≈ 75,000/s
-where
-D: the average length of one poll, ending at a message or the timeout, whichever comes first
-M: the average gap between messages, 120 s
-T: the timeout, 30 s
-e: Euler's number, about 2.718; e^{−T / M} is the chance that no message arrives before the timeout
-N: the number of clients
-R_B: the request rate under long polling
-≈: approximately equal to
-s: seconds; /s means per second
-In words: a poll lasts about 26.5 s on average, so each client sends one request every 26.5 s: about **75,000 requests per second**.
-```
+Long polls still complete on messages or timeouts. Each completion starts another request, so both message traffic and timeout settings contribute to load.
 
-This ideal model ignores network time, immediate restart cost and batching. A simpler upper bound counts at most one timeout per timeout interval plus the average message rate; it slightly overcounts polls ended early by a message.
+Shorter timeouts create more empty completions. More frequent messages also complete polls sooner. Batching, network time and reconnect gaps affect measured traffic; size the system with its actual workload.
 
 ## Key takeaways
 - Short polling trades lower delay for more request traffic.

@@ -23,7 +23,7 @@ trace 4bf92f…  total 840ms
 │   └ payment    █ 90
 ```
 
-Here the waterfall shows instantly that inventory, not payment, is the problem. Metrics alone would only tell you checkout is slow.
+Here the waterfall shows that inventory dominates this request's time. An aggregate checkout latency metric alone does not reveal that request's path; dependency-level metrics can also help locate the slowdown.
 
 ### Context propagation
 
@@ -64,6 +64,13 @@ Google's Dapper paper, which inspired Zipkin and Jaeger, sampled as few as 1 in 
 ```
 
 Because instrumentation targets the OTel API rather than a vendor SDK, you can often switch compatible backends by reconfiguring collector exporters; backend-specific features, telemetry data formats and unsupported signals may require additional migration work.
+
+> [!analogy] Real-world analogy: a parcel reference carried through depots
+> A parcel’s tracking events are useful together only when each depot records the same reference.
+>
+> **How it maps:** Carried trace context connects observations across services; spans record the separate stages.
+>
+> **Where it stops:** Requests can branch, overlap or link to separate traces, and sampling can omit observations. A trace is not automatically a complete record.
 
 ## Key takeaways
 

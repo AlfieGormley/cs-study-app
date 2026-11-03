@@ -13,27 +13,9 @@ Good and valid events from the SLI unit define the accounting boundary. This uni
 
 If the SLO is 99.9%, the **error budget** is the remaining 0.1%. It's an allowance of failure for the window, and you can count it in requests or in time:
 
-```formula
-B = 1 − SLO
-B = 1 − 0.999 = 0.001 = 0.1%
-B_req = BN
-B_req = 0.001 × 100,000,000 = 100,000
-B_time = BT
-B_time = 0.001 × 40,320 min ≈ 40 min
-where
-B: the error budget as a fraction of events (or of time)
-SLO: the service level objective as a fraction, here 99.9% = 0.999
-B_req: the number of failed requests allowed in the window
-N: the valid requests in the window, here 100 million in 28 days
-B_time: the full-outage time allowed in the window
-T: the window length, 28 days = 40,320 minutes (min)
-min: minutes
-≈: approximately equal to (rounded)
-%: per cent
-In words: a 99.9% SLO lets 1 in 1,000 events fail: 100,000 of 100 million requests, or about 40 minutes of total outage in 28 days.
-```
+For a 99.9% request-based objective, one in a thousand valid requests may be bad. A time-based objective instead counts bad time; the two budgets are comparable only when the measurement and traffic assumptions match.
 
-The time view assumes traffic is spread evenly; an outage at peak spends more of a request-based budget than the same outage at night.
+An outage at peak spends more of a request-based budget than the same outage at night.
 
 ### Error budget policy
 
@@ -54,10 +36,8 @@ This aligns product and SRE incentives. Product teams want to ship; SRE wants st
 
 **Burn rate** is how fast you're consuming the error budget relative to the rate that would exactly exhaust it at the end of the window.
 
-```formula
+```formula essential
 b = e / (1 − SLO)
-b = 1.44% / (1 − 99.9%)
-b = 1.44% / 0.1% = 14.4
 where
 b: the burn rate, a plain multiplier with no unit (1 = burning exactly on budget)
 e: the observed error rate, the fraction of valid events that are bad, here 1.44%
@@ -67,24 +47,20 @@ SLO: the service level objective, here 99.9%
 In words: errors at 1.44% against a 0.1% budget burn the budget 14.4 times faster than the rate that would just use it up by the end of the window.
 ```
 
-For the following exhaustion-time examples, assume steady traffic, a full initial budget and no additional old errors aging out. The time until the budget is gone is the window divided by the burn rate:
+For the following exhaustion-time examples, assume steady traffic, a full initial budget and no additional old errors aging out. Use these assumptions only for a planning estimate:
 
-```formula
-t_out = T / b
-t_out = 30 days / 14.4
-t_out = 720 h / 14.4 = 50 h
-where
-t_out: the time until the whole error budget is spent
-T: the SLO window, here 30 days = 720 hours (h)
-b: the burn rate, here 14.4
-days: calendar days; 1 day = 24 h
-h: hours
-In words: at burn rate 14.4 a 30-day budget lasts only 50 hours.
-```
+With a full budget, steady request volume and clean preceding history, sustained burning above the allowed rate spends the budget before the window ends. At 14.4 times the allowed rate, a 30-day budget would last about 50 hours; a rolling window and changing traffic require actual event accounting.
 
 - Burn rate 1: you'll use exactly 100% of the budget by the end of the window.
 - Burn rate 2: budget gone in half the window.
 - Burn rate 14.4 with a 30-day window: budget gone in about 50 hours.
+
+> [!analogy] Real-world analogy: a spending allowance with agreed rules
+> An allowance becomes useful when everyone agrees what spending calls for a review and what stops further discretionary purchases.
+>
+> **How it maps:** The error budget is an allowed level of bad outcomes; the pre-agreed policy turns its use into release and reliability decisions.
+>
+> **Where it stops:** User failures are not desirable purchases. Traffic and rolling history change the accounting, and spending budget never waives safety or security obligations.
 
 ## Key takeaways
 

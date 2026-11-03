@@ -40,6 +40,13 @@ The Twelve-Factor App calls this "execute the app as one or more stateless proce
 
 Ask whether another instance could reconstruct everything needed for the next request. A configuration cache fetched again from its source passes that test. A basket or avatar held only in one instance does not. A WebSocket connection necessarily has live connection state, but reconnecting clients need a way to restore room membership and resume useful work on a different instance. Moving state elsewhere also transfers responsibility: persistence, availability and access control belong to the backing service's design.
 
+> [!analogy] Real-world analogy: Any library desk
+> A library keeps reservations in a shared catalogue, so a reader can collect a book through any staffed desk.
+>
+> **How it maps:** Replaceable app instances are the desks; durable session or business records live outside one instance, so another instance can continue serving the reader.
+>
+> **Where it stops:** The shared store still has failure and consistency requirements. Working memory and local caches are allowed when losing them does not lose required state.
+
 ## Key takeaways
 - Statelessness removes dependence on durable instance-local client state between requests.
 - Shared stores retain durable state; caches and per-request memory can remain local when rebuildable.

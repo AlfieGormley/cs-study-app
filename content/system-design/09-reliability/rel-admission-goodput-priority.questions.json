@@ -19,7 +19,7 @@
       },
       {
         "text": "Queue all excess requests in an unbounded in-memory queue so none are lost",
-        "explanation": "Incorrect. An unbounded queue turns overload into ever-growing latency (every request now times out) and eventually out-of-memory. It defeats the purpose of shedding."
+        "explanation": "Incorrect. Under sustained overload, an unbounded queue grows, increasing deadline misses and eventually exhausting memory. It postpones rejection while consuming resources."
       }
     ],
     "answer": [
@@ -27,7 +27,7 @@
       1,
       2
     ],
-    "workedExample": "Think in terms of **goodput**: completed requests that the client still wanted.\n\n1. At 150% load, the server can serve only 2/3 of requests. The question is *which* 2/3.\n2. Serving requests whose clients have timed out produces zero goodput; drop them.\n3. Rejecting late (after DB work) burns the capacity you're trying to save; reject early.\n4. If you must reject 1/3 of traffic, make it the 1/3 that matters least.\n5. An unbounded queue serves everyone, all late, so goodput heads to zero: congestive collapse.",
+    "workedExample": "Think in terms of **goodput**: requests completed successfully while their results are still useful to the caller.\n\nThe offered work exceeds capacity, so accepting everything cannot keep this workload healthy. Reject expired reads and shed excess work before expensive processing. Use trusted priorities to preserve critical work, and bound the queue and concurrency so admitted requests can finish. More queued work does not create processing capacity.",
     "link": {
       "title": "Using load shedding to avoid overload (AWS Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/"
@@ -40,8 +40,8 @@
     "prompt": "After a traffic spike, a server's request queue holds about **2 seconds** of work, and clients time out after **1 second**. The server processes the queue first-in, first-out. Requests already queued are past their deadlines, results are useful only before those deadlines, and sustained new arrivals leave little spare capacity. What is the server's goodput, and what's the best fix?",
     "options": [
       {
-        "text": "Near zero until the backlog clears; drop requests older than the client timeout (or serve newest-first) so fresh requests succeed",
-        "explanation": "Correct. FIFO serves the oldest requests first, all of whose clients have given up, and new arrivals join the back to wait 2 s too. Dropping expired requests, or adaptive LIFO, spends capacity only on requests that can still succeed."
+        "text": "Near zero until the backlog clears; drop expired work and bound admission so fresh requests have a chance to finish on time",
+        "explanation": "Correct. FIFO spends capacity on expired work while new arrivals wait behind it. Deadline checks and bounded admission protect capacity for useful requests. Newest-first scheduling can help, but cannot guarantee a request will meet its deadline."
       },
       {
         "text": "Normal goodput, because arrivals are back to normal",
@@ -57,7 +57,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "The queued work exceeds the caller’s useful waiting limit:\n\n```formula\nW_q = 2 s\nD = 1 s\nW_q > D\nG ≈ 0 /s\nwhere\nW_q: approximate wait behind the queued work, in seconds\nD: the caller’s useful waiting limit, here one second\nG: goodput, useful completed reads per second\ns: seconds\n/s: per second\n>: greater than\n≈: approximately equal to; this is an overload illustration\nIn words: a two-second queue cannot serve reads usefully before a one-second deadline, so useful completions are nearly zero despite busy workers.\n```\n\n1. The backlog contains two seconds of work, so a new arrival waits about two seconds before service.\n2. The one-second client limit expires first, so processed queued requests are already abandoned even though the server stays busy.\n3. The backlog only drains at the rate spare capacity allows, so this can last a long time.\n4. Fixes:\n   - Check a queue-entry timestamp plus the useful waiting limit is earlier than the current time and drop expired synchronous requests without processing them; use the propagated absolute deadline rather than restarting the timeout at queue entry.\n   - **Adaptive LIFO**: when the queue is long, serve newest first; those clients are still waiting.\n   - Bound the queue to well under one timeout's worth of work.\n\nThis is the \"server does 100% work for 0% useful output\" collapse from the lesson.",
+    "workedExample": "1. Already expired synchronous reads cannot produce a useful result for these callers.\n2. Serving them consumes capacity while new arrivals wait behind the backlog.\n3. Drop expired work using the propagated deadline and bound admission. Adaptive newest-first scheduling can favour still-useful work where the request semantics permit it.\n4. Durable accepted jobs can have obligations after a client disconnects; the prompt deliberately concerns deadline-bound reads.",
     "link": {
       "title": "Using load shedding to avoid overload (AWS Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/"
@@ -67,27 +67,27 @@
     "id": "rel-overload-protection-q12",
     "level": "advanced",
     "type": "single",
-    "prompt": "For equal-cost requests, a backend can serve **1,000 req/s**. During a surge it receives 1,500 req/s: 600 req/s tagged `CRITICAL` (user checkouts) and 900 req/s tagged `SHEDDABLE` (prefetch and batch). With criticality-based shedding, what share of each class is served?",
+    "prompt": "A backend cannot serve all offered work. Trusted critical requests fit within capacity, and some capacity remains for lower-priority prefetch jobs. With strict criticality-based shedding and equal-cost requests, which policy fits?",
     "options": [
       {
-        "text": "Both classes get 67%, since 1,000 / 1,500 = 67%",
-        "explanation": "That's uniform shedding, which drops a third of checkouts. Criticality exists precisely so the important class is protected first."
+        "text": "Reject the same fraction of both classes",
+        "explanation": "Uniform shedding needlessly discards critical work that could fit."
       },
       {
-        "text": "CRITICAL about 83%; SHEDDABLE about 56%",
-        "explanation": "This splits the shortfall by some proportional rule. With strict criticality, lower classes are shed completely before any critical request is rejected."
+        "text": "Accept every prefetch job first so caches stay warm",
+        "explanation": "That reverses the supplied priority order."
       },
       {
-        "text": "CRITICAL 100%; SHEDDABLE 0%",
-        "explanation": "Shedding removes only what's necessary. There are 400 req/s of spare capacity after critical traffic, which sheddable requests can use."
+        "text": "Reject all prefetch jobs even when spare capacity remains",
+        "explanation": "Shedding need only remove excess work; lower-priority jobs can use remaining capacity."
       },
       {
-        "text": "CRITICAL 100%; SHEDDABLE about 44%",
-        "explanation": "Correct. All 600 critical requests are served. The remaining 400 req/s of capacity goes to sheddable traffic: 400 / 900 ≈ 44%. All 500 rejections fall on the sheddable class."
+        "text": "Serve critical work first, then admit prefetch only into the remaining capacity",
+        "explanation": "Correct. Protect the important class and use remaining resources without exceeding capacity."
       }
     ],
     "answer": 3,
-    "workedExample": "1. Excess: `1,500 − 1,000 = 500 req/s` must be rejected.\n2. Shed from the lowest criticality first: sheddable has 900 req/s, enough to absorb all 500.\n3. Served:\n\n```formula\nf_c = S_c / R_c\nf_c = 600 / 600 = 100%\nf_s = S_s / R_s\nf_s = 400 / 900 ≈ 44%\nwhere\nf_c: fraction of critical requests served\nS_c: served critical request rate, 600 requests per second\nR_c: offered critical rate, 600 requests per second\nf_s: fraction of sheddable requests served\nS_s: served sheddable rate, 400 requests per second\nR_s: offered sheddable rate, 900 requests per second\n%: per cent\n≈: approximately equal to, rounded\nIn words: All critical traffic is served and remaining capacity serves about 44% of sheddable traffic.\n```\n\n4. Make each rejection cheap (before parsing and DB work), and return `503` with `Retry-After` so batch clients back off.\n\nIf critical traffic alone exceeded 1,000 req/s, you'd shed it too, but only after every sheddable request was gone.",
+    "workedExample": "Confirm priorities come from trusted policy. Reserve capacity for critical work, then admit lower classes only while useful capacity remains. If critical work itself exceeds capacity, it too needs bounded admission. Reject cheaply and communicate retry guidance without promising capacity.",
     "link": {
       "title": "Handling overload (Google SRE book)",
       "url": "https://sre.google/sre-book/handling-overload/"

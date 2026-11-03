@@ -10,20 +10,12 @@ sourceLesson: api-rate-limiting
 ## Practical concerns
 
 - **Latency.** Every request now makes a Redis round trip; measure median and tail latency under representative contention.
-- **Fail open or closed?** If Redis is down, do you reject everything (closed) or allow everything (open)? A service may **fail open** with a local fallback limiter when availability is more important than temporary quota precision. Security-critical limits (login attempts) may fail closed.
+- **Fail open or closed?** If Redis is down, do you reject everything (closed) or allow everything (open)? A service may **fail open** with a bounded local fallback limiter when availability is more important than temporary quota precision. Local allowances across gateways do not preserve an exact global quota. Security-critical limits (login attempts) may fail closed.
 - **Hot keys.** One huge tenant's counter lives on one Redis shard. Shard by client id across a Redis Cluster, and consider local pre-aggregation.
 - **Clock skew.** The script above trusts `now` from whichever API server called it. If those clocks disagree, a server whose clock runs behind sees negative elapsed time. Use a trusted shared time source (for example Redis `TIME` in a compatible scripting/replication mode). The sample keeps the stored timestamp from moving backwards; merely clamping elapsed time while storing a lower timestamp can mint extra tokens when time catches up. Large forward jumps still require an explicit clock policy.
-- **Approximate local limiting.** At very high scale, each server can enforce its share of the limit locally and sync periodically. It's less precise but needs no per-request network hop. The share is shown below.
+- **Approximate local limiting.** At very high scale, each server can enforce its share of the limit locally and sync periodically. It's less precise but needs no per-request network hop. Equal shares need an explicit distribution policy.
 
-```formula
-L_local = L / N
-L_local = 1,000 / 20 = 50
-where
-L_local: the limit each server enforces on its own, per minute
-L: the client's overall limit, here 1,000 per minute
-N: the number of servers sharing it, here 20
-In words: split the limit evenly between the servers; this matches the global limit only when the client's traffic is spread evenly across all of them.
-```
+Dividing quota equally keeps the combined allocation bounded, but a client concentrated on a few gateways cannot use the shares reserved elsewhere.
 
 > [!note] Measurement gap
 > No benchmark establishes Redis latency, bytes per sorted-set member or a universal throughput cutoff here. These depend on deployment and data representation; measured capacity guidance is omitted.

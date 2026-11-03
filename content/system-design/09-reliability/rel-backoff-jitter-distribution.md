@@ -13,21 +13,7 @@ This unit assumes retries are safe and the operation still has time and budget. 
 
 Retrying immediately after a failure hits the dependency again while it's still struggling. **Exponential backoff** waits longer after each failure:
 
-```formula
-w = min(c, b(2^a))
-w = min(10 s, 100 ms × 2^4)
-w = min(10 s, 1600 ms) = 1.6 s
-where
-w: the wait (sleep) before the next attempt, in milliseconds (ms) or seconds (s)
-min: the smaller of the two values
-c: the cap, the longest wait ever allowed, here 10 s
-b: the base delay, here 100 ms
-a: the retry number, counting from 0, here 4
-2^a: 2 to the power a, which doubles with each failure (1, 2, 4, 8, 16...)
-ms: milliseconds; 1000 ms = 1 s
-s: seconds
-In words: each failure doubles the wait, starting from the base, until the wait reaches the cap and stays there.
-```
+Double the delay after each failed attempt until it reaches the cap. The following schedule is illustrative; the first retry uses the base delay.
 
 With base 100 ms and cap 10 s the waits go:
 
@@ -57,10 +43,8 @@ No jitter:          Full jitter:
 
 **Jitter** adds randomness so retries spread out. Marc Brooker's analysis on the AWS Architecture Blog compared variants. **Full jitter**, the recommended default, picks a wait uniformly at random anywhere between zero and the exponential-backoff value:
 
-```formula
+```formula reference
 w = random(0, min(c, b(2^a)))
-w = random(0, min(10 s, 100 ms × 2^2))
-w = random(0, 400 ms)
 where
 w: the wait before the next attempt, in milliseconds (ms)
 random(x, y): a number chosen uniformly at random between x and y, so every value in the range is equally likely
@@ -74,6 +58,13 @@ s: seconds
 In words: before its third retry (a = 2) a client waits somewhere between 0 and 400 ms, so 1,000 clients spread their retries across that whole window instead of all retrying at exactly 400 ms.
 ```
 
+> [!analogy] Real-world analogy: staggering departures after an event
+> If everyone leaves a venue together, the exit crowds. Asking groups to leave at varied times spreads the demand.
+>
+> **How it maps:** Varied departure times map to random retry delays; identical schedules map to repeated synchronised waves.
+>
+> **Where it stops:** Spreading arrivals does not create capacity or limit the total number of attempts. Retries still require safety, deadlines and budgets.
+
 ## Key takeaways
 
 - Backoff doubles delay until its cap, and the first retry has index zero.
@@ -81,7 +72,6 @@ In words: before its third retry (a = 2) a client waits somewhere between 0 and 
 - Backoff and jitter change timing; retry budgets and one retry layer still control work.
 
 ## Further reading
-
 
 - [Timeouts, retries and backoff with jitter (AWS Builders' Library)](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/)
 - [Exponential backoff and jitter (AWS Architecture Blog)](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/)

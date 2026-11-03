@@ -2,7 +2,7 @@
 id: arch-query-cost-replica-freshness
 title: Cheap queries and fresh replica reads
 level: intermediate
-minutes: 5
+minutes: 4
 summary: Reduce avoidable query work before spreading reads across replicas with an explicit freshness rule.
 sourceLesson: arch-scaling-reads
 ---
@@ -25,7 +25,7 @@ Before adding infrastructure, check the basics:
 
 Measure their benefit before adding infrastructure; gains depend on the original bottleneck.
 
-The N+1 pattern is worth spelling out, because ORMs produce it silently. This partial Python example assumes a database adapter that returns mutable post objects; the timings are hypothetical, not observed output:
+The N+1 pattern is worth spelling out, because ORMs can produce it silently. This partial Python example assumes a database adapter that returns mutable post objects:
 
 ```python
 # Fetch the page before its related users.
@@ -34,26 +34,13 @@ posts = db.query("SELECT * FROM posts"
 # Each lookup adds a serial database call.
 for p in posts:          # 50 more
     p.author = db.get_user(p.author_id)
-# Assume 1 ms per serial round trip:
-# 51 round trips = 51 ms (network only)
-# vs 2 queries (IN (...)) = ~2 ms
-# Query execution time is additional.
 ```
 
-The name comes from the count: one query for the list, then one more per item. When each query has to wait for its own network round trip, the time spent just on round trips is:
+The name comes from the count: one query for the list, then one more per item. Each serial round trip adds waiting.
 
-```formula
-T = (N + 1) × t
-T = (50 + 1) × 1 ms = 51 ms
-where
-T: total time spent on network round trips, in milliseconds (ms)
-N: the number of items in the list, here 50 posts
-t: the time for one round trip to the database, here an assumed 1 ms
-ms: milliseconds, thousandths of a second
-In words: the N+1 pattern costs one round trip per item, so 50 posts take 51 round trips instead of 2.
-```
+Fetching one author per post makes the number of round trips grow with the list. Fetching all required authors together avoids that growth.
 
-Fetching all the authors in one second query (`WHERE id IN (...)`) makes it 2 × 1 ms = about 2 ms, whatever N is. The 1 ms figure is an assumption; inside one data centre it is often less, across regions far more, and query execution time comes on top.
+Fetching all required authors in a second query can reduce round trips to two; a suitable join may use one. Query execution and result size still matter, so compare actual plans and timings.
 
 ## Read replicas
 

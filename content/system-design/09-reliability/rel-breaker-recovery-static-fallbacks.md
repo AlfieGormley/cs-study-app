@@ -70,7 +70,7 @@ When a dependency fails, serve a **reduced but useful** response rather than an 
 | Personalised prices | Show list price |
 | Search ranking ML | Fall back to text relevance |
 
-Netflix is the classic example: if the personalisation service is down, the home page still renders with generic rows, and users can still press play.
+For example, a streaming service could render a precomputed catalogue when personalisation is unavailable, while keeping its independently functioning playback path usable. That is an illustrative fallback design; it still needs failure testing.
 
 > [!warning] Fallbacks are dangerous if rarely exercised
 > The AWS Builders' Library argues against complex fallbacks: a code path that only runs during outages may be poorly exercised, and it may put sudden new load on another system. Prefer **static fallbacks** (cached or precomputed data), or make the "fallback" the path you use all the time.

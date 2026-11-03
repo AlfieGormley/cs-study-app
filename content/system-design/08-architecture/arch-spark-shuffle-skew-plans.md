@@ -2,12 +2,12 @@
 id: arch-spark-shuffle-skew-plans
 title: Understanding Spark stages and skew
 level: advanced
-minutes: 4
+minutes: 3
 summary: Read a lazy transformation plan and diagnose the hot task that dominates a shuffle stage.
 sourceLesson: arch-batch-vs-stream
 ---
 
-MapReduce groups equal keys on reducers. Spark extends this into stages of a dependency graph; the physical plan reveals where redistribution and hot keys dominate.
+MapReduce groups matching keys on reducers. Spark extends this into stages of a dependency graph; the physical plan reveals where redistribution and hot keys dominate.
 
 ## Spark
 
@@ -19,24 +19,11 @@ MapReduce groups equal keys on reducers. Spark extends this into stages of a dep
 - **Narrow vs wide transformations**: map and filter do not themselves redistribute rows; reading input can still use the network. Grouping and joins often need a shuffle, but existing partitioning, broadcasting or storage-partition joins can avoid it. Inspect the physical plan.
 
 > [!warning] Data skew kills batch jobs
-> If 30% of rows share one key (say `country = 'US'`, or a null) and the physical plan sends those rows to one task without first reducing or splitting them, that task can dominate the shuffle. The following model assumes enough workers to run the tasks together:
+> If many rows share one key and the physical plan sends them to one task without first reducing or splitting them, that task can dominate completion time.
 
-```formula
-T_stage ≈ max(t_1, t_2, ..., t_n)
-where
-T_stage: how long the shuffle stage takes, in seconds (s)
-t_1: how long task 1 takes, in s
-t_2: how long task 2 takes, in s
-...: and so on, one time per task
-t_n: how long the last task takes
-n: the number of tasks in the stage, e.g. 200
-max: the largest of the values listed
-≈: approximately equal to (ignoring scheduling overhead)
-s: seconds
-In words: a stage finishes only when its slowest task does, so one overloaded task sets the pace for everyone.
-```
+A stage cannot finish until its slowest required task finishes. Giving a hot key to one task can leave most workers idle while that task continues.
 
-With 200 tasks and evenly spread data, each would handle 0.5% of the rows; the skewed task handles 30%, about 60 times as much. With equal per-row cost and no other bottleneck, that task can take roughly 60 times the balanced-task time; actual stage duration depends on the physical plan and scheduling. Fixes include salting the hot key, broadcasting the small side of a join, and Spark's adaptive query execution, which splits skewed partitions.
+Adding workers alone does not divide an indivisible hot-key task. The right fix depends on the operation and physical plan.
 
 ### Match the fix to the operator
 

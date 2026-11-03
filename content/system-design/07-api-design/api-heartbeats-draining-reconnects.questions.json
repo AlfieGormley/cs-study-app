@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Estimate the burst:\n\n```formula\nR = N / T\nR = 200,000 / 2 s = 100,000/s\nR = 200,000 / 300 s ≈ 667/s\nwhere\nR: the rate of reconnects, each needing an auth check\nN: the number of clients on the gateway, 200,000\nT: the time over which they reconnect: about 2 s after a kill, 300 s (5 minutes) with a graceful drain\n≈: approximately equal to\ns: seconds; /s means per second\nIn words: the same 200,000 reconnects spread over 5 minutes instead of 2 seconds cut the peak rate 150-fold.\n```\n\n- A kill gives **100,000 auth checks/s**. If auth normally handles ~5,000/s, that's 20× overload.\n- A 5-minute graceful drain (closing connections in batches) gives **667 reconnects/s**, comfortably handled.\n\nAdd client-side backoff with full jitter (e.g. random 0–30 s on first retry) so even an unplanned crash spreads reconnects out. Resuming from a sequence number keeps each reconnect cheap.",
+    "workedExample": "Killing a gateway disconnects its entire population together. Their reconnects repeat TLS and authentication work, which can overload shared dependencies. Stop admitting new connections, drain in stages, spread client retries with jitter and resume from a retained sequence when supported. Coordinate the fleet’s drains against the capacity of the services that accept reconnects.",
     "link": {
       "title": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
       "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
@@ -101,27 +101,27 @@
     "id": "api-real-time-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "A gateway holds 200,000 WebSocket connections, and every reconnect costs one call to the auth service. Auth can absorb about 2,000 extra calls/s on top of normal load. For a deploy, you drain the gateway by closing connections at a steady rate, and clients reconnect promptly. Ignoring variability and all other bottlenecks, what lower bound does auth capacity place on drain time?",
+    "prompt": "Several WebSocket gateways will drain during a deploy. Each reconnect calls a shared authentication service. What should constrain the combined drain rate?",
     "options": [
       {
-        "text": "About 10 seconds",
-        "explanation": "That's 20,000 reconnects per second, ten times what auth can absorb."
+        "text": "Each gateway may independently use all spare authentication capacity.",
+        "explanation": "Those allocations add together and can overload the shared dependency."
       },
       {
-        "text": "It doesn't matter, as long as clients use exponential backoff",
-        "explanation": "Backoff helps after *failures*. If you close everything at once and auth falls over, backoff spreads out the wreckage, but you've still caused an outage. Draining controls the rate at the source."
+        "text": "Nothing, provided clients use exponential backoff.",
+        "explanation": "Backoff helps spread retries but does not prove enough authentication capacity."
       },
       {
-        "text": "About 100 seconds",
-        "explanation": "Correct. 200,000 ÷ 2,000 per second = 100 s. In practice you'd add headroom, say 3–5 minutes, and jitter on the client side."
+        "text": "The fleet’s combined reconnect load must fit spare authentication capacity, with headroom for variability.",
+        "explanation": "Correct. Coordinate drains using the shared dependency’s budget."
       },
       {
-        "text": "About 2,000 seconds",
-        "explanation": "That divides by 100 instead of 2,000. It's safe, but over half an hour per gateway makes deploys needlessly slow."
+        "text": "Only how quickly the old gateways can close sockets.",
+        "explanation": "Socket closure can be much faster than the dependency can accept reconnects."
       }
     ],
     "answer": 2,
-    "workedExample": "1. Reconnects to absorb: **200,000**.\n2. Auth headroom: **2,000/s**.\n3. Minimum drain time:\n\n```formula\nT_min = N / R\nT_min = 200,000 / 2,000 per s = 100 s\nwhere\nT_min: the shortest drain that keeps auth within its headroom\nN: the reconnects to absorb, 200,000\nR: the spare auth capacity, 2,000 calls per second\ns: seconds\nIn words: 200,000 reconnects at 2,000 a second take **100 s**.\n```\n\n4. Add headroom for other gateways, retries and failures: drain over a few minutes.\n\nCompare with killing the process: 200,000 reconnects in maybe 1–2 seconds, around 100,000/s, which is 50× auth's headroom.\n\nIf you deploy 10 gateways one after another at this pace, the whole rollout takes about 17 minutes, which is why large fleets drain several gateways in parallel only when auth has the capacity.",
+    "workedExample": "A graceful drain shifts work to connection establishment and authentication. Budget that extra work across all draining gateways, including normal traffic and failures. Stagger shutdowns and use jitter; resume state prevents missed data after a successful reconnect.",
     "link": {
       "title": "Discord: How Discord scaled Elixir to 5,000,000 concurrent users",
       "url": "https://discord.com/blog/how-discord-scaled-elixir-to-5-000-000-concurrent-users"

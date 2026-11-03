@@ -25,11 +25,10 @@ Requests enter a **queue** of fixed size, and are processed (they "leak out") at
 
 The worst-case extra delay is a full queue draining at the leak rate:
 
-```formula
+```formula reference
 W_max = B / r
-W_max = 100 / 50 = 2 s
 where
-W_max: the longest a request can wait in the queue, in seconds (s)
+W_max: an approximate upper bound on queue-drain time, in seconds (s)
 B: the queue size, in requests; here 100
 r: the leak rate, in requests per second; here 50
 s: seconds
@@ -67,14 +66,7 @@ The counter includes rejected attempts too, but only the first request sets its 
 
 It's extremely cheap: one counter per client per window. But it has a **boundary problem**. With a limit of 100/min, a client can send 100 at 12:00:59 and another 100 at 12:01:00. That's 200 requests in two seconds, double the intended rate:
 
-```formula
-A_max = 2 × L
-A_max = 2 × 100 = 200
-where
-A_max: the most requests a fixed-window limiter can accept in a short span that straddles a window boundary
-L: the limit per window, here 100 per minute
-In words: the end of one window and the start of the next each allow the full limit, so a client timing its bursts can get twice the limit through in a couple of seconds.
-```
+Two bursts can straddle a fixed-window boundary: the ending window and the new window each admit their full quota.
 
 ```
  limit 100/min

@@ -43,7 +43,7 @@ Design points:
 - **Event-driven and asynchronous**: the upload API returns immediately; the video shows "processing" until done.
 - **Parallelise by chunk**: split work at boundaries the video codec allows, encode chunks concurrently, then assemble and package them. Handle keyframes/GOPs, timestamps, audio alignment and rendition boundaries; speedup depends on available workers and split/encode/assembly costs.
 - **Idempotent, retryable steps**: workers can die (often on cheap spot instances). Include source version and encoding settings in output identity. Deterministic names alone do not guarantee idempotency: write temporary outputs, validate them, and conditionally publish a manifest so a stale retry cannot replace newer work.
-- **A workflow engine** (Step Functions, Temporal, or a simple state table) tracks each video's progress through stages: validate → transcode → thumbnail → moderate → publish.
+- **A workflow engine** (Step Functions, Temporal, or a simple database table of workflow progress) tracks each video's progress through stages: validate → transcode → thumbnail → moderate → publish.
 - **Prioritise**: publish a low-resolution rendition first so the video is watchable sooner, and fill in higher qualities afterwards.
 
 > [!example] Image pipeline

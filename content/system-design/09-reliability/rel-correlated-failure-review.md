@@ -11,22 +11,11 @@ The preceding units separated fault symptoms, isolation and survivor capacity. A
 
 ## Correlated failure and the "it can't all fail" fallacy
 
-The probability maths of redundancy assumes independence. When two replicas fail independently, the chance both are down at once is the product of their individual chances of being down:
+Simple product estimates for redundant copies assume independence.
 
-```formula
-P_both = (1 − A)^2
-P_both = (1 − 0.999)^2
-P_both = 0.001 × 0.001 = 0.000001
-P_both = 0.0001%
-where
-P_both: the probability that both replicas are down at the same moment
-A: the availability of one replica, the fraction of time it is up, here 99.9% = 0.999
-^2: squared, multiplied by itself once (one factor per replica)
-%: per cent; 0.000001 = 0.0001%
-In words: each replica is down 0.1% of the time; if they fail independently, both are down only one-thousandth of that, 0.0001% of the time.
-```
+Independent copies can make simultaneous outages much rarer. That improvement disappears for a fault that hits every copy, such as the same broken migration or shared credentials.
 
-That is only true if the failures really are independent. But real failures correlate:
+Real failures can correlate:
 
 - The same bad config or software release is applied to both.
 - A load spike that kills one replica shifts its load to the other and kills that too (a **cascading failure**).

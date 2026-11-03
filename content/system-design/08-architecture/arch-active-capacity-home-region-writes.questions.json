@@ -3,18 +3,18 @@
     "id": "arch-multi-region-q3",
     "level": "intermediate",
     "type": "single",
-    "prompt": "You run active-active across two regions, each at 70% CPU in normal operation. One region fails and all its traffic moves to the other. What happens, and what's the principle? Assume equal region capacity, CPU demand proportional to admitted load, no immediate extra capacity and no load shedding.",
+    "prompt": "Two active regions have equal capacity. Load tests show that either one alone cannot sustain the combined admitted traffic. One fails and all traffic moves to the survivor, with no immediate extra capacity or load shedding. What follows?",
     "options": [
       {
-        "text": "The survivor needs about 140% of its capacity, so it overloads; in an N-region active-active setup, each region must have headroom to absorb the failed region's share.",
-        "explanation": "Correct. 70% + 70% = 140% of one region's capacity. With 2 regions, normal utilisation must stay under about 50% (or the survivor must autoscale fast enough) for failover to work."
+        "text": "The survivor overloads; active serving in both regions still requires reserved capacity for a failure.",
+        "explanation": "Correct. The supplied load test establishes that the survivor lacks capacity for all transferred traffic."
       },
       {
-        "text": "The surviving region runs at 70%, because load balancers spread traffic evenly.",
+        "text": "The surviving region’s load remains unchanged because a load balancer spreads traffic evenly.",
         "explanation": "Wrong. The survivor now gets both regions' traffic. The load balancer can't spread it to a region that's down."
       },
       {
-        "text": "The failed region's traffic is dropped, and the survivor stays at 70%.",
+        "text": "The failed region’s traffic is automatically discarded, so the survivor stays at its old load.",
         "explanation": "Wrong. That defeats the purpose of active-active. Routing will send failed-region users to the survivor."
       },
       {
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Add up the load the survivor must carry:\n\n```formula\nL = N × u\nL = 2 × 70 % = 140 %\nwhere\nL: total load, as a percentage of one region's capacity\nN: number of regions, 2\nu: each region's normal utilisation, 70 %\n%: per cent of one region's capacity\nIn words: two regions at 70 % is 140 % of one region, more than it has.\n```\n\n2. After failure, one region must handle 140%, so it overloads and the outage can cascade into the second region.\n3. General rule for N equal regions surviving 1 failure:\n\n```formula\nU_max = (N − 1) / N\nU_max = 1/2 = 50 %  (N = 2)\nU_max = 2/3 ≈ 67 %  (N = 3)\nU_max = 3/4 = 75 %  (N = 4)\nwhere\nU_max: highest safe normal utilisation per region\nN: number of equal active regions\n≈: approximately equal to\n%: per cent\nIn words: the N − 1 survivors must carry everything, so each region can be at most (N − 1)/N busy.\n```\n4. So more regions mean less wasted headroom, but more complexity.\n5. Also cap traffic shifts and shed load so a failover can't knock over the survivor.",
+    "workedExample": "1. Both regions’ traffic moves onto one region’s capacity in the stated failure.\n2. The survivor cannot sustain the supplied combined demand, so queueing or rejection increases.\n3. Reserve standing headroom for failover and account for retries, cache misses and other shared limits.\n4. Use controlled traffic shifts and admission limits so overload does not cascade.",
     "link": {
       "title": "AWS: Disaster recovery options in the cloud",
       "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
@@ -40,8 +40,8 @@
         "explanation": "Wrong. LWW would silently discard one of two concurrent sales. Both buyers get a confirmation and the seat is double-sold."
       },
       {
-        "text": "Replicate seat maps globally for browsing; route seat reservations for each event to a single home region (or a strongly consistent store) so each seat has one serialised writer.",
-        "explanation": "Correct. Browsing tolerates slightly stale availability and is served locally; the invariant-critical write path has exactly one authority, paying the cross-region latency only on the purchase step."
+        "text": "Replicate seat maps for browsing; reserve through a fenced authoritative owner or suitable consistent store using an atomic condition or transaction.",
+        "explanation": "Correct when delayed browsing is acceptable. The atomic reservation enforces uniqueness; fresh reads or a single endpoint alone do not make a later unconditional write safe."
       },
       {
         "text": "Use CRDT sets so each region can add seat sales independently and merge later.",
@@ -63,27 +63,27 @@
     "id": "arch-multi-region-q9",
     "level": "intermediate",
     "type": "single",
-    "prompt": "You run active-active across 4 equal regions and want to survive the loss of any one region without overload. What's the highest safe normal utilisation per region, and how does that compare with 2 regions? Use an ideal equal-load, linear-capacity model without autoscaling; treat the answer as a theoretical ceiling before operating margin.",
+    "prompt": "Four equal active regions share traffic evenly. The design must survive one region failing without adding capacity immediately. Which planning rule is sound?",
     "options": [
       {
-        "text": "50%, the same as with 2 regions.",
-        "explanation": "Wrong. With more regions, each survivor absorbs only a share of the failed region's load."
+        "text": "The current average CPU alone proves failover is safe.",
+        "explanation": "Average CPU omits routing skew, resource-specific bottlenecks and changed demand during recovery."
       },
       {
-        "text": "100%, because the other regions will autoscale.",
-        "explanation": "Wrong. The question excludes autoscaling. Provisioning time varies and may be impaired during failure, so this model needs standing headroom."
+        "text": "Every region can run at full capacity because the others will absorb its traffic.",
+        "explanation": "The survivors then have no capacity left for transferred work."
       },
       {
-        "text": "25%, one quarter of capacity.",
-        "explanation": "Wrong. That over-provisions heavily; 25% is the share of load each region carries, not its utilisation limit."
+        "text": "Active-active removes the need to exercise failure routing.",
+        "explanation": "Normal serving does not test every failure path or ownership transition."
       },
       {
-        "text": "75%: after a failure, 3 regions carry 4 regions' load, so each must be at most 3/4 loaded normally; with 2 regions it's 50%.",
-        "explanation": "Correct. Divide the number of surviving regions by the original region count. More regions waste less headroom, at the cost of more complexity."
+        "text": "Reserve enough standing capacity for the survivors to carry all admitted work, then leave margin for skew, retries and cold caches.",
+        "explanation": "Correct. Sharing across more survivors reduces each one’s extra share in the ideal model, but the actual bottlenecks still need testing."
       }
     ],
     "answer": 3,
-    "workedExample": "1. Work out the load per region before and after a failure:\n\n```formula\nN_4 = L / 4\nN_3 = L / 3 ≤ C\nL ≤ 3 × C\nN_4 ≤ 3 × C / 4 = 0.75 × C\nwhere\nL: total load across all regions\nC: one region's capacity\nN_4: each region's share with all 4 up\nN_3: each survivor's share with 3 up\n≤: is less than or equal to\nIn words: if 3 survivors must each fit L/3 within C, then normally each region carries at most three-quarters of C.\n```\n\n2. Max normal utilisation = 75%.\n3. For equal regions, divide the surviving-region count by the original count: 50% for 2, about 67% for 3, 75% for 4.\n4. Also leave margin for retry storms and cold caches in the survivors.",
+    "workedExample": "1. Remove a region from the capacity plan.\n2. Route its work to the surviving regions using the intended failure policy.\n3. Check that every relevant resource can handle the resulting demand, including recovery effects.\n4. Validate with load and failover tests; region count alone does not prove safety.",
     "link": {
       "title": "AWS: What is a cell-based architecture?",
       "url": "https://docs.aws.amazon.com/wellarchitected/latest/reducing-scope-of-impact-with-cell-based-architecture/what-is-a-cell-based-architecture.html"

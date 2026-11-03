@@ -13,17 +13,7 @@ Idempotency makes retries *safe*. It doesn't make them *wise*. If a service is s
 
 **Exponential backoff** spaces retries out by doubling the wait each time:
 
-```formula
-T_n = base × 2^{n − 1}
-T_4 = 0.1 s × 2^3 = 0.1 s × 8 = 0.8 s
-where
-T_n: the wait before retry number n, in seconds (s)
-n: which retry this is: 1 for the first retry, 2 for the second, and so on
-base: the first wait, here 0.1 s
-T_4: the wait before the fourth retry
-s: seconds
-In words: each retry waits twice as long as the one before, so the waits grow 0.1, 0.2, 0.4, 0.8 s and so on.
-```
+For example, waits can grow from 0.1 to 0.2 to 0.4 to 0.8 seconds.
 
 ```
 attempt 1: wait 0.1 s
@@ -33,11 +23,11 @@ attempt 4: wait 0.8 s
 cap at, say, 20 s
 ```
 
-Doubling grows fast (the 12th retry would wait over 200 s), so real clients cap the wait at a maximum.
+Doubling grows quickly, so clients cap the wait at a maximum.
 
 **Jitter** randomises the wait so clients don't retry in synchronised waves. AWS's "full jitter" picks a random wait anywhere between zero and the capped backoff:
 
-```formula
+```formula reference
 T_max = min(cap, base × 2^{n − 1})
 T_sleep = random(0, T_max)
 where
@@ -52,22 +42,11 @@ s: seconds
 In words: work out the doubled backoff, never let it exceed the cap, then wait a random time between zero and that.
 ```
 
-Worked example for the fourth retry with base 0.1 s and cap 20 s:
+With base 0.1 seconds and a 20-second cap:
 
-```formula
-T_max = min(20 s, 0.1 s × 2^3)
-T_max = min(20 s, 0.8 s) = 0.8 s
-T_sleep = random(0 s, 0.8 s)
-where
-T_max: the longest the fourth retry may wait
-T_sleep: the wait actually used, on average 0.4 s
-min: the smaller of the two values
-random: a uniformly random value in the range
-s: seconds
-In words: the cap doesn't bite yet, so the client waits somewhere between 0 and 0.8 s, 0.4 s on average.
-```
+At the fourth retry in this convention, full jitter chooses a delay between zero and 0.8 seconds.
 
-AWS's article uses the attempt number itself as the exponent and doesn't say whether counting starts at 0 or 1. Counted from 0 it is exactly the formula above; counted from 1 every wait is twice as long, so check which convention a library uses. In code:
+Retry numbering differs between libraries. This code counts the first retry as 1:
 
 ```python
 import random
@@ -88,18 +67,15 @@ Also:
 - **Cap the number of attempts** according to the deadline and overload budget (for example, three total attempts).
 - **Use a retry budget**: allow retries to add at most, say, 10% extra load, so a full outage doesn't triple your traffic. For 1,000 requests/s, a 10% budget allows at most 100 retries/s, however many requests fail.
 - **Retry only retryable errors**: timeouts, connection resets, `429`, `502`, `503`, `504`, and an idempotency layer's `409` meaning "the original is still in progress". Never retry `400` or `422` unchanged.
-- **Honour `Retry-After`** when the server sends one. It knows better than your backoff formula.
+- **Honour `Retry-After`** when the server sends one. Wait at least that long only if another attempt still fits the operation deadline and retry budget; otherwise stop or report that retrying is deferred.
 - **Retry at one layer only.** If the app, the SDK and a sidecar each allow 3 total attempts, one failure can become 27 attempts on the struggling backend, because nested retries multiply:
 
-```formula
-A = a^L
-A = 3^3 = 3 × 3 × 3 = 27
-where
-A: the most attempts that reach the bottom service for one user action
-a: the total attempts each layer allows, here 3
-L: the number of nested layers that retry, here 3 (app, SDK, sidecar)
-In words: every attempt at one layer can trigger a full set of attempts at the layer below, so the counts multiply rather than add.
-```
+Every outer retry can run a complete set of inner retries. Choose one retry owner rather than letting every layer multiply the work.
+
+> [!analogy] Real-world analogy: Staggered return times
+> **How it maps:** If a busy reception desk tells everyone to return at exactly the same moment, the queue returns together. Giving people different return times spreads the next wave, like jitter.
+>
+> **Where it stops:** Random delays cannot make an overloaded service healthy or make an unsafe operation retryable. Attempt limits, deadlines and retry budgets are separate controls.
 
 ## Key takeaways
 - Exponential backoff doubles waits; a cap prevents unbounded delays.

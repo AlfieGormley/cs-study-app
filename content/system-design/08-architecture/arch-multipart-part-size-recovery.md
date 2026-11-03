@@ -2,8 +2,8 @@
 id: arch-multipart-part-size-recovery
 title: Choosing multipart sizes and recovery
 level: intermediate
-minutes: 4
-summary: Calculate part counts and size ceilings while retrying only incomplete work.
+minutes: 3
+summary: Choose part sizes against service limits, request overhead and the cost of retrying failed transfers.
 sourceLesson: arch-object-storage-media
 ---
 
@@ -22,18 +22,14 @@ Uploading a 4 GB video in one request is fragile: if the connection drops at 3.9
 
 The number of parts is the file size divided by the part size, rounded up (the last part holds whatever is left over):
 
-```formula
+```formula reference
 P = ⌈F / S⌉
-P = ⌈4 GB / 100 MB⌉
-P = ⌈4000 MB / 100 MB⌉ = 40
 where
-P: the number of parts to upload
-F: the file size, here 4 gigabytes (GB)
-S: the part size, here 100 megabytes (MB)
-GB: gigabyte; 1 GB = 1,000 MB
-MB: megabyte, a million bytes
-⌈ ⌉: ceiling: round up to the next whole number
-In words: a 4 GB file in 100 MB parts is 40 parts, which can be uploaded side by side.
+P: number of parts, a whole-number count
+F: file size in bytes
+S: chosen part size in bytes; all but the last part have this size
+⌈ ⌉: ceiling, rounding up to the next whole number
+In words: larger parts reduce the number of upload requests, but a failed part then contains more bytes to resend. Round up because the final part may be smaller.
 ```
 
 ```
@@ -47,36 +43,11 @@ In words: a 4 GB file in 100 MB parts is 40 parts, which can be uploaded side by
 
 Benefits: parallelism (faster uploads on fat pipes), resilience (lose only one part on failure) and the ability to pause and resume. AWS suggests considering multipart for anything over about 100 MB.
 
-The 10,000-part cap means **part size sets the maximum file size**:
+The 10,000-part cap means a fixed part size also limits the largest upload it can represent. Larger files need larger parts, while smaller parts reduce the bytes resent after one failed transfer.
 
-```formula
-F_max = N_max × S
-F_max = 10000 × 100 MB = 1000000 MB
-F_max = 1 TB
-where
-F_max: the largest file you can upload with that part size
-N_max: S3's maximum number of parts in one upload, 10,000
-S: the part size you chose, here 100 megabytes (MB)
-MB: megabyte, a million bytes
-TB: terabyte, a million MB (10^12 bytes)
-^: "to the power of": 10^12 is a 1 followed by 12 zeros
-In words: with 100 MB parts you top out at about 1 TB.
-```
+The current maximum object size is 48.8 TiB, requiring parts near the 5 GiB ceiling. Keep decimal file sizes and binary service limits in consistent units when planning.
 
-To reach the 48.8 TiB maximum object size you need parts near the 5 GiB ceiling:
-
-```formula
-F_max = 10000 × 5 GiB = 50000 GiB
-F_max = (50000 / 1024) TiB ≈ 48.8 TiB
-where
-F_max: the largest file with maximum-size parts
-GiB: gibibyte, 1,024 × 1,024 × 1,024 bytes (about 1.07 GB)
-TiB: tebibyte, 1,024 GiB
-≈: approximately equal to (rounded)
-In words: 10,000 parts of 5 GiB each is 50,000 GiB, about 48.8 TiB.
-```
-
-Pick a part size from the largest file you expect.
+Pick a part size from the largest file you support, then bound parallel requests to the client’s memory and network capacity.
 
 Set a lifecycle rule to abort incomplete multipart uploads after a few days, or orphaned parts will quietly cost money.
 

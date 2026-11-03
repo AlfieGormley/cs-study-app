@@ -40,14 +40,21 @@ Google's 2004 **MapReduce** paper described processing large datasets on cluster
 What made it work:
 
 - **Move compute to data**: schedule map tasks on the machines that hold the input blocks (Google used GFS; Hadoop uses HDFS replicas), avoiding network transfer.
-- **Fault tolerance by re-execution**: with deterministic functions over stable input and framework-managed output commit, failed tasks can be rerun elsewhere. Arbitrary external side effects are not made exactly-once by task retries. Slow "straggler" tasks are run speculatively on a second machine.
+- **Fault tolerance by re-execution**: with deterministic functions over stable input and framework-managed output commit, failed tasks can be rerun elsewhere. Arbitrary external side effects are not made exactly-once by task retries. A slow straggler task may get a backup attempt on another machine (speculative task execution). This helps only when the extra attempt can finish sooner and its output is handled safely.
 - **Immutable inputs, new outputs**: the framework convention is to read stable input and publish new output. User code must avoid unsafe external mutations; the framework does not make every program safe to retry.
 
 The weakness: map output is materialized on local disk and reducer output is written to the distributed file system; reducers can fetch completed map outputs before all maps finish. Chained jobs materialize intermediate results. For multi-stage pipelines and iterative algorithms, materializing intermediates can make I/O a major cost; whether it dominates depends on the workload.
 
+> [!analogy] Real-world analogy: Combining shop tallies
+> Several shop assistants count items in different aisles. Their tallies are grouped by product before one total is produced for each product.
+>
+> **How it maps:** Mappers produce intermediate records with keys and values, the shuffle groups matching keys and reducers combine their values.
+>
+> **Where it stops:** Retrying digital tasks needs stable inputs and safe output handling. Repeating a task must not repeat an external side effect unnoticed.
+
 ## Key takeaways
 - Bounded historical jobs fit batch; continuously arriving events with prompt result needs fit streams.
-- Map emits pairs, shuffle brings equal keys together and reduce combines their values.
+- Map emits pairs, shuffle brings matching keys together and reduce combines their values.
 - Data locality and deterministic recomputation improve recovery without making arbitrary side effects exactly once.
 - Materialising intermediate output adds I/O whose actual cost depends on the workload.
 

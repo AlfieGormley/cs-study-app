@@ -32,7 +32,7 @@ There are three broad shapes. None of them is "best". Each is a different set of
 ```
 
 - **Monolith**: an application deployed as one unit (often replicated behind a load balancer). Modules commonly call each other in-process and may share a database; a particular repository layout or exactly one database is not required.
-- **Modular monolith**: still one deployable, but the code is split into modules with **enforced boundaries**: each module owns its tables, exposes a public interface, and other modules may not reach into its internals. Shopify's core is the famous example, a very large Rails monolith split into components with tooling that flags boundary violations.
+- **Modular monolith**: still one deployable, but the code is split into modules with **enforced boundaries**: each module owns its tables, exposes a public interface, and other modules may not reach into its internals. Shopify has described a gradual effort to create boundaries within its large Rails monolith; such migrations do not establish complete isolation overnight.
 - **Microservices**: each business capability is its own service with its own process, its own deployment pipeline and, crucially, **its own data**. Services talk over the network (HTTP/gRPC or messages).
 
 ## What a monolith gives you for free
@@ -52,7 +52,7 @@ The costs show up with scale, of the *organisation* more than of traffic:
 - Without discipline, the code becomes a "big ball of mud" where everything depends on everything.
 
 > [!note] A monolith still scales horizontally
-> "Monolith" describes the deployment unit, not the instance count. Running 50 stateless copies of one app behind a load balancer is normal and handles very high traffic. Stack Overflow famously served huge traffic from a small number of monolithic servers.
+> "Monolith" describes the deployment unit, not the instance count. Running 50 stateless copies of one app behind a load balancer is normal and handles very high traffic.
 
 ## Key takeaways
 - A monolith is one deployable, which can run as many stateless instances.

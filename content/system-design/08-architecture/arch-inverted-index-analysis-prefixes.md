@@ -62,6 +62,13 @@ Before indexing (and again at query time), text goes through an **analyser**:
 
 Edge n-grams index prefixes only within their configured minimum and maximum lengths, not every possible prefix. A query such as `headp` should remain the intended typed token rather than being expanded into many shorter prefixes. Keep prefix indexing to suitable fields and measure its storage cost. Debounce keystrokes and cancel stale requests in the client to reduce unnecessary work. Search-as-you-type features can also combine shingle and prefix fields, so inspect the actual generated query and mapping.
 
+> [!analogy] Real-world analogy: The index at the back of a book
+> A book index lists a topic and the pages where it appears, saving a reader from scanning every page.
+>
+> **How it maps:** An inverted index maps terms to document identifiers; combining those lists finds documents containing the requested terms.
+>
+> **Where it stops:** Search analysis changes the terms, and ranking uses additional evidence. The index alone does not understand meaning or prove relevance.
+
 ## Key takeaways
 - An inverted index maps terms to sorted posting lists; boolean queries combine candidate document sets.
 - Analysis determines stored and queried terms, so both pipelines must be compatible.

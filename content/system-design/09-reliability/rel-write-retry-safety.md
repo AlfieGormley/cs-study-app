@@ -29,7 +29,7 @@ Idempotency-Key: 7f3a-…-c91e
 { "amount": 5000, "currency": "GBP" }
 ```
 
-The server coordinates concurrent requests and stores the key with the result. Stripe returns the stored result for the same key and parameters once execution has begun, including stored failures. Its keys may be pruned after at least 24 hours; reuse after pruning can execute a new request. External effects need compatible provider idempotency or reconciliation, because a local database transaction cannot atomically commit an external charge.
+The server coordinates concurrent requests and stores the key with the result. Stripe API v1 returns the stored result for the same key and parameters once execution has begun, including stored failures. Its API v1 keys may be pruned after at least 24 hours; reuse after pruning can execute a new request. External effects need compatible provider idempotency or reconciliation, because a local database transaction cannot atomically commit an external charge.
 
 ### What to retry
 

@@ -26,27 +26,12 @@ Defences, layered:
 5. **Make expensive endpoints cheap**: cache safe responses, require appropriate auth and use bounded admission queues. Authentication alone does not make a costly request cheap. Combine with the load shedding and autoscaling from earlier lessons.
 6. **Reduce attack surface**: close unused ports, don't expose databases or admin panels publicly.
 
-> [!example] Amplification maths
+> [!example] Reflection amplification
 > A memcached reflection attack sends a ~15-byte request with a spoofed source address; the server replies with up to hundreds of kilobytes to the victim. Amplification factors above 10,000× were observed in 2018, which is how attacks passed 1 Tbps. Never expose UDP services like memcached to the internet.
 
-The arithmetic behind amplification: the attacker pays for small requests, and the victim receives large replies. The following ideal model uses the same payload accounting for sizes and bit rates. The 15-byte measurement is a UDP payload: IP/UDP headers, fragmentation and other network overhead lower the corresponding on-wire amplification.
+The mechanism behind amplification: the attacker pays for small requests, and the victim receives large replies. Use consistent payload or wire accounting when comparing amplification measurements. The 15-byte measurement is a UDP payload: IP/UDP headers, fragmentation and other network overhead lower the corresponding on-wire amplification.
 
-```formula
-A = S_resp / S_req
-B_victim = B_attack × A
-B_victim = 100 Mbps × 10,000 = 1 Tbps
-where
-A: the amplification factor, how many times bigger each reply is than the request that triggered it
-S_resp: the reflected reply’s payload size, in bytes
-S_req: the spoofed request’s payload size, in bytes (about 15 in the cited memcached measurement)
-B_victim: the traffic arriving at the victim, in bits per second
-B_attack: the illustrative request-payload bit rate, here 100 megabits per second (Mbps), ignoring wire overhead
-Mbps: megabits per second (1,000,000 bits per second)
-Tbps: terabits per second (1,000,000 Mbps)
-In words: with a 10,000× amplifier, an attacker sending a modest 100 Mbps of requests points 1 Tbps of replies at the victim.
-```
-
-The 100 Mbps is illustrative. Real reflection attacks are limited by how many open reflectors exist and how much each one can send, not just by the factor.
+Real reflection attacks are limited by how many open reflectors exist and how much each one can send, not just by the factor.
 
 ## Key takeaways
 

@@ -7,21 +7,11 @@ summary: Choose proportionate defences for wrong answers and identify single poi
 sourceLesson: rel-designing-for-failure
 ---
 
-The previous unit covered silence and slowness. Here the component may answer incorrectly, or a shared dependency may disable every otherwise healthy replica. For the availability question, recall Fundamentals: independent hard dependency availabilities multiply, while independent redundant copies fail together only when all copies are down.
+The previous unit covered silence and slowness. Here the component may answer incorrectly, or a shared dependency may disable every otherwise healthy replica. A shared hard dependency can still disable every redundant application server.
 
 ### Byzantine failures
 
-The component returns *wrong* answers: corrupted data, a buggy release computing the wrong price, or a malicious node. Tolerating liars costs far more replicas than tolerating crashes. Classic partially synchronous Byzantine consensus protocols such as PBFT need:
-
-```formula
-R ≥ 3f + 1
-R ≥ 3 × 1 + 1 = 4
-where
-R: the number of replicas (copies of the service) running the protocol
-f: the number of replicas that may be Byzantine (faulty or lying) at the same time, here 1
-≥: "is at least"
-In words: to survive one replica that lies, you need at least four replicas; to survive two, at least seven.
-```
+The component returns *wrong* answers: corrupted data, a buggy release computing the wrong price, or a malicious node. Tolerating liars costs far more replicas than tolerating crashes. Classic protocols such as PBFT need four replicas to tolerate one Byzantine participant, or seven to tolerate two; their liveness relies on eventual timing bounds.
 
 For comparison, a crash-tolerant protocol such as Raft needs only three replicas to survive one crash, because a majority of two can still agree. Bounds differ with timing, authentication and trust assumptions; this is not a universal rule for every Byzantine-tolerant system.
 

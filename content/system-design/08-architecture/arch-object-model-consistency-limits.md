@@ -26,9 +26,6 @@ What you get:
 
 General purpose buckets do not provide arbitrary in-place byte updates, application editing mutexes, or multi-key transactional updates. S3 Object Lock provides retention protection, not a read-modify-write mutex. Use a separate query layer for rich metadata queries.
 
-> [!note] Evidence gap
-> Fixed object-store/CDN latency and transcoding speedup figures are omitted because no representative deployment benchmark supports them. Calculations below are hypothetical.
-
 On consistency, S3 is better than its old reputation. Since December 2020 it provides **strong read-after-write consistency** for object `PUT`s (new and overwrite) and `DELETE`s, and for the `GET`, `HEAD` and `LIST` requests that follow them. If your `PUT` returned success, a subsequent authorized direct read of the same bucket sees that write or a later modification. This does not make CDN caches or cross-Region replication synchronous. Two caveats:
 
 - **Concurrent writers to one key**: the last write wins. S3 has no application editing mutex, but it does support conditional writes (`If-None-Match` to create only if absent, `If-Match` on an ETag), which you can use for optimistic concurrency.

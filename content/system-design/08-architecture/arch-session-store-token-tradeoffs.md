@@ -48,9 +48,6 @@ The state goes into a signed token the client sends with every request, such as 
 > [!tip] Files are state too
 > Uploaded files written to `/tmp` on one server are invisible to the others. Send uploads straight to object storage (S3, GCS) instead, ideally via presigned URLs so they don't pass through the app tier at all.
 
-> [!note] Evidence gap
-> Fixed session-lookup and VM/container startup timings are omitted: this project has no measured deployment establishing them. Use application readiness measurements and load tests for capacity planning.
-
 ### Token lifecycle checks
 
 With asymmetrically signed access tokens, application servers verify using trusted public keys; protect the private signing key and plan rotation. Revoke refresh tokens in a server-side store when disabling future renewal. Already-issued access tokens remain usable until their expiry unless each authorisation performs an enforced token revocation check. Rotate refresh tokens on use and detect reuse atomically. Reuse may indicate theft or legitimate concurrent requests; invalidating a refresh-token family stops further renewal once enforced, but does not itself invalidate already-issued access tokens. A short access-token lifetime is a design example, not a universal security optimum; validation, key distribution and clock tolerance are part of the policy.

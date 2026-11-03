@@ -13,7 +13,7 @@ A written recovery plan is a hypothesis. This unit describes how teams test it. 
 
 You only know your DR and redundancy work if you've seen them work. **Chaos engineering** is the discipline of running controlled experiments on a system to build confidence that it withstands turbulent conditions.
 
-Netflix's **Chaos Monkey** (built around 2010–11, open-sourced in 2012) randomly terminated production instances during business hours, forcing every team to build services that survive instance loss. Its successors simulated whole-zone (Chaos Gorilla) and region (Chaos Kong) failures.
+Netflix described **Chaos Monkey** in 2011: it randomly terminated production instances during business hours to test resilience to instance loss. The same account described whole-zone experiments with Chaos Gorilla; a 2015 account described regional-outage simulations with Chaos Kong.
 
 The principles (from principlesofchaos.org):
 
@@ -24,16 +24,6 @@ The principles (from principlesofchaos.org):
 5. Run in production where possible, **minimise blast radius**, and automate experiments to run continuously.
 
 The illustrative experiment compares user-visible checkout success and stops before a small experiment becomes a large outage:
-
-```formula
-S_goal = 99.5%
-S_abort = 99%
-where
-S_goal: minimum checkout-success fraction expected in control and experiment groups
-S_abort: checkout-success fraction below which the experiment is stopped
-%: per cent of measured checkout attempts
-In words: Expect at least 99.5% successful checkout in both groups, and abort if experiment success falls below 99%.
-```
 
 ```
 Experiment: checkout survives recs loss
@@ -58,4 +48,6 @@ A **game day** is a scheduled exercise where a team simulates a disaster (e.g. "
 ## Further reading
 
 - [Principles of chaos engineering](https://principlesofchaos.org/)
+- [The Netflix Simian Army (Netflix, 2011)](https://netflixtechblog.com/the-netflix-simian-army-16e57fbab116)
+- [Chaos engineering upgraded (Netflix, 2015)](https://netflixtechblog.com/chaos-engineering-upgraded-878d341f15fa)
 - [Chaos engineering (Wikipedia)](https://en.wikipedia.org/wiki/Chaos_engineering)

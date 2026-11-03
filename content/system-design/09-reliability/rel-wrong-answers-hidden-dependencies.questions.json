@@ -57,7 +57,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Locate the fault: the *source* of the wrong answers is a buggy upstream, not your replicas.\n2. Classical PBFT, under its assumptions, needs this many replicas:\n\n```formula\nR ≥ 3f + 1\nR ≥ 3 × 1 + 1 = 4\nwhere\nR: the number of replicas running the protocol\nf: the number of replicas that may be faulty or lying at once, here 1\n≥: \"is at least\"\nIn words: classical PBFT needs at least four replicas to tolerate one arbitrary faulty participant under its timing and authentication assumptions.\n```\n\nThis is not a universal bound for every Byzantine model. And it only helps when a *replica* lies. If all inputs are already wrong, every replica faithfully processes the same wrong value; BFT doesn't help.\n3. Cheaper, targeted defences:\n   - **Validate** at the boundary: the amount satisfies the operation’s documented sign and range rules, currency in ISO 4217 list, checksum matches.\n   - **Reject** to a dead-letter queue so bad messages are visible and don't block the stream.\n   - **Reconcile** end to end (e.g. daily ledger totals vs bank statements).\n4. This turns silent invalid data into a visible rejection or quarantine. Checksums catch accidental transport or storage corruption; a buggy source can generate a matching checksum for a semantically invalid value, so boundary invariants and reconciliation remain necessary.",
+    "workedExample": "1. The bad input originates upstream, so every replica can agree on the same invalid value. Replicating the computation does not repair its input.\n2. Validate business invariants at the boundary and quarantine rejected messages.\n3. Checksums detect accidental corruption, but a buggy sender can checksum semantically wrong data.\n4. Reconcile end to end as a backstop. Classical PBFT addresses faulty participants under its protocol assumptions; it is not the targeted fix here.",
     "link": {
       "title": "Byzantine fault (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Byzantine_fault"
@@ -67,27 +67,27 @@
     "id": "rel-designing-for-failure-q12",
     "level": "advanced",
     "type": "single",
-    "prompt": "A service has two independent, active-active load balancers (each 99.9% available) in front of an app tier, and every request also needs a single database primary that is **99.95%** available. Assume database failures are also independent of the LB tier and failover/routing works. Ignoring other components, what is the service's availability, and where should effort go?",
+    "prompt": "An application has redundant load balancers with tested failover, but every successful request requires a single database primary. Incidents show database outages dominate user failures. Where should reliability work go first?",
     "options": [
       {
-        "text": "About 99.9999%, so it's extremely reliable",
-        "explanation": "That figure describes only the independently redundant load-balancer pair. The database is in series with it and caps the result."
+        "text": "Add more load balancers because the front door determines every outage",
+        "explanation": "More front-door replicas do not mask the required database being unavailable."
       },
       {
-        "text": "Exactly 99.9%, the availability of a single load balancer",
-        "explanation": "Redundancy lifts the LB tier well above 99.9%, and the database then sets the overall figure."
+        "text": "Remove database monitoring because the load balancers already have health checks",
+        "explanation": "The health of a different tier does not prove the database serves requests correctly."
       },
       {
-        "text": "About 99.85%, adding the two components' downtimes",
-        "explanation": "99.85% would be 99.9% LB in series with 99.95% DB, ignoring that the LBs are redundant."
+        "text": "Average the reliability of the two tiers and treat that as service reliability",
+        "explanation": "A required dependency can fail the whole request; averaging tiers hides that boundary."
       },
       {
-        "text": "About 99.95%; the database is the bottleneck, so make it redundant (e.g. a Multi-AZ standby) before adding more load balancers",
-        "explanation": "Correct. The independently redundant load-balancer pair is about 99.9999% available; the hard database dependency brings the service back to about 99.95%. The worked formula shows the product and its assumptions."
+        "text": "Improve the database restoration route and test it, while checking shared causes across replicas",
+        "explanation": "Correct. Work on the observed dominant failure path, including failover, capacity and shared dependencies."
       }
     ],
     "answer": 3,
-    "workedExample": "Parallel parts are down only when all copies are down; serial parts must all be up, so their availabilities multiply.\n\n```formula\nA_LB = 1 − (1 − a)^2\nA_LB = 1 − 0.001^2 = 0.999999\nA = A_LB × A_DB\nA = 0.999999 × 0.9995 ≈ 0.9995\nT_down = (1 − A) × T\nT_down ≈ 0.0005 × 43,200 min ≈ 22 min\nwhere\nA_LB: the availability of the load-balancer pair\na: one load balancer's availability, here 99.9% = 0.999\n^2: squared (one factor per load balancer)\nA_DB: the database primary's availability, here 99.95% = 0.9995\nA: the whole service's availability\nT_down: expected downtime in the period, in minutes (min)\nT: the period length: 30 days = 43,200 min\nmin: minutes\n≈: approximately equal to (rounded)\nIn words: the redundant pair is down almost never, so the service is about as available as the single database, 99.95%, which is roughly 22 minutes of downtime a month.\n```\n\nAlmost all of that downtime comes from the database.\nEffort goes where the downtime is: a standby with automatic failover, tested regularly.\n\nCaveat from the lesson: the 99.9999% only holds if the two LBs fail independently. A shared config push or certificate makes them fail together, and the pair is then no better than one.",
+    "workedExample": "Follow a request through every required component. If no database path can serve it, healthy load balancers cannot complete it. Prioritise a tested standby or other appropriate recovery mechanism, and verify that common configuration or credentials cannot disable all copies together.",
     "link": {
       "title": "AWS Well-Architected Reliability Pillar",
       "url": "https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html"

@@ -7,7 +7,7 @@
     "options": [
       {
         "text": "The write failed and was silently retried.",
-        "explanation": "Wrong. The new name appears a few seconds later, so the write succeeded. The read simply happened before the replica caught up."
+        "explanation": "The prompt says the primary confirmed the committed update. The replica read can still return an older replay position."
       },
       {
         "text": "Replication lag: the read hit a replica that hadn't yet applied the write, violating read-your-writes consistency.",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Read replicas copy *all* data and apply *all* writes.\n2. So with 1 primary + 5 replicas, every full replica replays the write stream, though execution/replay costs differ.\n3. They're excellent for the 95% read share: reads spread across 6 nodes.\n4. But as writes grow, the primary (and each replica) hits a write ceiling.\n5. Offloading reads can free primary headroom. Sharding, batching and larger hardware can address other write bottlenecks, but none guarantees a fixed scaling factor.",
+    "workedExample": "1. Full read replicas copy the dataset and apply its write stream.\n2. With 1 primary + 5 replicas, every full replica replays that stream, though execution costs differ.\n3. For a hypothetical workload with 95% reads, replicas can offload eligible reads if replication lag is acceptable. Routing and freshness requirements determine which nodes serve each read.\n4. As writes grow, the primary and replicas can still hit write ceilings.\n5. Offloading reads can free primary headroom. Sharding, batching and larger hardware can address other write bottlenecks, but none guarantees a fixed scaling factor.",
     "link": {
       "title": "AWS: Working with read replicas",
       "url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ReadRepl.html"
@@ -63,27 +63,27 @@
     "id": "arch-scaling-reads-q8",
     "level": "basic",
     "type": "single",
-    "prompt": "A page lists 50 posts with their authors. The ORM runs one query for the posts and then one query per post for its author. Each query is a ~1 ms round trip. What's the cost, and the fix?",
+    "prompt": "A page lists posts with their authors. The ORM fetches the posts, then makes a separate query for each author. As the page grows, what is the avoidable cost and best response?",
     "options": [
       {
-        "text": "About 2 ms; ORMs batch these automatically.",
-        "explanation": "Wrong. Many ORMs load related rows lazily, one query each, unless you ask for eager loading."
+        "text": "There is no extra cost because ORMs always batch these lookups.",
+        "explanation": "Lazy loading can issue a separate request for each related object."
       },
       {
-        "text": "About 51 ms of serial network round trips; batching authors takes two queries (~2ms network), while an appropriate join can use one",
-        "explanation": "Correct. This is the N+1 query problem: 1 query for the list plus N for related rows."
+        "text": "Repeated serial round trips grow with the list; fetch related authors together or use an appropriate join.",
+        "explanation": "Correct. Eager loading or a suitable join removes the per-item lookup pattern; inspect plans and result sizes."
       },
       {
-        "text": "About 51 ms, and the only fix is a read replica.",
-        "explanation": "Wrong. A replica spreads load but each read still takes 51 round trips."
+        "text": "Only storage space grows; read replicas are the only fix.",
+        "explanation": "The avoidable cost is repeated query work and network waiting, not just storage."
       },
       {
-        "text": "About 1 ms, because the database caches repeated queries.",
-        "explanation": "Wrong. Each query is a separate network round trip, whether or not the data is in memory."
+        "text": "The database buffer cache removes every network round trip.",
+        "explanation": "Cached pages can speed query execution, but each separate request still has a transport and processing path."
       }
     ],
     "answer": 1,
-    "workedExample": "1. Count the queries: 1 for the list of posts, plus 1 per post for its author.\n\n```formula\nQ = N + 1\nQ = 50 + 1 = 51\nT = Q × t\nT = 51 × 1 ms ≈ 51 ms\nwhere\nQ: the number of queries, each its own round trip\nN: posts on the page, here 50\nT: total time spent on round trips, in milliseconds (ms)\nt: one round trip, about 1 ms here\nms: milliseconds\n≈: approximately equal to\nIn words: 51 queries at about 1 ms each is about 51 ms of waiting on the network.\n```\n\n2. Fix: collect the author IDs, run `SELECT ... WHERE id IN (...)`: 2 queries ≈ 2 ms.\n3. ORM terms: eager loading, `select_related` / `prefetch_related` in Django, `includes` in Rails.\n4. Do this before adding any infrastructure.",
+    "workedExample": "1. Fetching the list once and then fetching each row’s related object creates repeated database round trips.\n2. Fetch the related records together, for example with eager loading or a suitable join.\n3. Compare plans and result sizes: fewer round trips do not automatically make every query cheaper.\n4. Keep the result semantics unchanged while measuring the improvement.",
     "link": {
       "title": "System Design Primer",
       "url": "https://github.com/donnemartin/system-design-primer"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Refresh 1 → replica A (lag 0.2 s): reply visible.\n2. Refresh 2 → replica B (lag 3 s): reply not there yet.\n3. Monotonic reads: once you've seen a value, you never see an older one.\n4. Fix: choose the replica from a hash of the user ID, so the same user always lands on the same replica:\n\n```formula\nr = hash(u) mod 3\nwhere\nr: the replica number, 0, 1 or 2\nhash: a hash function: turns the user ID into a big, evenly spread number, always the same for the same input\nu: the user's ID\nmod: modulo: the remainder after dividing, so the answer is always 0, 1 or 2\nIn words: hash the user ID and take the remainder after dividing by 3 to pick one of the 3 replicas.\n```\n\nIn one Python process: `replica = replicas[hash(user_id) % 3]`. Python string hashes are randomised between processes, so production routing across instances needs an explicitly stable hash function and consistent replica membership.\n5. If that replica fails, the user moves to another and may see one backwards step; that is a policy choice, not a monotonic-read guarantee. Preserve an observed-version token across reassignment if the product requires monotonic reads.",
+    "workedExample": "1. Independent replicas can be at different replay positions.\n2. A user can observe newer state on one request and older state on the next.\n3. Affinity can reduce switching, but failover and lag still matter.\n4. For a monotonic-read guarantee, track the required version or replay position and wait or route to a replica that has reached it.",
     "link": {
       "title": "AWS: Working with read replicas",
       "url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ReadRepl.html"

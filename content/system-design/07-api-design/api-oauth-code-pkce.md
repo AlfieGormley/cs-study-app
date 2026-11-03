@@ -50,17 +50,23 @@ Why the extra steps?
 
 The `S256` challenge is computed like this:
 
-```formula
-c = BASE64URL(SHA256(v))
+```formula reference
+c = BASE64URL(SHA256(ASCII(v)))
 where
 c: the code challenge, sent in the /authorize redirect at the start of the flow and stored by the authorisation server
 v: the code verifier: a high-entropy random string of 43 to 128 characters that the client keeps until the token request
+ASCII: the ASCII bytes of the verifier string
 SHA256: the SHA-256 hash function, which turns any input into a 32-byte digest and cannot feasibly be reversed
 BASE64URL: base64url encoding without padding, which writes those 32 bytes as 43 URL-safe characters
 In words: the challenge is a one-way fingerprint of the verifier, so seeing the challenge in the browser reveals nothing that lets an attacker redeem the code.
 ```
 
 At the token endpoint the server recomputes the challenge from the verifier the client sends and compares it with the stored one. RFC 7636's own example: the verifier `dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk` gives the challenge `E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM`. The protection rests on the verifier being long and random: a short or guessable one could be found by trying candidates.
+
+> [!analogy] Real-world analogy: Keeping half of a claim ticket
+> **How it maps:** The client keeps a secret verifier and registers its one-way fingerprint. Possessing the returned authorisation code alone is insufficient: redemption must also prove knowledge of that verifier.
+>
+> **Where it stops:** There is no reversible second half to reconstruct. PKCE does not replace TLS, redirect validation, client authentication where required or protection of the verifier itself.
 
 ## Key takeaways
 - OAuth delegates access without handing the client the resource owner’s password.

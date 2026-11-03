@@ -53,13 +53,18 @@ Stripe's documented API v1 behaviour is a concrete replay contract:
 
 API v2 has a different contract: Stripe retries failed or partially failed work to completion where possible and can return an updated response. Do not carry API v1's saved-failure or retention assumptions into API v2 without checking its current documentation.
 
-An expired IETF Internet-Draft for the **`Idempotency-Key` HTTP header** proposes `409 Conflict` for an operation still in progress and `422` for key reuse with a different payload. As checked in October 2026, it is not an RFC; treat these as a proposed convention, not a universal provider contract.
+The IETF Internet-Draft for the **`Idempotency-Key` HTTP header** proposes `409 Conflict` for an operation still in progress and `422` for key reuse with a different payload. As checked on 3 November 2026, revision 08 is an active draft, not an RFC; treat these as a proposed convention, not a universal provider contract.
+
+> [!analogy] Real-world analogy: A repair claim number
+> **How it maps:** When you call again about the same repair, the claim number identifies the existing job rather than opening another. An idempotency key identifies one logical request across retries.
+>
+> **Where it stops:** The server must retain the record, check the request parameters and coordinate the effect. Reusing a number for a different repair does not make it the same operation.
 
 ## Key takeaways
 - Generate and persist a key before the first attempt; reuse it on retries.
 - Replay behaviour depends on the endpoint’s key scope, retention and execution-start contract.
 - Stripe API v1 can replay saved failures and prunes eligible keys after at least 24 hours.
-- The expired Idempotency-Key draft’s 409/422 choices are a proposed convention, not an RFC.
+- The Idempotency-Key draft’s 409/422 choices are a proposed convention, not an RFC.
 
 ## Further reading
 - [Stripe API: Idempotent requests](https://docs.stripe.com/api/idempotent_requests)

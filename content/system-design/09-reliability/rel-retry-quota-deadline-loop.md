@@ -13,21 +13,11 @@ The earlier retry units established safety, full jitter and one retry layer. Her
 
 A **retry budget** limits retries to a proportion of requests, e.g. "retries may be at most 10% of original calls to this dependency". When things are healthy, the occasional failure gets retried. When everything is failing, the cap decides the load:
 
-```formula
-L_max = N(1 + β)
-L_max = 1000 calls/s × (1 + 0.1)
-L_max = 1100 calls/s
-where
-L_max: the most calls per second the dependency can receive, including retries
-N: the original (first-try) calls per second, here 1,000
-β: the retry budget, the most retries allowed as a fraction of original calls, here 10% = 0.1
-calls/s: calls per second
-In words: with a 10% budget, total load can never exceed 1.1 times normal, compared with 3 times normal (+200%) when every request may make 3 attempts.
-```
+A budget allowing at most one retry for every ten original calls caps aggregate extra traffic at 10% over the budget’s accounting window. A per-request attempt limit alone permits much more work during an outage.
 
 The AWS SDKs implement a version with a **token bucket** (the "retry quota"):
 
-This executable event model keeps the original refill, charge and refund operations. The caller must invoke the matching method after each outcome. It assumes one fixed retry cost and serial access; it does not implement a production SDK, synchronization or a fractional traffic budget.
+This executable event model keeps the original refill, charge and token-return operations. The caller must invoke the matching method after each outcome. It assumes one fixed retry cost and serial access; it does not implement a production SDK, synchronization or a fractional traffic budget.
 
 ```python
 class RetryQuota:
@@ -56,7 +46,7 @@ class RetryQuota:
       self.tokens + self.cost)
 ```
 
-When enough calls succeed, refunds keep quota available; retries still consume tokens and network resources. During a sustained outage the bucket drains and clients stop retrying. The documented 2026 opt-in standard behaviour starts with 500 tokens, charges 14 for transient-error retries and five for throttling retries, refunds the successful retry’s cost, and restores one token for a first-attempt success. A later success does not refund earlier failed retries. Other SDK versions and modes differ, and a finite initial bucket permits a burst rather than enforcing an exact traffic fraction.
+When enough calls succeed, returned tokens keep quota available; retries still consume tokens and network resources. During a sustained outage the bucket drains and clients stop retrying. The documented 2026 opt-in standard behaviour starts with 500 tokens, charges 14 for transient-error retries and five for throttling retries, restores tokens equal to the successful retry’s cost, and restores one token for a first-attempt success. A later success does not restore the tokens spent on earlier failed retries. Other SDK versions and modes differ, and a finite initial bucket permits a burst rather than enforcing an exact traffic fraction.
 
 The bucket is typically per client instance; exact scope depends on SDK. A thousand hosts each with their own bucket still add up, which is why server-side signals matter too.
 
@@ -102,7 +92,7 @@ def call(req, deadline):
 
 ## Key takeaways
 
-- A fractional retry budget caps aggregate extra traffic; a finite token quota has its own burst and refund behaviour.
+- A fractional retry budget caps aggregate extra traffic; a finite token quota has its own burst and replenishment behaviour.
 - Client-local quotas add up across hosts. Retain server-side overload signals and capacity limits.
 - Check the remaining deadline before calls and sleeps, and classify retryable failures narrowly.
 

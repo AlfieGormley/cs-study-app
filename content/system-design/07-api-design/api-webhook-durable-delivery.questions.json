@@ -23,7 +23,7 @@
       },
       {
         "text": "Return 500 for event types you don't handle so the provider stops sending them",
-        "explanation": "Wrong. A 5xx tells the provider delivery *failed*, so it retries for days and may eventually disable your endpoint. Return 2xx for events you ignore, and unsubscribe from them in the provider's settings."
+        "explanation": "Wrong. A 5xx tells the provider delivery *failed*, so it retries for days and may eventually disable your endpoint. Return 2xx for events you ignore, and disable their delivery in the provider's settings."
       }
     ],
     "answer": [
@@ -61,7 +61,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Quantify the starvation:\n\n- 200 delivery workers shared by all customers.\n- Big customer emits 10 events/s, each now holding a worker for 25 s.\n- Workers needed for that customer alone:\n\n```formula\nW = λ × T\nW = 10 per s × 25 s = 250\nwhere\nW: the number of workers busy with this customer at any moment\nλ: lambda, the rate of events for this customer, 10 per second\nT: how long each delivery holds a worker, 25 s\ns: seconds\nIn words: 10 new deliveries a second, each taking 25 s, keep **250** workers busy, more than the 200 in the pool.\n```\n\nEvery worker is soon stuck waiting on one slow endpoint, and everyone else's events queue up behind it.\n\nFixes:\n1. Cap concurrency per endpoint (e.g. 10 in flight).\n2. Shard queues by customer so one backlog can't block others.\n3. Lower timeouts (5–10 s) and open a circuit breaker after repeated failures.",
+    "workedExample": "Slow deliveries hold shared workers for longer. If one customer consumes the pool, other customers wait despite having healthy endpoints. Apply per-endpoint concurrency bounds and queue isolation, with appropriate timeouts and backoff. Provisioning more workers alone does not establish isolation or bound a single customer’s future demand.",
     "link": {
       "title": "Standard Webhooks specification",
       "url": "https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md"
@@ -109,27 +109,27 @@
     "id": "api-webhooks-gateways-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "A provider retries failed webhooks after 1 min, 5 min, 30 min, 2 h and 8 h (each delay measured from the previous attempt). Your endpoint goes down just before an event is first sent, and stays down for 6 hours. When is the event finally delivered, measured from the first attempt?",
+    "prompt": "Your webhook endpoint recovers from an outage before the provider’s next scheduled retry. Why should you reconcile missed events instead of simply waiting?",
     "options": [
       {
-        "text": "About 6 hours, as soon as the endpoint recovers",
-        "explanation": "Providers don't know when you recover; they only try at scheduled times. The next attempt after the outage ends is what matters."
+        "text": "The provider always detects recovery and delivers immediately.",
+        "explanation": "A scheduled retry system need not know when the endpoint recovers."
       },
       {
-        "text": "About 2 h 36 min",
-        "explanation": "That's when the fourth retry happens, but your endpoint is still down then (the outage lasts 6 h)."
+        "text": "Every missed event is permanently lost at the first failure.",
+        "explanation": "Providers may retain retries or expose an events API."
       },
       {
-        "text": "About 10 h 36 min, 4 hours 36 minutes after your endpoint came back",
-        "explanation": "Correct. Cumulative attempt times are 0, 1 min, 6 min, 36 min, 2 h 36 min and 10 h 36 min. The first one after the 6-hour outage is the last."
+        "text": "Recovery does not move the next retry forward, and a bounded retry window can expire.",
+        "explanation": "Correct. Reconciliation or supported redelivery can recover state sooner and cover missed attempts."
       },
       {
-        "text": "Never: after five failed retries the event is dropped",
-        "explanation": "Five retries means six attempts in total, and the sixth (at 10 h 36 min) comes after the outage ends."
+        "text": "A valid HMAC proves that no deliveries were missed.",
+        "explanation": "Authentication says nothing about completeness of delivery."
       }
     ],
     "answer": 2,
-    "workedExample": "Add up the delays to get the time of each attempt:\n\n```\nattempt  delay   at\n1        -       0:00   down\n2        1 min   0:01   down\n3        5 min   0:06   down\n4        30 min  0:36   down\n5        2 h     2:36   down\n6        8 h     10:36  up\n```\n\nThe endpoint recovers at 6:00 but waits until **10:36** for the event: 4 hours 36 minutes of avoidable staleness.\n\nThis is why consumers shouldn't rely on retries alone. After an outage, **reconcile** through the provider's events API (or trigger redelivery) instead of waiting for the backoff schedule.",
+    "workedExample": "An endpoint can be healthy while a retry remains scheduled for much later. It can also have been unavailable longer than the provider retains retries. Fetch authoritative events or current objects, process them idempotently and use supported redelivery where appropriate.",
     "link": {
       "title": "Stripe docs: Receive Stripe events in your webhook endpoint",
       "url": "https://docs.stripe.com/webhooks"

@@ -29,11 +29,8 @@ Adding a second copy helps against failures not shared by all copies; full stati
 
 If you run 3 nodes at 80% utilisation and lose one, the remaining two need to carry 120% each. They fall over, and you have turned a single failure into a total outage. The total work stays the same when a node dies; it is just shared among fewer survivors:
 
-```formula
+```formula reference
 U_after = (NU) / (N − k)
-U_after = (3 × 80%) / (3 − 1)
-U_after = 240% / 2 = 120%  ✗
-U_after = (3 × 60%) / 2 = 90%  ✓
 where
 U_after: the utilisation of each surviving node after the failure, as a percentage of one node's capacity
 N: the number of nodes before the failure, here 3
@@ -44,24 +41,13 @@ k: the number of nodes that fail, here 1
 In words: three nodes at 80% are doing 2.4 nodes' worth of work; split over two survivors that is 120% each, which they can't do. At 60% the survivors land on 90%, which they can.
 ```
 
-Setting U_after to 100% and solving for U gives the general rule: the highest safe utilisation before a failure.
+The same capacity model gives a theoretical ceiling before failure.
 
-```formula
-U_max = (N − k) / N
-U_max = (3 − 1) / 3 = 2/3 ≈ 67%
-U_max = (10 − 1) / 10 = 9/10 = 90%
-where
-U_max: the highest utilisation each node can run at and still let the survivors absorb the failed nodes' work without passing 100%
-N: the number of nodes, here 3 (or 10)
-k: the number of node failures the system must survive, here 1
-≈: approximately equal to (rounded)
-%: per cent of one node's capacity
-In words: the fraction of nodes that survive is the fraction of capacity you can use. Three nodes surviving one loss can run at about 67%; ten nodes can run at 90%.
-```
+The theoretical ceiling is the fraction of equal-capacity nodes that survive. Three nodes tolerating one loss can run at about 67% before the failure; ten can run at 90%. These ceilings leave no latency margin after failure.
 
-Treat U_max as a ceiling, not a target. At 60% the survivors land on 90%, and the queueing maths in the overload lesson shows that an illustrative M/M/1 model predicts mean response time ten times mean service time at 90%; this is not a universal latency multiplier. Real teams keep extra margin for traffic growth, uneven load balancing and the failure happening at peak. The rule also assumes load spreads evenly over the survivors.
+Treat that utilisation as a ceiling, not a target. At 60% the survivors land on 90%, and the queueing maths in the overload lesson shows that an illustrative M/M/1 model predicts mean response time ten times mean service time at 90%; this is not a universal latency multiplier. Real teams keep extra margin for traffic growth, uneven load balancing and the failure happening at peak. The rule also assumes load spreads evenly over the survivors.
 
-More, smaller units make redundancy cheaper, as the second formula shows: 3 nodes surviving one loss can only run at 67%, but 10 nodes can run at 90%. The same logic is why three AZs are more efficient than two: two AZs that must each survive the other's loss can run at only 50%: one of two equal zones survives.
+More, smaller units make redundancy cheaper, under these equal-capacity assumptions: 3 nodes surviving one loss can only run at 67%, but 10 nodes can run at 90%. The same logic is why three AZs are more efficient than two: two AZs that must each survive the other's loss can run at only 50%: one of two equal zones survives.
 
 AWS calls the stronger version **static stability**: the system keeps working through a failure *without depending on new provisioning or impaired control-plane operations*, such as launching new instances or changing DNS. If you pre-provision capacity in each zone to survive losing another zone, you don't depend on a control plane that may itself be impaired during the event.
 

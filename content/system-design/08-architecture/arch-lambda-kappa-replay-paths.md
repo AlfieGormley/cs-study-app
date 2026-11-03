@@ -11,7 +11,7 @@ Stream recovery restores one job. Correcting its business logic requires recompu
 
 ## Lambda architecture
 
-Early stream processors were fast but unreliable or approximate. Nathan Marz's **Lambda architecture** (described in 2011, from his work on Storm at BackType and Twitter) ran both paths side by side over the same immutable master dataset:
+**Lambda architecture** combines batch recomputation with low-latency processing of recent data. Both paths work from the same immutable master dataset:
 
 ```
            +--> [batch layer]  --+
@@ -50,7 +50,7 @@ Jay Kreps (co-creator of Kafka) proposed the **Kappa architecture** in his 2014 
 - It requires sufficient retained history, correct state/replay handling and sinks appropriate to the application. Built-in exactly-once support can help but is not a definition of Kappa or a guarantee for arbitrary external side effects.
 - The costs: during a reprocess you run two jobs and store two outputs, and Kafka source-reading concurrency is limited by the topic's partitions. Downstream operators can repartition to a different parallelism; source, network, processing and sink throughput all constrain replay. Replaying a year of history through a stream job can take far longer than a batch engine scanning columnar files would.
 
-In practice many organisations run something in between: streaming for fresh, incremental results, and batch for heavy historical backfills, ML training and ad-hoc analysis, increasingly on **unified engines** (Spark, Beam, Flink) where the same code can run in either mode.
+In practice many organisations combine streaming for fresh results with batch for historical backfills, ML training and ad-hoc analysis. **Unified engines** such as Spark and Flink support both bounded and unbounded processing, with engine-specific APIs and execution semantics. Apache Beam provides a unified programming model and SDKs; a selected runner executes its pipelines.
 
 ## Key takeaways
 - Lambda combines batch views with a recent speed layer and must reconcile their duplicated logic.

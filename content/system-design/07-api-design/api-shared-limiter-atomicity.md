@@ -11,15 +11,7 @@ sourceLesson: api-rate-limiting
 
 With 20 API servers behind a load balancer, a per-server in-memory limiter doesn't work: a client limited to 100/min could get 100 *per server*, or 2,000 in total:
 
-```formula
-L_eff = N × L
-L_eff = 20 × 100 = 2,000
-where
-L_eff: the most requests per minute the client can actually get through the fleet
-N: the number of servers, each with its own independent counter
-L: the limit each server enforces, here 100 per minute
-In words: independent limiters don't know about each other, so the real limit is multiplied by the number of servers the client can reach.
-```
+Each independent server grants its own allowance; sharing a client identity does not share its counter.
 
 ```
  +----+ +----+ +----+
@@ -70,10 +62,9 @@ return ok and 1 or 0
 
 This teaching script assumes a validated finite capacity of at least one token, a positive finite refill rate and a trusted timestamp in seconds. Arbitrary client timestamps must not reach it. Expiry must be no shorter than the time an empty bucket takes to refill completely; otherwise a slow-refilling bucket could expire and incorrectly reset to full:
 
-```formula
+```formula reference
 T_full = C / r
 TTL = max(1, ⌈T_full⌉)
-TTL = max(1, ⌈10 / 0.1⌉) = 100 s
 where
 T_full: the time for an empty bucket to refill to capacity, in seconds (s)
 C: the bucket capacity, in tokens

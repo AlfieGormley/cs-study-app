@@ -9,24 +9,11 @@ sourceLesson: rel-designing-for-failure
 
 This unit builds on fault models, leases and fencing in Distributed Systems. A fencing token is a monotonically increasing leadership epoch checked by the storage service: writes from an older epoch are rejected, even if the old leader resumes after a pause.
 
-At scale, failure is not an exception; it is the normal background noise. As an illustrative fleet calculation, 10,000 disks with an assumed 2% annual failure rate loses roughly **200 disks a year** (10,000 × 0.02), or about four a week.
+At scale, failure is not an exception; it is the normal background noise. Even a small per-device failure rate produces routine failures across a large fleet.
 
-Fan-out makes rare slowness common. If one request makes many independent downstream calls, the chance that *at least one* of them is slow is one minus the chance that *every* call is fast:
+Fan-out makes rare slowness common. If one request makes many independent downstream calls, waiting for every result exposes the request to each call’s slow tail.
 
-```formula
-P_slow = 1 − (1 − p)^n
-P_slow = 1 − (1 − 0.01)^50
-P_slow = 1 − 0.99^50
-P_slow ≈ 1 − 0.605 ≈ 0.395 = 39.5%
-where
-P_slow: the probability that a request hits at least one slow downstream call, a number from 0 to 1 (0.395 = 39.5%)
-p: the probability that any single downstream call is slow, here 1% = 0.01
-n: the number of independent downstream calls one request makes, here 50
-^: "to the power of"; 0.99^50 means 50 copies of 0.99 multiplied together
-≈: approximately equal to (the result is rounded)
-%: per cent, parts per hundred; 0.395 = 39.5%
-In words: each call is fast 99% of the time, but all 50 being fast happens only about 60% of the time, so roughly 4 requests in 10 meet at least one slow call.
-```
+With 50 independent downstream calls, each slow on 1% of attempts, roughly four requests in ten encounter at least one slow call. Waiting for every result therefore exposes the user to much more tail latency than one call alone.
 
 This assumes the calls are slow independently of each other. Real delays are often correlated (one overloaded host slows many calls at once), and the answer also depends on where you draw the line for "slow".
 
@@ -71,6 +58,13 @@ Gray:     req ──▶ ........ 9s ..... ok
 ```
 
 Microsoft researchers named this kind of fault **gray failure** (Huang et al., HotOS 2017): the system's failure detector sees a healthy component while the applications using it see a broken one. They argue that subtle faults like this, rather than clean crashes, are behind many major cloud availability breakdowns. Typical examples are a degraded disk, a NIC dropping a few per cent of packets, or a JVM stuck in GC. The fix is a combination of tight timeouts, latency-aware load balancing, and health checks that test real work, not just "is the process listening".
+
+> [!analogy] Real-world analogy: an open shop with an unusable till
+> A shop can have its lights on and front door open while every payment takes minutes.
+>
+> **How it maps:** An open door resembles a shallow health check; a completed purchase resembles the useful operation whose latency matters.
+>
+> **Where it stops:** A service can fail differently for different callers. Measure real request paths rather than replacing one shallow check with another.
 
 ## Key takeaways
 

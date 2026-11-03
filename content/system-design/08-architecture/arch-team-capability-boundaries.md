@@ -11,9 +11,7 @@ Services offer independent ownership only when their boundaries fit how the busi
 
 ## Conway's law
 
-> "Any organisation that designs a system will produce a design whose structure is a copy of the organisation's communication structure." Melvin Conway, 1968
-
-Eric Raymond's well-known paraphrase: if four groups work on a compiler, you get a four-pass compiler. If your payments and checkout teams barely talk, the interface between their services will be awkward and slow to change.
+Melvin Conway's 1968 observation is that an organisation's communication structure constrains the systems it designs. If payments and checkout teams rarely communicate, their service interface may be harder to coordinate and change.
 
 This works in both directions:
 

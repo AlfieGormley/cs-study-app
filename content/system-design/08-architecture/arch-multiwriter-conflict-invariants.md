@@ -16,26 +16,13 @@ Home-region ownership avoids concurrent regional writes to one record. When loca
 If two regions can write the same record concurrently (DynamoDB global tables, Cassandra multi-DC, CouchDB, multi-primary MySQL), concurrent writes will collide. Options:
 
 1. **Last-writer-wins (LWW)**: keep the write with the highest timestamp. Simple, and what DynamoDB global tables do in their default, eventually consistent mode, but it **silently discards** the other write, and clock skew can make the "wrong" one win. (Since 2025 DynamoDB also offers a multi-Region *strongly* consistent mode for global tables, which rejects overlapping cross-Region writes with a retryable conflict error and adds cross-region communication latency.)
-2. **Merge by data type**: use **CRDTs** (conflict-free replicated data types) that converge under their required delivery and merge assumptions, including eventual exchange of updates: counters (each region increments its own slot; the total is the sum, shown below), sets with add/remove semantics, registers with defined rules. Riak and Redis Enterprise's active-active mode use CRDTs.
+2. **Merge by data type**: use **CRDTs** (conflict-free replicated data types) that converge under their required delivery and merge assumptions, including eventual exchange of updates: counters (each region increments its own slot; reading combines the slots), sets with add/remove semantics, registers with defined rules. Riak and Redis Enterprise's active-active mode use CRDTs.
 3. **Application-level resolution**: keep both versions (siblings) and let the application or the user merge them, as with conflicting edits in a document.
 4. **Avoid it for invariants**: anything with a hard constraint (account balance must not go negative; one seat sold once) usually uses a single writer or a consensus-based store (Spanner, CockroachDB). Some bounded invariants can instead use escrow: preallocate disjoint spending or stock rights to regions, and reject locally when rights run out. Transferring rights then requires coordination.
 
-The counter CRDT (often called a G-Counter, a grow-only counter) is the simplest to see. Each region only ever increases its own slot, and merging two copies takes the larger value of each slot, so no increment is ever counted twice or lost:
+The counter CRDT (often called a G-Counter, a grow-only counter) is the simplest to see. Each region only ever increases its own slot, and merging two copies takes the larger value of each slot, so repeated state merges do not double-count increments, provided stable identifiers for replicas and durable-state rules hold:
 
-```formula
-C = c_EU + c_US
-merge(a, b)_r = max(a_r, b_r)
-where
-C: the counter's value as read by anyone
-c_EU: the EU region's slot: how many increments the EU has made
-c_US: the US region's slot
-merge(a, b)_r: slot r of the result of merging two copies a and b of the counter
-a_r: slot r in copy a
-b_r: slot r in copy b
-r: one region's slot, e.g. EU
-max: the larger of the two values
-In words: the total is the sum of every region's slot, and merging keeps the highest value seen for each slot.
-```
+Each replica increases only its own durable slot. Merge two copies by keeping the larger value for each slot, then add the slots to read the total. Repeated delivery of the same counter state does not add the increment again.
 
 If one copy has {EU: 41, US: 60} and another has {EU: 40, US: 62}, the merge is {EU: 41, US: 62}, and the counter reads 103.
 

@@ -9,7 +9,7 @@ sourceLesson: rel-timeouts-retries
 
 Gray failures hold caller resources while appearing alive. This unit bounds that resource use. A per-try timeout limits one attempt; an operation deadline limits the entire chain, including time already spent at earlier hops.
 
-Every remote call can hang, fail or succeed slowly. Timeouts bound how long you wait; retries turn transient failures into successes. Used carelessly, though, retries can contribute to large outages: they multiply load at the exact moment a system is weakest.
+Every remote call can hang, fail or succeed slowly. Timeouts bound how long you wait; retries can recover from transient failures. Used carelessly, though, retries can contribute to large outages: they multiply load at the exact moment a system is weakest.
 
 The following units separate timeout selection, retry safety, backoff, amplification and budgets.
 
@@ -40,19 +40,7 @@ A user-facing request with a 2-second budget calls A, which calls B, which calls
 
 The fix is to propagate an **RPC deadline**, rather than restarting a timeout at each hop. gRPC supports this when the language/runtime propagates the incoming context to outgoing calls. The remaining budget travels with the request; handlers must observe cancellation and stop their own work, because the deadline does not forcibly roll back or terminate every side effect.
 
-Each hop works out how much time is left from the one absolute deadline it received:
-
-```formula
-t_left = D − t_now
-t_left = 2000 ms − 300 ms = 1700 ms
-t_left = 2000 ms − 900 ms = 1100 ms
-where
-t_left: the time remaining before the user gives up, in milliseconds (ms)
-D: the absolute deadline on a clock with request arrival as zero, in milliseconds (ms); here 2000 ms
-t_now: the current time on the same request-start clock, in milliseconds (ms); here 300 ms when A calls B
-ms: milliseconds; 1000 ms = 1 second
-In words: the remaining budget is the deadline minus the time already spent, so every hop down the chain gets less, never a fresh 2 seconds.
-```
+Each downstream call receives only the time still available in the original operation budget. Time spent in earlier calls or backoff is already gone.
 
 ```
 User budget: 2000 milliseconds
@@ -62,7 +50,14 @@ After 900 ms: B calls C, 1100 ms left
 C: fail if budget cannot fit useful work
 ```
 
-Here p50 is the median latency of C's work: if less time remains than C usually needs, it is better to fail at once than start work nobody will wait for. Absolute deadlines assume the hosts' clocks roughly agree; gRPC avoids most clock skew by sending the remaining *duration* and converting it to a local deadline at each hop.
+A service can reject work unlikely to finish within the remaining budget; choose that request-admission rule from its latency distribution and the value of a late result. Absolute deadlines assume the hosts' clocks roughly agree; gRPC avoids most clock skew by sending the remaining *duration* and converting it to a local deadline at each hop.
+
+> [!analogy] Real-world analogy: one lunch break for several errands
+> If the first errand uses most of your lunch break, the next shop does not give you a fresh hour.
+>
+> **How it maps:** The lunch break is the whole-operation budget; each call and wait spends part of the same remaining time.
+>
+> **Where it stops:** A deadline cannot reverse work already done. Services must observe cancellation, and timing behaviour depends on the runtime.
 
 ## Key takeaways
 

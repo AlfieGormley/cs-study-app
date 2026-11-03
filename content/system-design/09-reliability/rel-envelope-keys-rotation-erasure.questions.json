@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. `GenerateDataKey` → KMS returns a plaintext 256-bit DEK and the same DEK encrypted under the KMS key.\n2. Encrypt each object locally with AES-256-GCM using the DEK with a unique nonce per encryption under that key, using a vetted SDK and respecting per-key/message limits. Hardware throughput figures are absent because no reproducible benchmark was available.\n3. Store ciphertext, nonce, authentication tag and encrypted DEK; wipe the plaintext DEK.\n4. To read: call KMS `Decrypt` on the encrypted DEK (IAM-checked, logged in CloudTrail), then decrypt locally.\n\nCompare sending the data itself through KMS:\n\n```formula\nn = ceil(D / c)\nn = ceil((5 × 10^12 B) / (4,096 B))\nn ≈ 1.2 × 10^9\nwhere\nn: the number of KMS Encrypt calls needed\nD: the data size, 5 terabytes (TB) = 5 × 10^12 bytes (B)\nceil: round upward to the nearest whole call\nc: the symmetric KMS Encrypt plaintext limit, here 4,096 bytes (B); this is 4 kibibytes, not 4,000 bytes\n10^12: 10 to the power 12, a million million\nB: bytes\n≈: approximately equal to (rounded)\nIn words: 5 TB in 4-kibibyte pieces is about 1.2 billion remote API calls.\n```\n\nWith envelope encryption key generation uses one KMS call per data key, with additional unwrap calls when decrypting; data-key caching changes this count.",
+    "workedExample": "1. Generate a data key through the KMS API and receive its plaintext and wrapped forms.\n2. Encrypt bulk data locally using a vetted format, preserving nonce and authentication tag and respecting per-key/message limits.\n3. Store the encrypted data key with the ciphertext and discard plaintext key copies appropriately.\n4. Decryption unwraps the small key through authorised KMS access, then decrypts locally. Caching can reduce KMS calls but changes audit coverage and key exposure.",
     "link": {
       "title": "AWS Encryption SDK concepts: envelope encryption",
       "url": "https://docs.aws.amazon.com/encryption-sdk/latest/developer-guide/concepts.html"
@@ -67,7 +67,7 @@
     "options": [
       {
         "text": "Rotating the KMS key's material; KMS keeps the old material to unwrap existing DEKs, new DEKs are wrapped with the new material, and the 10 TB is untouched",
-        "explanation": "Correct. With AWS KMS automatic rotation, the key ID stays the same and previous key material is retained for decryption. Optionally you can re-wrap old DEKs, which means only re-encrypting tiny keys."
+        "explanation": "Correct. With AWS KMS automatic rotation, the key identifier stays the same and previous key material is retained for decryption. Optionally you can re-wrap old DEKs, which means only re-encrypting tiny keys."
       },
       {
         "text": "Decrypting and re-encrypting all 10 TB under new data keys",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Layers: data → encrypted by DEK; DEK → wrapped by KMS key (KEK).\n2. Rotating the KEK changes what wraps *new* DEKs.\n3. Existing wrapped DEKs still decrypt, because KMS retains the old key material under the same key ID.\n4. Cost of rotation:\n\n```\nre-encrypt data: 10 TB, unnecessary\nplaintext DEK: 32 B for AES-256\nre-wrap: encrypted key blobs, optional\nKMS rotation: a key setting\n```\n\n5. If you must re-wrap (e.g. moving to a different key), `ReEncrypt` the encrypted DEKs: calls proportional to the number of DEKs; 10 TB alone does not determine that count.\n\nThe wrapped-key blob is larger than the 32-byte plaintext data key; its format and length depend on the encryption service. Automatic rotation does not require rewriting those blobs.",
+    "workedExample": "1. Layers: data → encrypted by DEK; DEK → wrapped by KMS key (KEK).\n2. Rotating the KEK changes what wraps *new* DEKs.\n3. Existing wrapped DEKs still decrypt, because KMS retains the old key material under the same key identifier.\n4. Cost of rotation:\n\n```\nre-encrypt data: 10 TB, unnecessary\nplaintext DEK: 32 B for AES-256\nre-wrap: encrypted key blobs, optional\nKMS rotation: a key setting\n```\n\n5. If you must re-wrap (e.g. moving to a different key), `ReEncrypt` the encrypted DEKs: calls proportional to the number of DEKs; 10 TB alone does not determine that count.\n\nThe wrapped-key blob is larger than the 32-byte plaintext data key; its format and length depend on the encryption service. Automatic rotation does not require rewriting those blobs.",
     "link": {
       "title": "AWS KMS concepts",
       "url": "https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html"

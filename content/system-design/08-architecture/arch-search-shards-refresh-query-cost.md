@@ -25,12 +25,12 @@ Elasticsearch (and its fork OpenSearch) builds a distributed system on top of Lu
  [P0] [R2]    [P1] [R0]    [P2] [R1]
 ```
 
-Any *single* node can lose its disks and every shard still has a copy elsewhere. If a node holding a primary fails, the master promotes an in-sync replica to primary and then rebuilds a new replica on another node. Note that a single-node cluster with 1 replica has nowhere to put the replicas, so the index shows as *yellow* (unassigned replicas).
+Any *single* node can lose its disks and every shard still has a copy elsewhere. If a node holding a primary fails, the master promotes an Elasticsearch in-sync replica to primary and then rebuilds a new replica on another node. Note that a single-node cluster with 1 replica has nowhere to put the replicas, so the index shows as *yellow* (unassigned replicas).
 
 ### How a write runs
 
 1. The write is routed to the shard's **primary**.
-2. The primary validates and indexes it, then forwards it to all **in-sync replicas** in parallel.
+2. The primary validates and indexes it, then forwards it to all **Elasticsearch in-sync replicas** in parallel.
 3. The primary waits for in-sync copies or removal of a failed copy from the in-sync set before acknowledging. Inspect the response shard results and durability settings; an acknowledgment does not guarantee the configured replica count was available.
 
 So replicas add write cost (every copy indexes every document) while adding read capacity. More replicas help a read-heavy cluster and hurt a write-heavy one.
@@ -44,21 +44,11 @@ So replicas add write cost (every copy indexes every document) while adding read
 
 The query phase waits for participating shards, and end-to-end latency also includes coordinating, fetch and network work, which is why too many small shards hurt and why replicas help: since 7.0, **adaptive replica selection** uses response-time, service-time and queue information to choose shard copies.
 
-Deep pagination is costly for the same reason. Each shard must return enough results to cover every page up to the one you asked for:
+Deep pagination can be costly even when the returned page is small.
 
-```formula
-from = (p − 1) × size
-N_shard = from + size
-N_shard = (1000 − 1) × 10 + 10 = 10000
-where
-from: how many results to skip before the page starts (an Elasticsearch search parameter)
-p: the page number requested, here 1,000
-size: results per page, here 10
-N_shard: how many top hits each participating shard must return to the coordinating node
-In words: to show results 9,991 to 10,000, every shard sends its top 10,000 and the coordinator sorts them all to keep 10.
-```
+Deep offset paging can require each shard to collect enough candidates to cover the skipped results as well as the requested page. The coordinator merges candidates before returning the small final page.
 
-With 5 shards that is 50,000 hits sorted to show 10. Elasticsearch caps `from + size` at 10,000 by default and offers `search_after` for deep scrolling.
+Elasticsearch caps `from + size` at 10,000 by default. For sequential deep paging, use `search_after`; a point-in-time view and stable sort values keep the pages consistent.
 
 ### Near-real-time indexing
 
@@ -79,5 +69,4 @@ The number of primary shards is fixed at index creation (changing it needs a rei
 ## Further reading
 - [Elasticsearch: Scalability and resilience](https://www.elastic.co/guide/en/elasticsearch/reference/current/scalability.html)
 - [Elasticsearch: Near real-time search](https://www.elastic.co/guide/en/elasticsearch/reference/current/near-real-time.html)
-- [Elasticsearch: General index settings](https://www.elastic.co/docs/reference/elasticsearch/index-settings/index-modules)
 - [Elasticsearch: General index settings](https://www.elastic.co/docs/reference/elasticsearch/index-settings/index-modules)

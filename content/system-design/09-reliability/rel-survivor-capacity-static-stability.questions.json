@@ -3,27 +3,27 @@
     "id": "rel-designing-for-failure-q3",
     "level": "intermediate",
     "type": "single",
-    "prompt": "You run 4 identical nodes behind a load balancer, each at 70% CPU at peak. The service must provision capacity to survive losing one node; assume identical linear capacity and perfectly balanced work. What happens if a node fails at peak, and what is the theoretical pre-failure utilisation ceiling before survivors reach 100%?",
+    "prompt": "A load test shows that after one of four identical nodes fails, the three survivors can carry peak traffic but run very close to saturation. Is that sufficient evidence for the production failure plan?",
     "options": [
       {
-        "text": "Survivors run at about 93%; theoretical ceiling is 75%",
-        "explanation": "Correct. Total work is 4 × 70% = 280% of a node. Spread over 3 survivors that is 93.3% each, dangerously close to saturation. The safe maximum is the fraction of nodes that survive: 3 of 4 = 75%."
+        "text": "No: also validate latency, uneven load and bursts, and retain additional headroom",
+        "explanation": "Correct. Fitting the aggregate work does not prove response-time targets or resilience to traffic variation."
       },
       {
-        "text": "Survivors run at about 93%; theoretical ceiling is 66%",
-        "explanation": "The 93% is right, but about 67% is the threshold for 3 nodes surviving one loss (2 of 3 survive). With 4 nodes, 3 of 4 survive, so the threshold is 75%."
+        "text": "Yes: any utilisation below 100% guarantees acceptable latency",
+        "explanation": "Queues can grow sharply near saturation; a capacity ceiling is not a latency target."
       },
       {
-        "text": "Survivors run at 70%; the load balancer spreads load so nothing changes",
-        "explanation": "The load balancer redistributes load, but it can't make it disappear. The failed node's 70% has to land on the other three, raising each of them."
+        "text": "Yes: load balancing removes the work previously done by the failed node",
+        "explanation": "Load balancing redistributes that work; it does not eliminate it."
       },
       {
-        "text": "Survivors run at 105%; theoretical ceiling is 50%",
-        "explanation": "105% would be 280% / ~2.67, which is not a real node count. 50% is the threshold for surviving two failures out of four, which is stricter than the requirement."
+        "text": "No: a service can never tolerate a node failure without launching another node",
+        "explanation": "Pre-provisioned survivor capacity can provide static stability without new launches."
       }
     ],
     "answer": 0,
-    "workedExample": "The total work doesn't shrink when a node dies; it is shared by fewer survivors. Work it through:\n\n```formula\nW = N × U\nW = 4 × 70% = 280%\nU_after = W / (N − k)\nU_after = 280% / 3 ≈ 93.3%\nU_max = (N − k) / N\nU_max = (4 − 1) / 4 = 0.75 = 75%\nwhere\nW: the total work at peak, as a percentage of one node's capacity\nN: the number of nodes before the failure, here 4\nU: each node's peak utilisation before the failure, here 70%\nk: the number of node failures to survive, here 1\nU_after: each survivor's utilisation after the failure\nU_max: the highest pre-failure utilisation that keeps each survivor at or below 100%\n≈: approximately equal to (rounded)\n%: per cent of one node's full capacity\nIn words: four nodes at 70% do 2.8 nodes' worth of work; three survivors must each carry about 93%. To keep survivors at 100% or less, run below 3/4 = 75% before the failure.\n```\n\nAt 93%, queueing delay explodes (latency grows sharply as utilisation approaches 100%), which leaves little headroom; actual latency and cascading risk depend on the workload and controls.\n\nSo keep peak below **75%**, and in practice a little lower to leave room for queueing.\n\nCheck: at 75% per node, the total work uses three nodes’ worth of capacity; three survivors would each run at 100%. That is the absolute limit, which is why real teams leave a further margin.",
+    "workedExample": "1. Failure moves work onto fewer nodes.\n2. The ideal equal-load capacity model is only a starting point.\n3. Test response times and queue growth after failure, including imbalanced traffic and peak demand.\n4. Reserve enough existing capacity that recovery does not depend on emergency provisioning.",
     "link": {
       "title": "Static stability using Availability Zones (AWS Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/static-stability-using-availability-zones/"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Identify the dependency: recovery needed the **control plane** (the EC2 launch API).\n2. Control planes are more complex than data planes and are often impaired during exactly the events you're trying to survive.\n3. Static stability removes the dependency: provision so that the *current* fleet survives the failure as-is.\n4. Capacity maths for 3 AZs surviving loss of 1:\n\n```formula\nC_AZ = 100% / (Z − k)\nC_AZ = 100% / (3 − 1) = 50%\nC_total = Z × C_AZ\nC_total = 3 × 50% = 150%\nwhere\nC_AZ: the capacity each AZ must hold, as a percentage of peak load\nC_total: the total capacity provisioned across all AZs, as a percentage of peak load\nZ: the number of availability zones (AZs), here 3\nk: the number of AZs that may fail, here 1\n%: per cent of peak load\nIn words: the two surviving AZs must carry all of peak between them, so each holds half of peak; three halves is 150% of peak in total.\n```\n\n5. The cost is ~50% extra capacity; the benefit is that an AZ loss requires no new provisioning; health detection, rerouting and other prearranged data-plane recovery may still occur.\n\nThis is the approach AWS describes for services like EC2 itself: pre-provision, don't react.",
+    "workedExample": "1. Recovery failed because it needed the impaired EC2 management API.\n2. Pre-provision and load-test the surviving zones for the full peak workload.\n3. Retain additional latency and imbalance headroom.\n4. Failure detection and prearranged routing may still occur, but serving recovery no longer depends on launching instances.",
     "link": {
       "title": "Static stability using Availability Zones (AWS Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/static-stability-using-availability-zones/"
@@ -91,7 +91,7 @@
       2,
       4
     ],
-    "workedExample": "For each design ask: *during the failure, does something need to be created, launched or reconfigured through a control plane?*\n\n| Design | New action needed? |\n|---|---|\n| Pre-provisioned AZs | No ✓ |\n| Launch replacements | Yes ✗ |\n| Cached config | No ✓ |\n| Create DNS records | Yes ✗ |\n| Running standby | Minimal ✓ |\n\nControl planes are more complex than data planes and are often the first thing to degrade in a large event, so the more of the recovery path that already exists, the more reliable it is.",
+    "workedExample": "For each design ask: *during the failure, does something need to be created, launched or reconfigured through a control plane?*\n\n| Design | New action needed? |\n|---|---|\n| Pre-provisioned AZs | No ✓ |\n| Launch replacements | Yes ✗ |\n| Cached config | No ✓ |\n| Create DNS records | Yes ✗ |\n| Running standby | Minimal ✓ |\n\nControl planes are more complex than data planes and are often the first thing to degrade in a large event, so the more of the restoration route that already exists, the more reliable it is.",
     "link": {
       "title": "Static stability using Availability Zones (AWS Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/static-stability-using-availability-zones/"

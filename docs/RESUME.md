@@ -3,11 +3,12 @@
 The user resumed the rewrite. Durable current progress is in `.handoffs/concept-first/cf2-progress.json`;
 `queue.json` is reconciled against the release audit. Author/verifier evidence is under `evidence/cf3-*`.
 
-Confirmed live checkpoint: `35b4d0c` (app `f4d895e39563`), with 52/60 modules and 1,520/1,845 lessons
-independently reviewed and published. Distributed Systems, Messaging and Advanced Algorithms are
-independently verified and have passed release checks: 55/60 modules, 1,643/1,845 lessons reviewed.
-Shared glossary corrections have passed their own distinct verification. API Design, Architecture
-& Scaling Patterns and Reliability author passes are underway; both case-study modules remain.
+Confirmed live checkpoint: `be5f68e` (app `7bd4224b15dc`), with 55/60 modules and 1,643/1,845 lessons
+independently reviewed and published. API Design, Architecture & Scaling Patterns and Reliability are
+independently verified; this candidate brings review coverage to 58/60 modules and 1,760/1,845 lessons.
+Its 92 unit tests, seven local release checks and full-baseline integrity/dictionary audits pass.
+Focused shared glossary and ordered-retry corrections have passed distinct independent verification.
+Both final case-study modules are being rewritten; independent verification must finish before release.
 
 Use `worktree/` for scoped author/verifier work; publish only frozen, independently verified modules
 through `release/`. Do not modify the dirty primary checkout. Scope stays 10 subjects, 60 modules,

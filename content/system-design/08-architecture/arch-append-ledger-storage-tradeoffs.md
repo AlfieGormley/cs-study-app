@@ -25,19 +25,7 @@ Many write-heavy systems are built on this:
 
 Reading a balance from a ledger means adding the entries up, usually starting from the last saved snapshot so you don't sum the whole history every time:
 
-```formula
-balance = S + Σ e_i
-balance = (100 − 10 + 25 − 5) GBP
-balance = 110 GBP
-where
-balance: the account's current balance, in the account's currency (e.g. pounds, £)
-S: the balance recorded in the latest snapshot, here £100
-e_i: one ledger entry written after that snapshot: negative for a debit, positive for a credit
-i: counts through the entries, 1, 2, 3, …
-Σ: sigma, "the sum of": add up every e_i
-GBP: pounds sterling, the currency used in this example
-In words: the balance is the last snapshot plus every change since; here £100 − £10 + £25 − £5 = £110.
-```
+Start with the last balance snapshot and apply every later credit and debit exactly once. The ledger preserves the history; the invariant check still needs an atomic decision.
 
 ## Key takeaways
 - Append-oriented designs improve locality without removing durability, indexing or validation work.

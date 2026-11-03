@@ -37,19 +37,7 @@ Benefits: potentially fast behavior rollback by flipping a flag (subject to prop
 Pete Hodgson's article on martinfowler.com classifies flags by longevity and dynamism: **release toggles** (short-lived), **experiment toggles**, **ops toggles** (kill switches for expensive features under load) and **permission toggles**.
 
 > [!warning] Flags are debt and config is code
-> Every independent on/off flag doubles the number of possible configurations (see the formula below), although not every combination is reachable or a distinct execution path. Remove release flags once rolled out. And remember a flag change is a production change: stage it, audit it and monitor it like a deploy. Several major outages have come from a config or flag pushed globally at once.
-
-The number of possible configurations grows exponentially with the number of flags:
-
-```formula
-C = 2^n
-C = 2^10 = 1,024
-where
-C: the number of possible on/off combinations
-n: the number of independent binary (on/off) flags, here 10
-^: "to the power of"
-In words: each extra flag doubles the combinations, so 10 flags allow 1,024 configurations, far more than anyone tests.
-```
+> Every independent on/off flag doubles the number of possible configurations, although not every combination is reachable or a distinct execution path. Remove release flags once rolled out. And remember a flag change is a production change: stage it, audit it and monitor it like a deploy. Several major outages have come from a config or flag pushed globally at once.
 
 ## Rollback safety
 

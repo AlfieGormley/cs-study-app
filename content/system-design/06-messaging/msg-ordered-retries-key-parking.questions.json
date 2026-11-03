@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "```\nmain  P2: Frozen(9) ✗ → retry-5m\nmain  P2: Closed(9) ✓ state=Closed\nretry  +5m: Frozen(9) ✓ state=Frozen\n```\n\n1. Retry topics trade **per-key order** for **partition throughput**.\n2. For independent events (send email) that trade is fine; for a state machine it is not.\n3. Option A, **park the key**: on failure, record `blocked[9]`. Any later event for account 9 is also sent to the retry path, behind Frozen. When Frozen succeeds, release the key.\n4. Option B, **version checks**: each event carries a per-account sequence number; apply only if `seq > current_seq`. The late Frozen (seq 2) is ignored after Closed (seq 3).\n5. Option B works for superseding snapshots; if every transition or delta has a required effect, detect gaps and replay/park instead of skipping it.",
+    "workedExample": "```\nmain  P2: Frozen(9) ✗ → retry-5m\nmain  P2: Closed(9) ✓ state=Closed\nretry  +5m: Frozen(9) ✓ state=Frozen\n```\n\n1. Retry topics trade **per-key order** for **partition throughput**.\n2. For independent events that trade can be acceptable; these snapshots must instead preserve the latest business state.\n3. Option A, **park the key**: durably record that account 9 is blocked, and divert later events behind Frozen in an ordered parking path. Coordinate forwarding and checkpoints, then drain the parked backlog before safely reopening normal processing; an in-memory flag is insufficient.\n4. Option B, **version checks**: each snapshot carries a per-account sequence number; atomically apply only if `seq > current_seq`. The late Frozen (seq 2) is ignored after Closed (seq 3).\n5. Option B works for superseding snapshots; if every transition or delta has a required effect, detect gaps and replay/park instead of skipping it.",
     "link": {
       "title": "Error handling patterns in Kafka (Confluent)",
       "url": "https://www.confluent.io/blog/error-handling-patterns-in-kafka/"
@@ -37,15 +37,15 @@
     "options": [
       {
         "text": "Retry everything 20 times instead of 5",
-        "explanation": "Wrong. Parse errors will never succeed, so more retries just waste more time and capacity, and in an ordered partition they block everything behind them for longer."
+        "explanation": "Wrong. An unchanged malformed payload will not become valid by waiting. More retries waste capacity and can hold up ordered work; a parser bug or a different cause needs an explicit repair."
       },
       {
-        "text": "Classify errors: send permanent ones such as parse errors straight to the DLQ, and retry transient ones such as 503s with backoff and jitter, pausing consumption if the dependency stays down",
-        "explanation": "Correct. Permanent and transient failures need opposite handling. Parse errors should fail fast; 503s deserve patience, and a circuit breaker stops a long outage from dead-lettering healthy messages."
+        "text": "Quarantine malformed payloads, retry eligible failures safely with bounded backoff, and explicitly pause affected consumption during a sustained outage",
+        "explanation": "Correct. Inspect the cause and service contract. A 503 may be retryable but can persist; safe repetition, attempt and time limits still matter. Configure the consumer to pause affected work while maintaining its polling obligations, and monitor backlog and retention. A breaker alone does not pause it."
       },
       {
         "text": "Send every failure straight to the DLQ on the first attempt",
-        "explanation": "Wrong. Transient errors such as a brief 503 would be dead-lettered unnecessarily, creating manual redrive work for messages that would have succeeded seconds later."
+        "explanation": "Wrong. Some failures clear and can be retried safely. Dead-lettering every first failure creates avoidable repair work; a status code alone does not establish whether or when recovery will happen."
       },
       {
         "text": "Catch the exceptions and acknowledge the messages so the queue keeps moving",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Ask of each error: **could retrying ever succeed?**\n\n| Error | Kind | Handling |\n|---|---|---|\n| JSONDecodeError | Permanent | DLQ now |\n| HTTP 503 | Transient | Back off |\n| Timeout | Transient | Back off |\n\n2. Permanent: retrying is pure waste. Dead-letter with the error attached.\n3. Transient: exponential backoff with jitter. If the dependency is down for minutes, a circuit breaker pauses consumption so messages wait in the broker instead of exhausting their retries.\n4. Classify explicitly, by exception type or status code, rather than treating every failure the same.",
+    "workedExample": "1. Inspect the payload and failure cause. An unchanged malformed JSON payload needs quarantine and repair, not more delay.\n2. Treat a 503 or timeout as evidence to classify, not proof that recovery is imminent. A timeout can also hide a completed write, so duplicate protection may be necessary.\n3. Retry eligible operations with bounded attempts, jitter and an overall deadline.\n4. If the dependency remains unavailable, explicitly pause affected consumption while maintaining required polling. Track retention and backlog, and define when and how to resume. A circuit breaker can signal dependency health but does not perform that consumer coordination automatically.",
     "link": {
       "title": "Error handling patterns in Kafka (Confluent)",
       "url": "https://www.confluent.io/blog/error-handling-patterns-in-kafka/"

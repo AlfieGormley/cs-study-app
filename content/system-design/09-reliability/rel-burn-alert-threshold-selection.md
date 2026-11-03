@@ -7,7 +7,7 @@ summary: Choose meaningful budget spending and reachable error thresholds for al
 sourceLesson: rel-slos-error-budgets
 ---
 
-Burn rate measures bad events against the allowed rate. Here we turn it into an alert threshold: how much budget should disappear, over how long, before a page or ticket is justified? The next unit adds short windows and derives detection time.
+Burn rate measures bad events against the allowed rate. Here we turn it into an alert threshold: how much budget should disappear, over how long, before a page or ticket is justified? The next unit adds short windows and explains detection time.
 
 ## Alerting on SLOs
 
@@ -18,26 +18,14 @@ Naive approaches all have problems:
 
 The SRE workbook's recommendation is **multi-window, multi-burn-rate alerts**. You choose burn rates that correspond to a meaningful fraction of budget consumed in a given lookback window:
 
-```formula
-f = bw / T
-f = 14.4 × 1 h / 720 h = 0.02 = 2%
-where
-f: the fraction of the whole period's error budget consumed
-b: the burn rate during the alert window, here 14.4
-w: the alert's lookback window, here 1 hour (h)
-T: the SLO period, here 30 days = 720 h
-h: hours
-%: per cent
-In words: burning at 14.4 times the sustainable rate for one hour spends 2% of a 30-day budget.
-```
+Higher burn sustained for longer spends more budget. Under roughly uniform traffic, a 14.4 burn rate over one hour consumes about 2% of a 30-day budget.
 
 For request-based SLIs, the time-ratio calculation assumes roughly uniform request volume. The exact fraction consumed is bad requests in the alert window divided by the full-period request budget; traffic spikes can change it.
 
-Rearranged under that assumption, it tells you which burn rate to alert on: pick the fraction of budget worth waking someone for, and the window over which you want to notice it:
+For a reference calculation under that assumption: pick the fraction of budget worth waking someone for, and the window over which you want to notice it:
 
-```formula
+```formula reference
 b_alert = fT / w
-b_alert = 0.02 × 720 h / 1 h = 14.4
 where
 b_alert: the burn rate at which the alert should fire
 f: the fraction of budget worth alerting on, here 2% = 0.02
@@ -55,38 +43,11 @@ The workbook's recommended starting point for a 99.9% SLO over 30 days (720 hour
 | 6 | 6 hours | 5% | page |
 | 1 | 3 days | 10% | ticket |
 
-Check each row with the budget-consumed formula:
-
-```formula
-f = bw / T
-f = 14.4 × 1 h / 720 h = 2%
-f = 6 × 6 h / 720 h = 5%
-f = 1 × 72 h / 720 h = 10%
-where
-f: the fraction of the 30-day error budget used when the alert fires
-b: the burn-rate threshold of the rule
-w: the rule's long window: 1 h, 6 h or 3 days = 72 h
-T: the SLO period, 30 days = 720 hours (h)
-h: hours
-%: per cent
-In words: the three rules fire after 2%, 5% and 10% of the monthly budget has gone.
-```
+These rows illustrate different urgency levels; choose them for the service rather than treating them as universal defaults.
 
 The burn rates are relative to the budget, so the same thresholds can be reused for other SLOs with the same period; only the error-rate thresholds change. Each threshold must also be reachable: even 100% errors can only burn so fast.
 
-```formula
-e_alert = b(1 − SLO)
-e_alert = 14.4 × 0.1% = 1.44%
-b_max = 1 / (1 − SLO)
-b_max = 1 / 0.001 = 1,000
-where
-e_alert: the error rate at which a burn-rate rule fires
-b: the rule's burn-rate threshold, here 14.4
-SLO: the objective, here 99.9%, so 1 − SLO = 0.1% = 0.001
-b_max: the highest burn rate possible, reached when every event fails
-%: per cent
-In words: for a 99.9% SLO the 14.4× rule fires at 1.44% errors, and a total outage burns at 1,000×. For a 99% SLO, b_max is only 100.
-```
+For a 99.9% SLO, the 14.4 burn-rate threshold corresponds to 1.44% errors; total failure burns at 1,000 times the allowed rate. Tightening the SLO lowers the error-rate threshold for the same burn multiplier.
 
 For 99.99% the 14.4× rule fires at 0.144% errors. For a loose SLO such as 90%, the maximum burn rate is just 10, so a 14.4× rule could never fire. The workbook's full example configuration also adds a fourth, ticket-level rule (3× over 24 hours) between the 6-hour and 3-day rules.
 

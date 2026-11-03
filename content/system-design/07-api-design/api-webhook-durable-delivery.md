@@ -17,7 +17,7 @@ What this means for you as a consumer:
 
 - **Respond 2xx quickly**, within a few seconds. Providers time out (GitHub asks for a 2xx within 10 seconds) and treat slow responses as failures. Providers with automatic retries can then send duplicates; GitHub instead supports explicit redelivery.
 - **Do the work asynchronously.** Verify the signature, write the event to a queue or table, return `200`, then process. Your downstream outage then doesn't become a webhook failure.
-- **Be idempotent.** You *will* receive the same event more than once. Deduplicate on the authenticated event identity, in the same transaction as a local database side effect. External effects need downstream idempotency or reconciliation; a local transaction cannot atomically commit a remote API call.
+- **Be idempotent.** The same event may arrive more than once. Deduplicate on the authenticated event identity, in the same transaction as a local database side effect. External effects need downstream idempotency or reconciliation; a local transaction cannot atomically commit a remote API call.
 
 This SQL fragment needs the actual order predicate and a branch on the inserted-row count. The following is transaction pseudocode, not a complete handler.
 

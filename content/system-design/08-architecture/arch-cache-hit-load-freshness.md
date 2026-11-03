@@ -2,12 +2,12 @@
 id: arch-cache-hit-load-freshness
 title: Relating cache hits to load and freshness
 level: intermediate
-minutes: 4
-summary: Calculate cache read cost and database miss load while keeping each cache layer within its freshness policy.
+minutes: 3
+summary: Explain how cache hits reduce database work while keeping each layer within its freshness policy.
 sourceLesson: arch-scaling-reads
 ---
 
-Read replicas add serving capacity but can lag. Caches keep frequently requested results close to readers; the calculation here measures their benefit using explicit hypothetical inputs.
+Read replicas add serving capacity but can lag. Caches keep frequently requested results close to readers, exchanging freshness and maintenance work for faster reuse.
 
 ## Caching layers
 
@@ -30,12 +30,9 @@ Layers from the user inwards:
 | Distributed | Shared results | Network, load and consistency |
 | Database buffer cache | Hot pages | Query work, locks and I/O |
 
-> [!note] Evidence gap
-> Fixed cache and database latency ranges are omitted because no measured environment supports them. The calculation below uses explicit hypothetical inputs.
+Every read in this model checks the cache first. A **cache hit** returns the cached result; a **miss** pays for both the cache lookup and the database query. More hits reduce database traffic and pull the average towards the cache lookup time. The optional model assumes fixed lookup costs and no extra cache layer:
 
-The arithmetic is why caches matter. Every read checks the cache first. A **cache hit** is answered from the cache; a **miss** pays for the cache check *and* the database. The average read time and the share of reads that reach the database are:
-
-```formula
+```formula reference
 T_avg = h × t_c + (1 − h) × (t_c + t_db)
 F_db = 1 − h
 where
@@ -48,21 +45,7 @@ ms: milliseconds, thousandths of a second
 In words: the average is mostly the fast cache time, plus the misses' share of the slow path; only the misses load the database.
 ```
 
-With a 95% hit rate, a 0.5 ms cache and a 20 ms database:
-
-```formula
-T_avg = (0.95 × 0.5 + 0.05 × 20.5) ms
-T_avg = (0.475 + 1.025) ms = 1.5 ms
-F_db = 1 − 0.95 = 0.05 = 5 %
-where
-T_avg: average time per read, in milliseconds (ms)
-F_db: fraction of reads reaching the database
-%: per cent; 0.05 = 5 %
-ms: milliseconds
-In words: reads average 1.5 ms instead of 20 ms, and only 1 read in 20 touches the database.
-```
-
-That's 20× less database load. Push the hit rate from 95% to 99% and F_db falls from 5% to 1%, so database load drops another 5×. The numbers are hypothetical inputs; real hit rates depend on how much of the data is hot, and the formula assumes every miss goes to the database (no second cache layer). Another module covers cache patterns, invalidation and stampedes in depth; architecturally, the key points are to cache close to the consumer, choose freshness, invalidation and eviction policies for each kind of data. A TTL is useful in many designs but does not alone bound source-data age; immutable content-addressed data can use different policies.
+Real hit rates depend on which data is popular and how long entries stay usable. Choose freshness, invalidation and eviction policies for each kind of data. A TTL bounds local residence time, but does not alone bound source-data age if an upstream copy was stale. Immutable content-addressed data can use different policies.
 
 ## Key takeaways
 - Every miss pays for the cache lookup and the database under this single-cache model.

@@ -3,27 +3,27 @@
     "id": "arch-scaling-writes-q3",
     "level": "intermediate",
     "type": "single",
-    "prompt": "An ingest service inserts telemetry rows one per transaction. Each commit costs about 2 ms of fsync on networked storage, and commits are effectively serialised. What's the approximate maximum rate, and what's the rate if you batch 500 rows per transaction (assume the fsync still dominates)?",
+    "prompt": "A database spends substantial time on commit overhead for many tiny independent inserts. What is the expected trade-off from batching several rows into each transaction?",
     "options": [
       {
-        "text": "About 500 rows/s unbatched; about 250,000 rows/s batched.",
-        "explanation": "Correct under the stated simplified assumptions: 500 commits/s multiplied by 500 rows/commit gives 250,000 rows/s. This is a model, not a measured throughput prediction."
+        "text": "It amortises commit overhead, but can increase waiting time, transaction size and the amount of work retried after a failure.",
+        "explanation": "Correct. Sharing fixed work can improve throughput without making row processing free."
       },
       {
-        "text": "About 2,000 rows/s unbatched; about 4,000 rows/s batched.",
-        "explanation": "Wrong. 2,000/s would need 0.5 ms commits, and batching 500 rows per commit multiplies throughput by roughly 500, not by 2."
+        "text": "It removes index maintenance and validation for every row.",
+        "explanation": "Those costs still occur even when commits are shared."
       },
       {
-        "text": "About 500 rows/s either way, because the disk is the bottleneck.",
-        "explanation": "Wrong. The disk bottleneck is per *flush*, not per row. Batching puts many rows into one flush."
+        "text": "It guarantees throughput increases exactly in proportion to batch size.",
+        "explanation": "CPU, locks, indexes, group commit and storage can become limiting."
       },
       {
-        "text": "Batching reduces throughput because transactions are larger.",
-        "explanation": "Wrong. Larger transactions take a little longer to write, but they amortise the fixed fsync cost over many rows, so total throughput rises sharply."
+        "text": "It makes uncommitted rows durable immediately.",
+        "explanation": "Durability follows the database’s commit and acknowledgement configuration."
       }
     ],
     "answer": 0,
-    "workedExample": "1. With serialised commits, throughput is commits per second times rows per commit:\n\n```formula\nX = (B / t_c) × 1000 ms/s\nwhere\nX: rows written per second (rows/s)\nt_c: time for one commit's fsync, here 2 ms\nB: rows per transaction (batch size)\nms: milliseconds\ns: seconds; 1000 ms/s converts a per-millisecond rate to a per-second rate\nIn words: count how many commits fit in a second, then multiply by the rows in each.\n```\n\n2. Unbatched, each transaction writes just one row:\n\n```formula\nX = (1 / (2 ms)) × 1000 ms/s\nX = 500 /s\nwhere\nX: rows per second\nms: milliseconds\ns: seconds; 1000 ms/s is the conversion factor\n/s: per second\nIn words: 500 commits a second, one row each.\n```\n\n3. Batched, 500 rows share one commit, assuming the fsync still dominates:\n\n```formula\nX = (500 / (2 ms)) × 1000 ms/s\nX = 250000 /s\nwhere\nX: rows per second\nms: milliseconds\ns: seconds; 1000 ms/s is the conversion factor\n/s: per second\nIn words: still 500 commits a second, but each carries 500 rows.\n```\n4. In reality CPU, network and index maintenance cap it lower, and no typical gain is asserted without a representative benchmark.\n5. Trade-off: rows wait in the batch buffer (say up to 100 ms), and an unflushed batch can be lost on crash unless it was read from a durable queue.",
+    "workedExample": "1. Identify the fixed cost paid for each transaction.\n2. A batch shares it across several rows.\n3. Larger batches also wait longer to fill and can hold resources longer.\n4. Measure the workload and choose a bounded batch size and wait time.",
     "link": {
       "title": "Azure Architecture Center: Queue-Based Load Leveling",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Even `linger.ms=0` can batch records when records accumulate before sending.\n2. `linger.ms=10` permits waiting for an unfilled per-partition batch, normally until its delay expires or it fills.\n3. At a uniform rate, records arriving during the linger window:\n\n```formula\nn = r × t\nn = 50000 /s × 0.010 s = 500\nwhere\nn: records that arrive during one linger window\nr: the send rate, 50,000 records per second (/s)\nt: the linger time, 10 ms = 0.010 seconds (s)\nms: milliseconds\ns: seconds\n/s: per second\nIn words: 10 ms at 50,000 a second is 500 records, spread across the partitions' batches.\n```\n4. Measure request counts, compression and end-to-end latency; broker backpressure and queues can delay sends beyond linger.",
+    "workedExample": "1. Batching shares fixed send and request overhead across records.\n2. A linger window permits a short wait for a batch to fill; full batches can be sent earlier.\n3. It is not an end-to-end latency guarantee: backpressure, broker queues and retries add delays.\n4. Choose the batch and wait limits against the workload’s throughput and freshness requirements.",
     "link": {
       "title": "Apache Kafka documentation",
       "url": "https://kafka.apache.org/documentation/"

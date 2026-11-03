@@ -31,7 +31,7 @@ No single control is perfect, so layer them. An attacker who gets past one layer
 
 ## Encryption in transit
 
-Use **TLS** for supported application protocols across network boundaries (1.2 minimum, 1.3 preferred under current IETF guidance); use an appropriate encrypted transport for other traffic. TLS gives confidentiality, integrity, and server authentication via certificates.
+Use **TLS** for supported application protocols across network boundaries. Current IETF guidance requires new protocols using TLS to support and default to TLS 1.3; TLS 1.2 may remain a non-default compatibility option where deployment requires it. Existing TLS 1.2 deployments need secure configuration; do not use older versions. Use an appropriate encrypted transport for other traffic. TLS gives confidentiality, integrity, and server authentication via certificates.
 
 - **At the edge**: HTTPS everywhere, with HSTS so browsers upgrade requests to HTTPS once a policy is learned (or preloaded); the initial visit is otherwise not protected by HSTS alone.
 - **Inside the network**: historically teams terminated TLS at the load balancer and sent plain HTTP inside the "trusted" network. Zero trust (below) rejects this; internal hops should be encrypted too.
@@ -65,3 +65,4 @@ Be honest about the limits: if an attacker compromises the application, which ca
 - [Secrets management cheat sheet (OWASP)](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html)
 - [AWS Well-Architected Security Pillar](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/welcome.html)
 - [Recommendations for TLS and DTLS (RFC 9325)](https://www.rfc-editor.org/rfc/rfc9325)
+- [New protocols using TLS must require TLS 1.3 (RFC 9852)](https://www.rfc-editor.org/rfc/rfc9852.html)

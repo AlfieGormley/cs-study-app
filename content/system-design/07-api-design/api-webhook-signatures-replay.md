@@ -49,7 +49,7 @@ Your webhook URL is public. Anyone who discovers it can `POST` a fake "payment s
 
 A common technique is an **HMAC signature** (a shared-secret message authentication code). Follow the provider-specific signing protocol; asymmetric signatures are another option. Provider and consumer share a secret (`whsec_...`). The provider computes (this is Stripe's scheme):
 
-```formula
+```formula reference
 m = t + "." + b
 sig = HMAC(k, m)
 where
@@ -94,23 +94,17 @@ Defences:
 - **Sign the timestamp** along with the body (as above), and **reject events whose timestamp is too old**. Stripe's libraries default to a 5-minute tolerance. The check is shown below this list.
 - **Deduplicate by event id.** Store processed `evt_...` ids and ignore repeats. You need this anyway for retries (below). For GitHub, `X-GitHub-Delivery` is useful for ordinary redelivery deduplication, but it is not included in the body HMAC: someone replaying a captured body can change that header. Use authenticated payload identity or a retained digest of the verified raw body where appropriate, make business effects idempotent, and reconcile current provider state. Without signed freshness or retained identity, the signature alone cannot reject an old valid payload.
 
-The following one-sided age check rejects old deliveries after signature verification. Follow the provider SDK's clock-skew policy as well; this inequality alone does not reject future timestamps.
+An age check rejects old deliveries after signature verification. Follow the provider SDK's clock-skew policy as well; an old-age test alone does not reject future timestamps.
 
-```formula
-T_now − t ≤ τ
-T_now − t = 1,767,226,500 − 1,767,225,600
-T_now − t = 900 s
-where
-T_now: the receiver's current time, as a Unix timestamp in seconds
-t: the signed timestamp from the header
-τ: tau, the tolerance, here 300 s (5 minutes)
-≤: less than or equal to; the event is accepted only when this holds
-s: seconds
-In words: accept the event only if it was signed within the tolerance; a delivery signed 900 s (15 minutes) ago fails the 300 s check, so it is refused even though its signature is genuine.
-```
+For example, a delivery signed 15 minutes ago fails a five-minute age tolerance even if its signature is valid. A valid signature proves authenticity of the signed bytes, not freshness by itself.
 
 > [!warning] Why the timestamp must be inside the signature
 > If the timestamp were sent separately and unsigned, an attacker could replay an old body with a fresh timestamp. Including it in the signed string means changing it breaks the signature.
+
+> [!analogy] Real-world analogy: A dated authenticated notice
+> **How it maps:** Authenticating the date together with a notice prevents an attacker changing an old notice to look newly issued. A separate record of notice identities helps detect repeats still inside the allowed age.
+>
+> **Where it stops:** An HMAC uses a shared secret, so either secret holder can compute it. It does not encrypt the notice or prove that the business event has not already been handled.
 
 ## Key takeaways
 - A webhook is a provider-to-consumer HTTP notification whose public endpoint must authenticate each request.

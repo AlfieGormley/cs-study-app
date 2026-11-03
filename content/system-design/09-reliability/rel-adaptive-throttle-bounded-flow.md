@@ -13,10 +13,8 @@ The server-side admission unit rejected excess work at the service. Client-side 
 
 The Google SRE book describes **adaptive throttling**: each client counts the requests it has tried to make and the requests the backend accepted, over the last two minutes, and rejects new requests locally with this probability:
 
-```formula
+```formula reference
 P_rej = max(0, (R − KA) / (R + 1))
-P_rej = max(0, (100 − 2 × 30) / 101)
-P_rej = 40 / 101 ≈ 0.40
 where
 P_rej: the probability that the client rejects a new request itself, without sending it, from 0 to 1
 max: the larger of the two values, so P_rej is never below 0
@@ -27,7 +25,7 @@ K: a tuning multiplier, usually 2
 In words: while the backend accepts at least half the requests (with K = 2), nothing is dropped locally; when it accepts only 30 of 100, the client drops about 40% of new requests itself.
 ```
 
-With the tuning multiplier set to two, once the backend is rejecting more than half the requests, the client starts dropping some itself, and those rejected requests don't even cost the backend a network round trip. In steady state the client sends roughly twice the accepted request count when the multiplier is two, enough to notice quickly when the backend recovers. Lower K is more aggressive; higher K wastes more backend effort on rejections. The +1 in the denominator only stops division by zero when the client has sent nothing yet.
+With the tuning multiplier set to two, once the backend is rejecting more than half the requests, the client starts dropping some itself, and those rejected requests don't even cost the backend a network round trip. In steady state the client sends roughly twice the accepted request count when the multiplier is two, enough to notice quickly when the backend recovers. A lower multiplier is more aggressive; a higher one spends more backend effort on rejections. The +1 in the denominator only stops division by zero when the client has sent nothing yet.
 
 ## Backpressure at the service level
 
@@ -35,7 +33,7 @@ With the tuning multiplier set to two, once the backend is rejecting more than h
 
 - **Bounded queues**: when full, reject or block the producer.
 - **Protocol signals**: HTTP `429` with `Retry-After`, gRPC `RESOURCE_EXHAUSTED`, TCP flow control windows, Reactive Streams' `request(n)`.
-- **Pull-based consumption**: Kafka consumers pull at their own pace, so the broker never pushes faster than they can handle; lag grows instead (which you alert on).
+- **Pull-based consumption**: Kafka consumers control their fetches. They must still bound local buffers and processing work; when consumption falls behind, broker lag grows against finite retention and storage limits.
 
 Backpressure must propagate all the way to something that can actually slow down: a user, a batch job, or a queue with spare capacity. Otherwise it just moves the overflow somewhere else.
 

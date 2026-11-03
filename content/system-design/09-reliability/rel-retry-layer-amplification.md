@@ -3,7 +3,7 @@ id: rel-retry-layer-amplification
 title: Retry amplification across service layers
 level: intermediate
 minutes: 3
-summary: Calculate worst-case and expected retry load and choose one retry layer.
+summary: Explain how nested retry loops amplify load and choose one retry layer.
 sourceLesson: rel-timeouts-retries
 ---
 
@@ -22,46 +22,14 @@ Service ──3x──▶ Database
 If the database is completely down, one user request produces:
 
 - 3 attempts at the API
-- 3 × 3 = 9 at the service
-- 3 × 3 × 3 = **27** at the database
+- Up to 9 at the service
+- Up to **27** at the database
 
-Each retrying layer multiplies the attempts of the layer above it:
-
-```formula
-M = n^L
-M = 3^3 = 3 × 3 × 3 = 27
-M = 3^5 = 243
-where
-M: the attempts reaching the bottom dependency for one user request (the amplification factor)
-n: the maximum attempts each layer makes (1 try + retries), here 3
-L: the number of layers (hops) that retry, here 3 (or 5)
-^: "to the power of"
-In words: three retrying layers of three attempts turn one request into 27 at the database; five layers turn it into 243.
-```
+Each retrying layer multiplies the attempts of the layer above it. Adding another retrying layer multiplies the database load again.
 
 This is the worst case, when every attempt fails. The database, which was perhaps just overloaded, now receives 27 times its normal traffic and has no chance to recover. This is a **retry storm**.
 
-Partial failure amplifies too, just less dramatically. Take a single retrying layer making up to 3 tries. The first try always happens; the second happens only if the first fails; the third only if the first two fail:
-
-```formula
-E = 1 + p + p^2
-E = 1 + 0.5 + 0.5^2
-E = 1 + 0.5 + 0.25 = 1.75
-where
-E: the expected (average) number of attempts per request
-p: the probability that any one attempt fails, from 0 to 1, assumed independent and unchanged between attempts; here 0.5 (50%)
-p^2: p squared, the chance the first two attempts both fail
-In words: when half of attempts fail, each request makes 1.75 attempts on average, so the dependency sees 75% extra load.
-```
-
-The same formula gives the rest of the table:
-
-| Failure rate p | Attempts per request |
-|---|---|
-| 10% | 1.11× |
-| 50% | 1.75× |
-| 90% | 2.71× |
-| 100% | 3× |
+Even one retrying layer adds traffic during partial failure: some original calls retry, and some retries fail and retry again. A per-request cap alone does not bound retries to a small fraction of original traffic.
 
 The extra load arrives exactly as the dependency gets worse, which is a positive feedback loop: more failures cause more retries, which cause more failures.
 
@@ -74,7 +42,7 @@ The extra load arrives exactly as the dependency gets worse, which is a positive
 ## Key takeaways
 
 - Worst-case attempts multiply across retrying layers.
-- Expected attempts for three tries depend on the failure probability remaining independent and unchanged.
+- Even one retrying layer adds load during partial failure; a traffic budget limits that extra work.
 - Choose one retrying layer, propagate overload signals and bound retry traffic; jitter alone changes timing.
 
 ## Further reading

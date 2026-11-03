@@ -2,7 +2,7 @@
 id: arch-write-ownership-shard-routing
 title: Partitioning write ownership
 level: intermediate
-minutes: 5
+minutes: 4
 summary: Identify single-primary limits and choose shard routing that preserves common query locality.
 sourceLesson: arch-scaling-writes
 ---
@@ -12,9 +12,6 @@ In a single-writer system, read replicas offload reads but do not divide ownersh
 This lesson covers the architectural patterns. The database module covers sharding internals (hash vs range partitioning, rebalancing, consistent hashing) in more depth.
 
 ## Why a single primary runs out
-
-> [!note] Evidence gap
-> Generic primary throughput, disk flush latency and Kafka broker throughput figures are omitted: no representative benchmark environment was supplied. Measure the actual workload.
 
 Potential limits include:
 
@@ -38,20 +35,9 @@ Split data by a **shard key** so each shard (its own primary) owns a subset of k
    0,4,8..  1,5,9..  2,6,..   3,7,..
 ```
 
-The router in the diagram picks a shard with the remainder after division:
+The diagram uses the remainder after division to choose an owner. The code spelling is `user_id % 4`; real systems commonly hash the key first to avoid patterns in raw identifiers.
 
-```formula
-s = u mod N
-s = 42 mod 4 = 2
-where
-s: the shard number the row lives on, from 0 to N − 1
-u: the shard key, here the numeric user ID (user_id); user 42 in the example
-N: the number of shards, here 4
-mod: modulo: the remainder after dividing u by N (42 ÷ 4 = 10 remainder 2)
-In words: divide the user ID by the number of shards; the remainder says which shard owns that user.
-```
-
-In code this is written `user_id % 4`. Real systems usually apply it to a *hash* of the key rather than the raw ID, so that keys that happen to follow a pattern still spread evenly.
+Changing the divisor in modulo routing changes the destination of many existing keys. Adding one physical server therefore needs a migration plan, not just a new divisor.
 
 Four equivalent shards can approach four times one shard's capacity if writes spread evenly and routing, coordination and other shared resources do not become bottlenecks.
 
@@ -63,22 +49,10 @@ Choosing the shard key is the critical decision:
 - The most common queries should hit **one** shard. Shard a chat app by `conversation_id` so that loading a conversation is a query confined to one shard.
 - Cross-shard operations (joins, transactions, global secondary indexes) become expensive or impossible, so pick a key that keeps related data together.
 
-> [!warning] Sharding is a one-way door
-> Re-sharding a live system is one of the hardest migrations in engineering. Instagram famously pre-split into thousands of *logical* shards mapped onto a few physical servers, so that later they could move logical shards between machines instead of re-hashing data.
+> [!warning] Resharding needs a migration plan
+> Re-sharding a live system moves data while requests continue. Many small logical shards mapped onto fewer physical servers let operators move selected logical shards without changing the key-to-logical-shard mapping.
 
-Note also that plain `hash(key) % N` (the same remainder rule, applied to a hash of the key) can remap a large fraction of keys when N changes. A key stays put only if its remainder happens to be the same for both shard counts. For hashes spread evenly, the share of keys that has to move when you add one shard is:
-
-```formula
-F_moved = N / (N + 1)
-F_moved = 4 / (4 + 1) = 0.8 = 80 %
-where
-F_moved: the fraction of all keys whose shard changes, between 0 and 1
-N: the number of shards before the change, here 4 (going to 5)
-%: per cent; 0.8 = 80 %
-In words: adding one shard to N moves almost everything, about N out of every N + 1 keys; going from 4 to 5 shards moves about 80 % of keys.
-```
-
-That holds because, out of every 20 consecutive hash values, only the 4 whose remainders are 0, 1, 2 and 3 under both rules stay (20 is the first number divisible by both 4 and 5). Logical shards (or consistent hashing) mean adding a server moves only the shards you choose.
+Changing plain hash-modulo routing can remap most keys. Logical shards or consistent hashing limit which assignments change, but affected data still needs safe transfer, routing updates and write-ownership cutover.
 
 ## Key takeaways
 - Replicas replay writes; reducing work, increasing resources or partitioning ownership addresses a write bottleneck.

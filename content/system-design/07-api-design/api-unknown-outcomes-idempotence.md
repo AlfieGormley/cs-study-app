@@ -11,12 +11,12 @@ In a distributed system, every network call has three possible outcomes: success
 
 An unknown outcome can be resolved by querying/reconciling operation status, or by retrying under an **idempotency contract**: repeating the logical operation has the same intended effect as doing it once. Do not blindly repeat an operation whose outcome remains ambiguous.
 
-## Why "exactly once" is really "at least once + idempotent"
+## Delivery and business effects
 
-You can't guarantee a message is *delivered* exactly once over an unreliable network. You can only choose:
+After a lost acknowledgement, a sender cannot tell from silence whether the receiver acted. Delivery policies make different trade-offs:
 
-- **At most once**: never retry. Some requests are lost.
-- **At least once**: retry until acknowledged. Some requests are duplicated.
+- **At most once**: avoid duplicate delivery, accepting that some work may be lost. A simple implementation sends once and abandons an unknown outcome.
+- **At least once**: retry under a stated failure and retention model, accepting possible duplicate delivery. Finite retry windows do not guarantee eventual arrival through an arbitrarily long outage.
 
 One way to obtain an effectively-once business effect is at-least-once delivery plus atomic deduplication with the effect. Delivery, processing and external side effects are different guarantees. Systems such as Kafka idempotent producers and SQS FIFO have specific scopes and retention windows; no claim applies to every payment API or arbitrary external effect. (The messaging module goes deeper on delivery guarantees.)
 
@@ -33,7 +33,7 @@ Some operations are idempotent by design:
 | `POST /payments` | No |
 | `INSERT ... ON CONFLICT DO NOTHING` | Yes |
 
-Where you can, design operations to be naturally idempotent. Use absolute values instead of deltas. Let the client choose the resource id and use `PUT /orders/{client-uuid}` instead of `POST /orders`.
+Where you can, design operations to be naturally idempotent. Absolute assignments can avoid repeating a delta, but they do not prevent concurrent lost updates; use conditional updates when needed. Let the client choose the resource id and use `PUT /orders/{client-uuid}` instead of `POST /orders`.
 
 But many operations are inherently "do something": charge a card, send an email, ship a parcel. For those you need an **idempotency key**.
 

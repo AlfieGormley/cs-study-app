@@ -41,43 +41,27 @@ LIMIT 21;
 Three details make this work:
 
 - **A unique tiebreaker**. Two orders can share a `created_at`. Adding `id` makes the order total. With immutable sort keys, inserts ahead of the cursor no longer shift later pages; changes to sort keys or filters can still move items across the cursor. Use a stable snapshot if the entire traversal must represent one instant.
-- **An index** on `(created_at, id)`. The `WHERE` clause becomes an index seek, so each page costs a few steps down the tree plus the rows it returns (the formula below makes this precise), without an offset-dependent walk.
+- **An index** on `(created_at, id)`. The `WHERE` clause becomes an index seek, so each page costs a few steps down the tree plus the rows it returns (the reference below describes the growth of work), without an offset-dependent walk.
 - **Fetch limit + 1**. If you get 21 rows, `has_more` is true and you return 20.
 
 The cost of a keyset page comes from the seek down the B-tree plus the rows it returns:
 
-```formula
-E_key ≈ log_b(n) + limit
+```formula reference
 cost = O(log n + limit)
 where
-E_key: the work for one keyset page: index pages read during the seek, plus entries returned
-cost: the work the database does for one page
-n: the number of rows in the index
-b: the fan-out of the B-tree: how many child pointers one index page holds, often a few hundred
-log_b: the logarithm to base b: how many times you can divide n by b before reaching 1, which is the number of tree levels the seek walks down
-log: a logarithm; inside Big O its base doesn't matter
-limit: how many rows the page returns
-O(...): Big O notation: how the cost grows as the quantities inside grow, ignoring constant factors
-≈: approximately equal to
-In words: finding the starting point takes only a few steps down the tree, however big the table, and then the page reads just its own rows.
+cost: the growth of work for an indexed keyset page
+n: the number of indexed rows
+limit: the requested page size in rows
+log: logarithm; its base does not affect this growth classification
+O(...): Big O notation, which ignores constant factors
+In words: an indexed seek finds the cursor position, then reads the page; a deeper cursor does not require walking all preceding rows.
 ```
 
-For an illustrative 2-million-row index with fan-out about 300:
-
-```formula
-h = log_{300}(2,000,000) ≈ 2.5
-p ≈ 3
-where
-h: the illustrative logarithmic tree-height estimate
-log_{300}: logarithm to base 300, the assumed number of child pointers per index page
-p: the approximate index pages read during the seek, followed by the requested 20 entries
-≈: approximately equal to; actual height depends on page size, fill and implementation
-In words: the seek traverses roughly three index pages, independently of how deep the cursor lies in the ordered result.
-```
+The tree height depends on page size, fill and implementation. The important distinction is that the seek does not grow with the number of rows before the cursor.
 
 | | Offset | Cursor |
 |---|---|---|
-| Deep page cost | O(offset + limit) | O(log n + limit) |
+| Deep page work | Walk skipped rows, then page | Seek, then read page |
 | Resists offset shifts | No | Yes, with stable sort keys |
 | Jump to page N | Yes | No |
 
@@ -90,6 +74,11 @@ In a simplified indexed scan over 2 million rows at 20 per page, the last offset
 
 > [!note] Content gap: measured pagination latency
 > A reproducible workload and benchmark are not available here, so no seconds-versus-milliseconds claim is included. Index-entry estimates explain the scaling difference, not a universal response time.
+
+> [!analogy] Real-world analogy: A bookmark
+> **How it maps:** A bookmark identifies where to continue. Counting pages from the front each time resembles offset navigation; continuing after a known ordered item resembles keyset navigation.
+>
+> **Where it stops:** Rows can move or disappear, unlike fixed printed pages. Stable sort keys, unique ties and sometimes a snapshot are still needed.
 
 ## Key takeaways
 - Use a total order such as created_at plus a unique id, with a matching index.

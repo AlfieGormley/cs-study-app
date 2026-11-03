@@ -7,27 +7,13 @@ summary: Separate per-commit overhead from per-row work and decide what batching
 sourceLesson: arch-scaling-writes
 ---
 
-Sharding changes who owns writes. Batching instead reduces fixed overhead for the same owner. The following flush calculation explicitly assumes no database group commit.
+Sharding changes who owns writes. Batching instead reduces fixed overhead for the same owner.
 
 ## Write batching
 
 Much of a write's cost is fixed overhead: a network round trip, a transaction, an `fsync`. Batching amortises it.
 
-Suppose each commit has to wait for its own `fsync` (no grouping by the database). Then the number of flushes depends only on how many rows you put in each transaction:
-
-```formula
-F = ⌈R / B⌉
-F = 1000 / 1 = 1000 fsyncs
-F = 1000 / 1000 = 1 fsync
-where
-F: the number of transactions, and so of fsync flushes to disk
-R: the number of rows to write, here 1,000
-B: rows per transaction (the batch size): 1 in the first case, 1,000 in the second
-fsync: one forced flush of the log to durable storage, the slow fixed cost of a commit
-fsyncs: plural of fsync
-⌈ ⌉: ceiling: round up to a whole transaction
-In words: 1,000 one-row transactions pay for 1,000 disk flushes; one 1,000-row transaction pays for one.
-```
+A batch shares the commit overhead across its rows. Group commit can also share flushes across transactions, so one flush per transaction is only a simplified model.
 
 Each row still has to be written, so the saving is the fixed per-commit cost, not all of the work.
 

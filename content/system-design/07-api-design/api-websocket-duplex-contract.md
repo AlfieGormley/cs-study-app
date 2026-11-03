@@ -33,7 +33,7 @@ After the `101`, the TCP connection carries WebSocket **frames** in both directi
 
 Classic WebSockets take over a whole TCP connection. RFC 8441 defines how to run them as one stream inside an HTTP/2 connection instead, which some browsers and servers support.
 
-Use WebSockets when the client sends frequently too: chat, multiplayer games, collaborative editing (Figma, Google Docs), trading terminals.
+Use WebSockets when the client sends frequently too: chat, multiplayer games, collaborative editing, trading terminals.
 
 Costs:
 

@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Compare the hot task with an average one:\n\n```formula\nH = f × N\nH = 0.25 × 2000000000 = 500000000\nA = (N − H) / (P − 1)\nA = 1500000000 / 199 ≈ 7500000\nwhere\nH: rows with the hot key, all in one task\nf: the hot key's share of rows, 25 % = 0.25\nN: total rows, 2 billion\nA: average rows in each of the other tasks\nP: number of shuffle partitions, 200\n≈: approximately equal to\n%: per cent\nIn words: one task gets 500 million rows while the others average about 7.5 million: over 60 times as much.\n```\n\n2. That assumes the other rows spread evenly; actual hashing can add other rows to the hot partition too.\n3. For SUM, assign salt buckets, compute partial sums by (customer_id, salt), then sum partials by customer_id.\n4. NULL keys are a legitimate group in aggregation; dropping them changes the result. For an ordinary inner equijoin, NULLs do not match and Spark may already filter them.\n5. AQE skew-join splitting is not a universal automatic fix for every hot-key aggregation.",
+    "workedExample": "1. Equal partition counts do not imply equal work.\n2. A frequent key can send much more data to one task and delay stage completion.\n3. Inspect key frequencies and the execution plan; pre-aggregate or salt when partial results can be merged safely.\n4. More workers alone cannot divide an indivisible hot-key task. AQE skew-join handling is not a universal fix for every aggregation.",
     "link": {
       "title": "Apache Spark: RDD programming guide",
       "url": "https://spark.apache.org/docs/latest/rdd-programming-guide.html"
@@ -37,7 +37,7 @@
     "options": [
       {
         "text": "`filter(col('country') == 'GB')`",
-        "explanation": "Wrong. Filter is narrow: each output partition depends on one input partition, so no data moves."
+        "explanation": "Filter does not itself redistribute rows between partitions. Reading the input may still require network I/O."
       },
       {
         "text": "`groupBy('customer_id').sum('amount')`",
@@ -61,7 +61,7 @@
       3,
       4
     ],
-    "workedExample": "1. Narrow: output partition needs one input partition. Pipelined in one stage. (filter, map, withColumn)\n2. Wide: output partition needs data from many input partitions. Stage boundary + shuffle. (groupBy, join, distinct, repartition)\n3. Cost: shuffles write to local disk, cross the network and are where skew bites.\n4. Tricks: filter and project before the shuffle; broadcast small tables.",
+    "workedExample": "1. Map, filter and per-row expressions can pipeline without a new shuffle.\n2. Under the stated assumptions, grouping and joining require data redistribution so matching keys meet.\n3. Repartition explicitly redistributes rows.\n4. Existing compatible layouts or supported broadcast/storage-partition plans can change the need for a shuffle; inspect the physical plan.",
     "link": {
       "title": "Apache Spark: RDD programming guide",
       "url": "https://spark.apache.org/docs/latest/rdd-programming-guide.html"

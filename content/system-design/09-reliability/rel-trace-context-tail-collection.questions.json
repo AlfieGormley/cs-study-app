@@ -36,8 +36,8 @@
     "prompt": "Traces for your order flow show the API span, then stop. The worker that consumes from a message queue produces its own separate traces with new trace IDs and no links to the producing traces. What's the most likely cause?",
     "options": [
       {
-        "text": "The worker's sampling rate is too low",
-        "explanation": "A sampling rate changes retained data, not by itself the propagated trace ID. A new ID can also be intentional across an asynchronous boundary when a span link preserves causality."
+        "text": "The worker's sampling fraction is too low",
+        "explanation": "A sampling fraction changes retained data, not by itself the propagated trace ID. A new ID can also be intentional across an asynchronous boundary when a span link preserves causality."
       },
       {
         "text": "The trace context (`traceparent`) isn't propagated through the message headers",
@@ -63,27 +63,27 @@
     "id": "rel-observability-q6",
     "level": "advanced",
     "type": "single",
-    "prompt": "A service handles 20,000 req/s. 0.05% of requests fail and 0.5% are slow (>1 s), with no overlap between these groups. Assume all spans reach the tail sampler before its decision and no buffer overflow. You can afford to store about 300 traces/s. Compare 1% head-based sampling with tail-based sampling that keeps all errors and slow traces plus a random sample of the rest. Which is true?",
+    "prompt": "Rare errors are missed by low-rate head sampling. You want outcome-based trace retention, and all relevant spans can reach a sufficiently sized collector before its decision. What does tail sampling offer?",
     "options": [
       {
-        "text": "Head-based keeps ~200 traces/s but only ~0.1 error traces/s; tail-based keeps all ~10 errors/s and ~100 slow/s within budget",
-        "explanation": "Correct. Head sampling picks 1% before outcomes are known, so it keeps 1% of errors too. Tail sampling sees the full trace first, so it can keep every interesting one and fill the rest of the budget with normal traffic."
+        "text": "It can preferentially retain error and slow traces, at the cost of buffering and trace-consistent routing",
+        "explanation": "Correct. It waits for outcome evidence, unlike an initial random decision, but requires resources and complete-enough input."
       },
       {
-        "text": "Both keep the same number of error traces, because sampling is random",
-        "explanation": "That's only true if both sample uniformly. Tail-based sampling deliberately biases towards errors and slow traces, which is its whole point."
+        "text": "It keeps exactly the same error traces as head sampling because every policy is uniform",
+        "explanation": "Outcome-based policies intentionally select different populations."
       },
       {
-        "text": "Tail-based sampling is cheaper to run because it stores fewer spans",
-        "explanation": "Tail sampling stores roughly the same amount in the backend but needs a collector tier that buffers *all* spans of in-flight traces in memory before deciding, which costs more to run."
+        "text": "It eliminates collector memory because fewer traces are exported",
+        "explanation": "The collector must hold incoming spans before deciding, even if most are eventually dropped."
       },
       {
-        "text": "Head-based sampling at 1% keeps all errors because errors are propagated to the root",
-        "explanation": "With head sampling the keep/drop decision is made at the root span, before the error happens. A dropped trace isn't recorded no matter how it ends."
+        "text": "It reconstructs spans that head sampling already discarded",
+        "explanation": "Tail sampling cannot recover telemetry never sent to it."
       }
     ],
     "answer": 0,
-    "workedExample": "**Head-based at 1%:** traces are kept at random before anyone knows how they end, so each kind is kept at the same 1% rate.\n\n```formula\nT = Rfh\nT_all = 20,000 /s × 1 × 0.01\nT_all = 200 /s\nT_err = 20,000 /s × 0.0005 × 0.01\nT_err = 0.1 /s\nT_slow = 20,000 /s × 0.005 × 0.01\nT_slow = 1 /s\nwhere\nT: traces of a given kind stored per second (/s)\nT_all: all traces stored per second (f = 1)\nT_err: error traces stored per second (f = 0.0005, i.e. 0.05%)\nT_slow: slow traces stored per second (f = 0.005, i.e. 0.5%)\nR: the request rate, here 20,000 per second\nf: the fraction of requests of that kind\nh: the head-sampling rate, here 1% = 0.01\n/s: per second\nIn words: 1% head sampling stores 200 traces a second, but only one error trace every 10 seconds.\n```\n\nYou'd see one error trace every 10 seconds.\n\n**Tail-based:**\n\n```formula\nT_err = 20,000 /s × 0.0005 = 10 /s\nT_slow = 20,000 /s × 0.005 = 100 /s\nT_norm = 300 /s − 110 /s = 190 /s\nwhere\nT_err: error traces kept per second (all of them)\nT_slow: slow traces kept per second (all of them)\nT_norm: normal traces that still fit in the 300-per-second budget\n/s: per second\nIn words: keep all 10 error and all 100 slow traces each second, and fill the remaining 190 slots with a random sample of normal traffic.\n```\n\nYou get 100× more error traces within the stated 300 traces/s budget (versus 200 traces/s for 1% head sampling). The cost is the collector: it must hold every span for, say, 30 s until the trace completes. At ~10 spans × 2 KB per trace:\n\n```formula\nM = Rwz\nM = 20,000 /s × 30 s × 20 KB\nM = 12,000,000 KB ≈ 12 GB\nwhere\nM: the memory the collectors need to hold in-flight traces\nR: new traces per second, here 20,000\nw: the decision window, here 30 seconds (s)\nz: the size of one trace, here 10 spans × 2 KB = 20 kilobytes (KB)\n/s: per second\ns: seconds\nKB: kilobytes; 1,000,000 KB = 1 GB\nGB: gigabytes\n≈: approximately equal to\nIn words: 20,000 traces a second held for 30 seconds is 600,000 traces in memory; at 20 KB each that is about 12 GB.\n```\n\nThat is raw span payload, before object/indexing overhead, spread across collectors that each receive whole traces.",
+    "workedExample": "Head sampling chooses before the outcome is known. Tail sampling waits for spans and can select observed errors or slow requests, then sample routine traffic. Route each trace consistently and size buffers for traffic and decision time. Missing or late spans, upstream drops and overflow limit what it can retain.",
     "link": {
       "title": "Traces (OpenTelemetry)",
       "url": "https://opentelemetry.io/docs/concepts/signals/traces/"
@@ -121,7 +121,7 @@
       2,
       3
     ],
-    "workedExample": "Think about what a tail-sampling decision needs: **the complete trace**.\n\n1. Spans arrive from many services at different times. Route by trace ID so one collector gets them all.\n2. Wait a decision window (e.g. 30 s) for late spans. Memory grows with traffic and with the window:\n\n```formula\nM ≈ rwz\nwhere\nM: the collector memory needed for in-flight spans, in bytes\nr: the span arrival rate, spans per second\nw: the decision window, in seconds\nz: the average span size, in bytes\n≈: approximately equal to (ignores overhead)\nIn words: double the traffic or double the wait and you need about twice the memory.\n```\n\n3. Apply policies: errors → keep; latency > 1 s → keep; otherwise keep ~1%.\n4. Export the kept traces to a supported backend via the collector's exporters.\n\nPropagation (`traceparent`) is still what makes the spans one trace in the first place.",
+    "workedExample": "1. Propagate context so spans can be related.\n2. Route spans with the same trace ID to the same tail-sampling decision point.\n3. Longer decision windows admit more late spans but hold more work in memory.\n4. Apply policies and export selected traces. Switching compatible exporters often avoids reinstrumentation, but backend-specific features may require migration work.",
     "link": {
       "title": "Traces (OpenTelemetry)",
       "url": "https://opentelemetry.io/docs/concepts/signals/traces/"

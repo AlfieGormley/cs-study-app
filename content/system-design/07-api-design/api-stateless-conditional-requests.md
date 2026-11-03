@@ -58,6 +58,11 @@ ETags also prevent **lost updates**. Two admins load product 5 at version `"v7"`
 
 Fielding's full list also includes client–server separation, a layered system (clients can't tell if they're talking to a proxy), and HATEOAS (responses include links to the next possible actions). The Richardson Maturity Model grades APIs from level 0 (one endpoint, RPC over HTTP) to level 3 (hypermedia). A pragmatic API can use level 2: resources plus proper verbs and status codes. This is useful, although it does not satisfy all of Fielding's REST constraints.
 
+> [!analogy] Real-world analogy: Editing the same draft
+> **How it maps:** Two editors start from revision 4. Accepting an edit only if revision 4 is still current prevents the second editor silently replacing a newer revision. If-Match applies the same check to a representation tag.
+>
+> **Where it stops:** An ETag is an opaque validator, not necessarily a numbered revision. The check and update must be atomic, and retries still need an application decision.
+
 ## Key takeaways
 - Strict REST carries conversational context in requests; shared application state can still live in a database.
 - If-None-Match revalidates a cached representation without resending unchanged content.

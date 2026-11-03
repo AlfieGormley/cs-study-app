@@ -36,24 +36,24 @@
     "prompt": "A UK-based service has growing numbers of users in Australia, who complain about slowness. Each page makes 4 sequential API round trips to London (about 280 ms each). What's the main benefit of serving them from an Australian region? Treat 280 ms as the measured existing RTT and assume the proposed local path measures 20 ms and does not call London synchronously.",
     "options": [
       {
-        "text": "It removes most of the ~1.1 s of network latency per page, because round trips to a nearby region take a few tens of milliseconds instead of ~280 ms.",
-        "explanation": "Correct. Distance sets a hard floor on round-trip time. Four 280 ms round trips (about 1.1 s) become four round trips of about 20 ms (about 80 ms) when served locally."
+        "text": "It removes much of the waiting on the measured long remote paths, provided requests do not synchronously return to London.",
+        "explanation": "Correct. A nearby measured serving path shortens the sequential network waits; the whole dependency path must benefit."
       },
       {
         "text": "It makes the London servers' CPUs faster.",
-        "explanation": "Wrong. Server CPU speed isn't the issue. The delay is propagation time over about 17,000 km of fibre."
+        "explanation": "Moving the serving location changes the network path, not the speed of London’s processors."
       },
       {
         "text": "Nothing; the speed of light is fast enough that distance doesn't matter.",
-        "explanation": "Wrong. A hypothetical 17,000 km fibre route at 200 km/ms takes 85 ms one way before other delays. Actual routes differ; use the measured RTTs supplied in the question."
+        "explanation": "Distance creates a propagation floor and the prompt supplies measurements showing a large path difference."
       },
       {
         "text": "It guarantees strong consistency with London.",
-        "explanation": "Wrong. Adding a region makes consistency *harder*. Cross-region replication is either slow (sync) or lagging (async)."
+        "explanation": "Regional placement alone does not define replication or transaction consistency. Remote coordination and asynchronous visibility have separate trade-offs."
       }
     ],
     "answer": 0,
-    "workedExample": "1. Use the hypothetical measured path values in the question, not a generic geographic latency claim.\n2. Serial round trips add up:\n\n```formula\nT = n × RTT\nT_London = 4 × 280 ms = 1120 ms\nT_local = 4 × 20 ms = 80 ms\nΔT = (1120 − 80) ms = 1040 ms\nwhere\nT: network wait per page, in milliseconds (ms)\nn: sequential round trips per page, 4\nRTT: round-trip time for one request, in ms\nT_London: page wait when served from London\nT_local: page wait from an Australian region\nΔT: the saving; Δ (delta) means \"change in\"\nms: milliseconds\nIn words: four 280 ms trips cost about 1.1 s; four 20 ms trips cost 80 ms, saving about a second per page.\n```\n\n3. The modeled saving is 1,040 ms. Remote database calls could erase it.\n4. Also consider fewer serial requests and caching.",
+    "workedExample": "1. The question supplies measured remote and local path times.\n2. Serial network trips accumulate, so a nearby serving path can remove much of that waiting.\n3. A synchronous call back to London can reintroduce the long path.\n4. Measure the complete request and also consider reducing serial requests or caching.",
     "link": {
       "title": "Azure Architecture Center: Geode pattern",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/geodes"
@@ -63,27 +63,27 @@
     "id": "arch-multi-region-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A payments database in London synchronously replicates every commit to a replica in Virginia before acknowledging (RTT about 75 ms). A checkout flow performs 4 sequential commits. Compared with async replication, roughly how much latency does sync replication add to checkout, and what do you get for it? Treat the 75 ms RTT as a hypothetical measured input, assume a durable acknowledgment in Virginia, and ignore additional remote processing costs.",
+    "prompt": "A London database acknowledges commits only after a Virginia replica durably stores them. Virginia is the required remote copy. What happens to latency and availability under this design?",
     "options": [
       {
-        "text": "About 75 ms in total, because replication happens once per checkout.",
-        "explanation": "Wrong. Each commit waits for its own round trip, so the cost is per commit, not per flow."
+        "text": "Replication is background work, so commits never wait for the remote path.",
+        "explanation": "That describes asynchronous acknowledgement, not the stated synchronous requirement."
       },
       {
-        "text": "Nothing noticeable, because replication runs in the background.",
-        "explanation": "Wrong. That describes async replication. Sync means the commit isn't acknowledged until the remote replica confirms."
+        "text": "A successful local disk write is enough to acknowledge when Virginia is unreachable.",
+        "explanation": "Doing so changes the stated durability policy."
       },
       {
-        "text": "About 300 ms (4 × 75 ms), in exchange for a zero-data-loss objective if London is lost; and if Virginia is unreachable, commits stall unless you fall back to async.",
-        "explanation": "The simplified added wait is 4 × 75 = 300 ms. Surviving durable copies protect acknowledged commits under this one-region-loss model; failover must fence the old writer. Async fallback changes the loss guarantee."
+        "text": "Commits wait for remote acknowledgement; the surviving durable copy can protect acknowledged data after London is lost, but an unreachable Virginia can stop writes.",
+        "explanation": "Correct. Failover must select the durable copy and fence the old writer; asynchronous fallback changes the loss guarantee."
       },
       {
-        "text": "About 4 × 1–2 ms, the same as cross-AZ replication.",
-        "explanation": "This contradicts the supplied 75 ms RTT. There is no universal 1–2 ms cross-AZ latency applicable to this deployment."
+        "text": "Strong replication automatically makes every failover instantaneous and correct.",
+        "explanation": "Detection, fencing, routing, capacity and recovery validation remain necessary."
       }
     ],
     "answer": 2,
-    "workedExample": "1. Each synchronous commit waits for one round trip to Virginia, and the commits run one after another:\n\n```formula\nΔT = n × RTT\nΔT = 4 × 75 ms = 300 ms\nwhere\nΔT: extra latency added to checkout; Δ (delta) means \"change in\"\nn: sequential commits, 4\nRTT: London–Virginia round-trip time, 75 ms\nms: milliseconds\nIn words: four commits each waiting 75 ms for Virginia add about 0.3 s.\n```\n\n2. Gain: a recovery point objective (RPO) of zero for London's loss: every acknowledged commit is already durable in Virginia.\n3. Cost: if the link fails, you choose between stopping writes (consistency) or degrading to async (availability). This illustrates a partition-time consistency/availability trade-off; outside partitions, remote coordination also adds latency.\n4. Alternatives: fewer commits per flow, or sync to a nearby region (e.g. a measured lower-latency pair) and async further away.",
+    "workedExample": "1. Locate the acknowledgement boundary: Virginia must durably confirm.\n2. That adds remote coordination to each commit’s critical path.\n3. If London fails, the surviving acknowledged copy supports the defined zero-loss objective.\n4. If the required remote acknowledgement is unavailable, either stop writes or deliberately change the guarantee.",
     "link": {
       "title": "AWS: Disaster recovery options in the cloud",
       "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"

@@ -13,9 +13,6 @@ Regional replication and conflict rules do not contain every bad deploy or runaw
 
 Consider a hypothetical tenant whose contract explicitly requires EU-only storage and processing. The following is an architecture exercise for that stated requirement.
 
-> [!note] Content gap
-> Jurisdiction-specific legal requirements are not assessed here: no applicable contract, sector or legal analysis was supplied. This lesson does not assert that every EU customer has an EU-only obligation.
-
 - **Pin data to a region by tenant or user**: EU customers' records live and are processed in EU regions, and are not replicated to the US.
 - **Separate global from local data**: product catalogues and configuration can be global; personal data stays local. A global directory can map opaque tenant identifiers to home regions, but identifiers and routing metadata may themselves be personal data if they can be linked to a person; minimise and govern that data too.
 - **Watch the side channels**: backups, logs, analytics pipelines, search indexes, caches and support tools all copy data. Residency applies to every copy.
@@ -35,7 +32,7 @@ A **cell-based architecture** divides the system into many independent, identica
    customers mapped to one cell
 ```
 
-- **Blast radius**: a cell-local failure can be contained to that cell if shared dependencies remain healthy. With 20 equally populated cells, one cell holds 1/20 = 5% of customers.
+- **Blast radius**: a cell-local failure can be contained to that cell if shared dependencies remain healthy. With 20 equally populated cells, one cell holds 5% of customers.
 - **Staged deploys**: roll out to one cell, watch, then expand in waves.
 - **Known scaling limits**: each cell has a fixed maximum size that has been load tested. Growth means adding cells, not scaling one system into unknown territory.
 - **Routing layer**: a thin, extremely simple router (often a lookup of customer → cell) is a shared dependency to keep minimal and robust; audit other shared services and control-plane dependencies too.
@@ -56,7 +53,7 @@ A realistic design for a global SaaS:
 
 ### Why shuffled assignments reduce full overlap
 
-With fixed groups of four workers, a customer's traffic that breaks all four removes every worker for its whole group. Shuffle sharding instead assigns customers different four-worker combinations drawn from the larger fleet. Another customer loses every assigned worker only when its combination fully overlaps the failed one; partial overlaps can leave a healthy retry route. The combination calculation in the question assumes independent uniform assignments. It does not guarantee that every partially overlapping customer has spare capacity or that shared dependencies survive.
+With fixed groups of four workers, a customer's traffic that breaks all four removes every worker for its whole group. Shuffle sharding instead assigns customers different four-worker combinations drawn from the larger fleet. Another customer loses every assigned worker only when its combination fully overlaps the failed one; partial overlaps can leave a healthy retry route. This comparison assumes independent uniform assignments. It does not guarantee that every partially overlapping customer has spare capacity or that shared dependencies survive.
 
 ## Key takeaways
 - A stated residency boundary covers backups, logs, analytics, search, caches and support paths as well as the primary.

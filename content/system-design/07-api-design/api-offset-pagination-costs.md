@@ -32,9 +32,8 @@ It's simple and lets users jump to "page 37". But it has two serious problems.
 
 **1. It gets slower the deeper you go.** The database can't jump to row 40,000. It has to walk the index and discard the first 40,000 rows, then return 20:
 
-```formula
+```formula reference
 E_off ≈ offset + limit
-E_off ≈ 40,000 + 20 = 40,020 entries
 cost = O(offset + limit)
 where
 E_off: the number of index entries the database walks to serve one offset page
@@ -44,7 +43,7 @@ entries: index entries, one per row in the index
 cost: the work the database does for one page
 O(...): Big O notation: how the cost grows as the quantities inside the brackets grow, ignoring constant factors
 ≈: approximately equal to
-In words: every row before the page still has to be stepped over, so page 2,001 costs about 2,000 times as much as page 1.
+In words: in this indexed scan, a deep offset still walks past the preceding entries before returning the requested page.
 ```
 
 This assumes the database walks an index in sort order. Without a suitable index it is worse: it may sort the whole table first.

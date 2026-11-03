@@ -1,9 +1,9 @@
 ---
 id: arch-queue-burst-drain-budgets
-title: Sizing burst queues and drain time
+title: Understanding burst queues and recovery
 level: intermediate
 minutes: 3
-summary: Calculate queue growth and recovery time while distinguishing temporary bursts from sustained overload.
+summary: Explain when a queue can absorb a burst and why sustained overload needs capacity or admission changes.
 sourceLesson: arch-scaling-writes
 ---
 
@@ -24,42 +24,22 @@ Traffic is spiky, and databases have a fixed write capacity. A **queue between p
 - The API accepts the request, enqueues it durably, and returns `202 Accepted`.
 - Workers pull at a rate the database can sustain.
 
-For example, start with an empty queue and take a 2-minute burst at 20,000 messages a second while workers drain 5,000 a second. During a burst, the queue grows by the difference between what arrives and what workers remove:
+A short burst can create a large backlog even if workers continue at their normal sustainable rate.
 
-```formula
-B = (A − D) × T
-B = (20000 − 5000) /s × 120 s
-B = 1800000
-where
-B: the peak backlog at the end of the burst, in messages
-A: the arrival rate during the burst, here 20,000 messages per second (/s)
-D: the drain rate: how many messages per second the workers finish, here 5,000/s
-T: how long the burst lasts, in seconds (s): 2 minutes = 120 s
-s: seconds
-/s: per second
-In words: 15,000 extra messages a second for 120 seconds piles up 1.8 million messages.
-```
+While arrivals exceed completed work, the backlog grows. Once arrivals slow, only spare worker capacity clears old work; if ongoing arrivals use all capacity, the backlog does not drain.
 
-If traffic then drops to zero, the time to clear it is the backlog divided by the drain rate:
-
-```formula
-T_drain = B / (D − A_remaining)
-T_drain = B / D when A_remaining = 0 /s
-T_drain = 1800000 / (5000 /s)
-T_drain = 360 s
-where
-T_drain: time to empty the queue, in seconds (s): 360 s = 6 minutes
-B: the backlog, 1.8 million messages
-D: the drain rate, 5,000 messages per second (/s)
-A_remaining: ongoing arrival rate while clearing the queue, in messages per second; zero in this example. The first equation needs D greater than A_remaining, with constant rates and sufficient worker capacity.
-s: seconds
-/s: per second
-In words: 1.8 million messages at 5,000 a second take 6 minutes to clear.
-```
+If arrivals stop completely, all worker capacity can clear old work. Continued arrivals leave less capacity for recovery.
 
 When arrivals continue, the smaller spare rate makes recovery slower. If ongoing arrivals stay at or above the completion rate, the backlog cannot clear under this constant-rate model.
 
 It works when the client doesn't need the result immediately (an order confirmation can arrive by email). It doesn't fix a *sustained* overload: if input exceeds drain rate forever, the queue grows without bound. You need monitoring on queue age and a way to shed load.
+
+> [!analogy] Real-world analogy: A parcel depot
+> Parcels wait at a depot when they arrive faster than vans can leave. The pile shrinks later only if the vans have spare carrying capacity.
+>
+> **How it maps:** The depot is the queue, arrivals are admitted work and departures are completed work. Storage buys time for a temporary burst.
+>
+> **Where it stops:** The comparison does not guarantee retention, delivery or a completion deadline. A finite depot cannot absorb permanent overload.
 
 ## Key takeaways
 - A durable queue permits asynchronous acceptance and a controlled worker drain rate.

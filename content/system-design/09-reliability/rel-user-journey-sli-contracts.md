@@ -32,17 +32,7 @@ The fundamentals module covered what the nines mean in downtime per year. Here w
 
 The SRE workbook recommends expressing every SLI as:
 
-```formula
-SLI = G / V × 100%
-SLI = 999,000 / 1,000,000 × 100%
-SLI = 99.9%
-where
-SLI: the service level indicator, as a percentage from 0 to 100%
-G: good events, e.g. requests that succeeded within the latency threshold, here 999,000
-V: valid events, all events that count (excluding things like health checks), here 1,000,000
-%: per cent
-In words: the SLI is the share of valid events that were good. 999,000 good requests out of a million valid ones is an SLI of 99.9%.
-```
+A ratio SLI is the share of valid events that meet the definition of good. Specify both sets explicitly: omitting failed requests from the denominator can make a broken service look healthy.
 
 This gives a number between 0 and 100% that's easy to reason about and aggregate.
 

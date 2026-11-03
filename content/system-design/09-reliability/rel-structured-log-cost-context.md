@@ -49,27 +49,11 @@ Good logging practice:
 - Include a **trace ID** and request ID on every line, so logs can be joined to traces.
 - Log at boundaries (request in, response out, external call) and on errors, not in tight loops.
 - Never log secrets, tokens, passwords or full card numbers; redact PII.
-- Sample high-volume debug logs; prioritize errors, but rate-limit or deduplicate error storms while preserving counters and useful examples.
+- Sample high-volume debug logs; prioritize errors, but rate limit or deduplicate error storms while preserving counters and useful examples.
 
 Log cost depends on event size, indexing, volume and retention. Estimate raw volume from request rate, log bytes per request and elapsed time:
 
-```formula
-V = rbt
-V = 50,000 /s × 1 KB × 86,400 s
-V = 4,320,000,000 KB ≈ 4.3 TB
-V_30 = 4.32 TB × 30 ≈ 130 TB
-where
-V: the log volume produced in one day
-V_30: the volume kept over a 30-day retention period
-r: the request rate, here 50,000 requests per second (/s)
-b: the log bytes written per request, here 1 kilobyte (KB)
-t: the time period, here one day = 86,400 seconds (s)
-KB: kilobytes; 1 TB = 1,000,000,000 KB (decimal units)
-TB: terabytes
-s: seconds
-≈: approximately equal to (rounded)
-In words: 50,000 requests a second at 1 KB each is about 4.3 terabytes of logs a day, roughly 130 TB if you keep 30 days.
-```
+More requests, larger records and longer retention each increase raw log volume. Sampling routine events and summarising loops can reduce it substantially; retain useful error evidence and counters when applying those controls.
 
 Indexing, replication and compression can make the stored size larger or smaller than this raw figure.
 

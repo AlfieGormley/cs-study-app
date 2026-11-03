@@ -84,6 +84,11 @@ Content-Type: application/json
 > [!warning] Don't change state on GET
 > A `GET /users/7/delete` link will eventually be followed by a crawler, a link-preview bot or a browser prefetch. Teams have lost data this way. Safe means safe.
 
+> [!analogy] Real-world analogy: Setting a thermostat
+> **How it maps:** Setting the target to 20 degrees repeatedly leaves the same target. Asking it to raise the target by one degree repeatedly keeps changing it. This mirrors absolute assignment versus an increment.
+>
+> **Where it stops:** Idempotency concerns the intended operation, not identical responses, logs or every physical side effect.
+
 ## Key takeaways
 - Use resource identities and standard methods to make intent visible.
 - Safe methods request no state change; incidental logging is allowed. Idempotent methods preserve the intended effect on repetition.

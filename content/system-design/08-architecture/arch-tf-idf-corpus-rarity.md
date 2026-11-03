@@ -3,14 +3,13 @@ id: arch-tf-idf-corpus-rarity
 title: Ranking terms by corpus rarity
 level: intermediate
 minutes: 3
-summary: Calculate TF-IDF weights and compare rare and common terms using a fully defined teaching model.
+summary: Explain why frequent terms in one document and rare terms across the corpus influence relevance differently.
 sourceLesson: arch-search-systems
 ---
 
 The previous unit found matching documents. Ranking now asks which matches deserve priority; first isolate the effect of a term's rarity before adding length and repetition controls.
 
-## TF-IDF intuition and calculation
-
+## TF-IDF intuition
 
 Matching tells you *which* documents qualify. Ranking tells you which are *best*. The classic intuition:
 
@@ -19,7 +18,7 @@ Matching tells you *which* documents qualify. Ranking tells you which are *best*
 
 TF-IDF multiplies those two ideas together, giving one score for how well a term marks out a document:
 
-```formula
+```formula reference
 w(t, d) = tf(t, d) × idf(t)
 idf(t) = log_10(N / df(t))
 where
@@ -34,22 +33,7 @@ log_10: logarithm to base 10: the power you raise 10 to to get the number, so lo
 In words: a term scores highly in a document when it appears there often (tf) but appears in few documents overall (idf).
 ```
 
-The logarithm squashes the range: a term in 1 document out of a million gets an IDF of 6, not a million. Different engines use slightly different variants (natural log, adding 1 to avoid dividing by zero), but the shape is the same. For a collection of a million documents:
-
-```formula
-idf("wireless") = log_10(1000000 / 50000)
-idf("wireless") = log_10(20) ≈ 1.30
-idf("anc") = log_10(1000000 / 1000)
-idf("anc") = log_10(1000) = 3.00
-where
-idf: inverse document frequency of the quoted term
-log_10: logarithm to base 10 (log_10(1000) = 3, because 10^3 = 1000)
-^: "to the power of"
-≈: approximately equal to (rounded)
-In words: "wireless" is in 50,000 of a million documents and scores 1.30; "anc" (active noise cancelling) is in only 1,000 and scores 3.00.
-```
-
-So a match on the rarer term counts more than twice as much (3.00 / 1.30 ≈ 2.3 times).
+The optional formula uses a logarithm so rarity differences grow more gently than raw rarity ratios. It applies to terms present in the corpus; scoring variants and smoothing differ by engine. With equal within-document frequency, a term found in fewer documents gets more weight.
 
 ## Key takeaways
 - Term frequency rewards occurrences inside a document; inverse document frequency rewards rarity across the corpus.
@@ -57,4 +41,4 @@ So a match on the rarer term counts more than twice as much (3.00 / 1.30 ≈ 2.3
 - Equal term frequencies still produce different weights when document frequencies differ.
 
 ## Further reading
-- [Wikipedia: tf–idf](https://en.wikipedia.org/wiki/Tf%E2%80%93idf)
+- [Stanford CS124: Information retrieval and TF-IDF](https://web.stanford.edu/class/cs124/lec/ir_jan17_2026.pdf)

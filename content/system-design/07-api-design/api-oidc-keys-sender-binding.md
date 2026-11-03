@@ -22,7 +22,7 @@ The distinction matters:
 | ID token | The client app | Who logged in |
 | Access token | The API | What it may access |
 
-Never send an ID token to an API as a bearer credential. "Sign in with Google/Apple/Microsoft" is OIDC.
+For an OAuth resource API, send the access credential that API requires; an ID token issued to the client app is not a substitute. Follow any other service's explicitly documented token purpose and audience contract. "Sign in with Google/Apple/Microsoft" uses OIDC.
 
 ## API keys
 

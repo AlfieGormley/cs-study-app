@@ -23,19 +23,7 @@ Autoscaling isn't instant. VM provisioning, image pulls and application warm-up 
 > [!warning] Scaling the web tier can break the database
 > Going from 10 to 100 app servers, each with a pool of 20 database connections, takes you from 200 to 2,000 connections. Whether that exceeds limits or sustainable load depends on database configuration, memory and active query demand. Use a connection pooler (PgBouncer, RDS Proxy) and remember the bottleneck usually moves down a tier.
 
-Every app server keeps its own pool of open database connections, so the total the database sees grows with the server count:
-
-```formula
-C = N × P
-C = 100 × 20 = 2000
-where
-C: the total number of connections opened against the database
-N: the number of app server instances, here 100 (up from 10)
-P: the size of each server's connection pool, here 20
-In words: ten times the servers means ten times the database connections: 10 × 20 = 200 becomes 100 × 20 = 2,000.
-```
-
-This is the upper bound when every pool is full. Putting a pooler such as PgBouncer between the app servers and the database lets many client connections share far fewer real database connections.
+More app instances can exhaust the shared database connection budget even when each instance has a small pool. The example assumes every pool is full. A pooler such as PgBouncer can let many client connections share fewer database connections, subject to the pooling mode and transaction workload.
 
 ## Containers
 

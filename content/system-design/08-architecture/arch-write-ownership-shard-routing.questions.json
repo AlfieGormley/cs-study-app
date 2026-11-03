@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Suppose the primary handles 10,000 writes/s.\n2. Each of 5 replicas also applies those 10,000 writes/s.\n3. Add up the work across the cluster:\n\n```formula\nW_total = W × (1 + r)\nW_total = 10000 /s × (1 + 5)\nW_total = 60000 /s\nwhere\nW_total: write applications per second across all nodes\nW: writes per second from the application, 10,000\nr: the number of full replicas, 5\n/s: per second\nIn words: 6 nodes each apply all 10,000 writes a second: 60,000 applies a second of work for 10,000 useful writes.\n```\n\nThe *useful* write throughput is still 10,000/s.\n4. Contrast with 4 shards: each takes 2,500 of 10,000 writes/s, so they could support more writes if each has spare capacity and no shared bottleneck dominates.\n5. Copying helps reads; splitting helps writes.",
+    "workedExample": "1. Every full replica repeats the logical writes; it does not own a disjoint share.\n2. Read replicas can offload reads, but the primary still processes the write stream.\n3. Partitioned write ownership can spread distinct keys across writers, subject to skew and cross-shard coordination.",
     "link": {
       "title": "Azure Architecture Center: Sharding pattern",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sharding"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Criteria: (a) even spread of writes, (b) the hot query hits one shard.\n2. `message_id`: (a) yes, (b) no.\n3. `sent_date`: (a) no, today is hot; (b) no.\n4. `sender_country`: (a) no, (b) no.\n5. `conversation_id`: (a) yes, many conversations; (b) yes.\n6. Caveat: a giant group chat could become hot. Discord, for example, buckets messages by channel *and* time window to bound partition size.",
+    "workedExample": "1. Compare routing for the common query and the expected distribution of request rates.\n2. A random message ID distributes records but makes conversation reads fan out.\n3. A date key concentrates current writes; country has few, unevenly popular values.\n4. Conversation ID keeps a conversation's messages together and offers many values across which to distribute load.\n5. Many values do not guarantee balanced traffic: a giant group chat can remain hot. Discord buckets messages by channel and time window to bound partition size; time buckets alone do not spread a single current hot chat's writes.",
     "link": {
       "title": "Discord: How Discord stores trillions of messages",
       "url": "https://discord.com/blog/how-discord-stores-trillions-of-messages"
@@ -63,27 +63,27 @@
     "id": "arch-scaling-writes-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Users are sharded with `hash(user_id) % 4`. You add a fifth shard and switch to `% 5`. Roughly what fraction of users now map to a different shard? Assume hash values are approximately uniform.",
+    "prompt": "A service routes keys by taking a hash modulo the physical shard count. An engineer adds one shard and changes the divisor immediately. What is the main risk?",
     "options": [
       {
-        "text": "About 20%, the share the new shard should take.",
-        "explanation": "Wrong. That's the ideal amount to move, but modulo hashing doesn't achieve it: changing N reshuffles almost every key."
+        "text": "Only newly created keys ever use the changed divisor.",
+        "explanation": "The routing calculation also changes for existing keys."
       },
       {
-        "text": "None; existing keys stay where they are.",
-        "explanation": "Wrong. The shard is recomputed from the new modulus, so most keys get a new answer."
+        "text": "Changing the divisor automatically copies records to their new owners.",
+        "explanation": "Routing computes a destination; migration must move data and coordinate ownership."
       },
       {
-        "text": "About 80%: a key stays put only if `h % 4 == h % 5`, which holds for 4 of every 20 hash values.",
-        "explanation": "Correct. Only about 1 in 5 keys keeps its shard, so roughly 80% of the data must move. Logical shards or consistent hashing avoid this."
+        "text": "Consistent hashing eliminates every migration and failure concern.",
+        "explanation": "It can reduce movement, but affected data still needs safe transfer and routing updates."
       },
       {
-        "text": "Exactly 50%.",
-        "explanation": "Wrong. There's no reason for half; work it out over one full cycle of 20 hash values."
+        "text": "Many existing keys now route to a different shard before their data has moved; use a coordinated migration or stable logical-shard mapping.",
+        "explanation": "Correct. A new routing result is not evidence that the destination contains the record."
       }
     ],
-    "answer": 2,
-    "workedExample": "1. The shard is the remainder after dividing the hash by the shard count. Both patterns repeat together every 20 hash values:\n\n```formula\nL = lcm(4, 5) = 20\nwhere\nL: the length of the repeating cycle\nlcm: least common multiple: the smallest number both 4 and 5 divide into exactly\nIn words: after every 20 hash values, both remainders start again from 0.\n```\n\n2. Count hash values from 0 through 19 whose remainders agree: only 0, 1, 2 and 3 do, so 4 values.\n3. Turn that into fractions:\n\n```formula\nF_same = 4 / 20 = 0.2 = 20 %\nF_moved = 1 − F_same = 80 %\nwhere\nF_same: the fraction of keys whose shard is unchanged\nF_moved: the fraction that move to a new shard\n%: per cent; 0.2 = 20 %\nIn words: only 1 key in 5 stays; 4 in 5 move.\n```\n4. Fix: thousands of logical shards, mapped to physical servers in a lookup table. Adding a server moves whole logical shards, about 1/5 of them.\n\n```python\n# Count hashes keeping their shard.\nsum(h % 4 == h % 5\n    for h in range(20))  # 4\n# 4 stay; the other 16 move.\n```",
+    "answer": 3,
+    "workedExample": "1. Recompute routing for an existing key under the new shard count.\n2. Its chosen owner may change while its bytes remain on the old owner.\n3. Stable logical shards separate key placement from physical-server placement.\n4. Move data with a plan for writes, reads and ownership cutover.",
     "link": {
       "title": "Azure Architecture Center: Sharding pattern",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sharding"

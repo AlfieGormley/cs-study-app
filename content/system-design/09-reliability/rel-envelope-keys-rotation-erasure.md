@@ -39,15 +39,22 @@ Benefits:
 - The master key never leaves the HSM.
 - Each KMS unwrap call is subject to access controls and audit logging. A cached plaintext DEK can decrypt many records locally without another KMS call, so KMS logs alone do not audit every data read.
 - **Key rotation** need not rewrite bulk data. AWS KMS automatic rotation retains old key material for decrypting existing DEKs; moving to a different KEK may instead require re-wrapping DEKs.
-- **Crypto-shredding**: destroy the relevant key material and every remaining plaintext or alternate-wrapped DEK, and ciphertext with no other recovery path becomes unreadable, which is useful for erasure requests and per-tenant keys.
+- **Crypto-shredding**: destroy the relevant key material and every remaining plaintext or alternate-wrapped DEK, and ciphertext with no other restoration route becomes unreadable, which is useful for erasure requests and per-tenant keys.
 
 AWS services including S3, EBS, RDS and DynamoDB offer KMS integrations; exact key handling and defaults depend on the service and selected encryption mode.
+
+> [!analogy] Real-world analogy: a locked box with a separately protected key
+> A large box holds the contents while a separate protected store controls access to its small key.
+>
+> **How it maps:** The data key encrypts the bulk contents; the wrapping key protects the stored data-key copy.
+>
+> **Where it stops:** Cryptographic formats need nonce and integrity protections. Cached or copied plaintext keys can bypass the key service, and rotating a wrapping key is not erasing old data.
 
 ## Key takeaways
 
 - Encrypt bulk data with a local data key, protect its wrapped copy and retain nonce/tag information.
 - Select the KMS protection level; cached plaintext keys bypass per-read KMS audit.
-- KMS automatic rotation retains decryptable old material. Erasure requires destroying every remaining recovery path and obeying provider deletion timing.
+- KMS automatic rotation retains decryptable old material. Erasure requires destroying every remaining restoration route and obeying provider deletion timing.
 
 ## Further reading
 

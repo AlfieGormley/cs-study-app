@@ -1,6 +1,6 @@
 # Concept-first library review
 
-Status: **in progress**. 55/60 modules and 1643/1845 active lessons have current independent editorial reviews.
+Status: **in progress**. 58/60 modules and 1760/1845 active lessons have current independent editorial reviews.
 
 This report counts only active lesson IDs from module.json. Retired subjects (os, architecture, theory, languages; see `content/retired-subjects.json`) are excluded. Pending modules have not been certified by keyword scans or by renderer tests.
 
@@ -69,9 +69,9 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | [system-design / Databases & Storage](../content/system-design/04-databases/verification.json) | Reviewed | 37 | 98 | 21 → 6 | 2 / 4 | 34 → 0 | 311 | 202 | 7 |
 | [system-design / Distributed Systems & Consensus](../content/system-design/05-distributed-systems/verification.json) | Reviewed | 40 | 96 | 33 → 29 | 9 / 20 | 33 → 3 | 302 | 651 | 82 |
 | [system-design / Messaging & Streaming](../content/system-design/06-messaging/verification.json) | Reviewed | 34 | 96 | 22 → 11 | 2 / 9 | 33 → 0 | 291 | 130 | 28 |
-| system-design / API Design | Pending review | 38 | — | — | — | — | — | — | — |
-| system-design / Architecture & Scaling Patterns | Pending review | 41 | — | — | — | — | — | — | — |
-| system-design / Reliability, Operations & Security | Pending review | 38 | — | — | — | — | — | — | — |
+| [system-design / API Design](../content/system-design/07-api-design/verification.json) | Reviewed | 38 | 96 | 29 → 11 | 0 / 11 | 40 → 0 | 383 | 528 | 32 |
+| [system-design / Architecture & Scaling Patterns](../content/system-design/08-architecture/verification.json) | Reviewed | 41 | 108 | 30 → 7 | 0 / 7 | 54 → 0 | 262 | 495 | 26 |
+| [system-design / Reliability, Operations & Security](../content/system-design/09-reliability/verification.json) | Reviewed | 38 | 97 | 44 → 10 | 2 / 8 | 61 → 0 | 207 | 342 | 15 |
 | system-design / Case Studies I | Pending review | 43 | — | — | — | — | — | — | — |
 | system-design / Case Studies II | Pending review | 42 | — | — | — | — | — | — | — |
 
@@ -2995,7 +2995,7 @@ None recorded in this editorial review.
 
 ## system-design / Messaging & Streaming
 
-36 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+38 question objects changed. Every changed question has a specific independent-review reason in the linked record.
 
 **Corrections in this review:**
 
@@ -3097,4 +3097,246 @@ None recorded in this editorial review.
 - medium confidence, msg-kafka-transaction-effect-scope: Java Kafka transaction/fencing behavior Primary APIs/source reviewed; incomplete success path explicitly labelled; no live Kafka runtime or fault experiment.
 - medium confidence, msg-stream-watermarks-late-results: Flink Java source-watermark/idleness behavior Primary strategy/API and generator reviewed; no Flink job execution.
 - medium confidence, msg-stream-joins-keyed-fraud: Flink temporal join SQL and illustrative state sizing Versioned table/time attribute/watermark prerequisites checked; no Flink execution or measured event-list/checkpoint capacity.
+
+
+## system-design / API Design
+
+47 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- {"kind":"question","question":"api-idempotency-q1","change":"Require an original supported idempotency key within scope/retention, or authoritative reconciliation; a newly added key cannot deduplicate an earlier unkeyed attempt."}
+- {"kind":"question","question":"api-idempotency-q8","change":"Remove the stale claim that the Idempotency-Key draft is expired after checking active revision 08."}
+- {"kind":"question","question":"api-rate-limiting-q10","change":"Remove a dangling reference to an equation that the conceptual prompt no longer contains."}
+- {"kind":"question","question":"api-auth-q3","change":"Avoid unsupported code representation/lifetime claims and distinguish front-channel exposure from browser-process ownership of a verifier."}
+- {"kind":"question","question":"api-auth-q2","change":"Date the OWASP ranking to its 2023 edition without inferring a prevalence statistic."}
+- {"kind":"question","question":"api-rest-graphql-grpc-q2","change":"Qualify GraphQL schema so the dictionary opens its intended concept rather than database schema."}
+- {"kind":"question","question":"api-rest-graphql-grpc-q10","change":"Qualify protobuf schema in the varint scenario to avoid a database-schema dictionary link."}
+- {"kind":"question","question":"api-rest-graphql-grpc-q3","change":"Qualify the old protobuf schema in the wire-mismatch walkthrough."}
+- {"kind":"question","question":"api-auth-q6","change":"Use the precise credential revocation term rather than the earlier certificate-revocation alias."}
+- {"kind":"question","question":"api-real-time-q5","change":"Describe ending a channel subscription without linking to marketing consent."}
+- {"kind":"question","question":"api-webhooks-gateways-q4","change":"Describe disabling event delivery without linking to marketing unsubscribe consent."}
+- {"kind":"question","question":"api-rest-graphql-grpc-q11","change":"Scope supported streaming modes to the checked grpc-web implementation and its grpcwebtext mode."}
+- {"kind":"glossary","term":"internet-draft","change":"Replace expired Idempotency-Key example with checked active revision 08 and preserve draft/RFC distinction."}
+- {"kind":"glossary","term":"http-head","change":"Permit HEAD omissions for header fields computed only during content generation, as RFC 9110 allows."}
+- {"kind":"glossary","term":"cors","change":"Distinguish response-read permission from sending simple cross-origin requests; CORS does not replace CSRF controls."}
+- {"kind":"glossary","term":"n-plus-one-problem","change":"Remove universal promise that all N+1 access becomes exactly two queries."}
+- {"kind":"glossary","term":"dataloader","change":"Explain instance-scoped memoisation, request scoping and application-supplied batching rather than automatic request lifetime or a guaranteed single query."}
+- {"kind":"glossary","term":"query-cost-analysis","change":"Separate GitHub primary connection-request points from its potential-node limit."}
+- {"kind":"glossary","term":"jws","change":"Distinguish compact JWS/JWT usage from JSON serialisation and non-JWT signed content."}
+- {"kind":"glossary","term":"resource-owner","change":"Use the RFC entity definition, allowing a non-person resource owner."}
+- {"kind":"glossary","term":"oauth-client","change":"Include client-credentials access under the client own authority."}
+- {"kind":"glossary","term":"token-endpoint","change":"Distinguish token requests from redirects without excluding public browser clients."}
+- {"kind":"glossary","term":"entropy","change":"Replace impossible-to-guess with computationally infeasible given adequate entropy and attacker resources."}
+- {"kind":"glossary","term":"full-duplex","change":"Remove half-duplex as an alias for the opposite communication mode."}
+- {"kind":"lesson","lesson":"api-session-token-revocation","change":"Remove unsupported breach-share attribution; date OWASP API1 ranking to 2023."}
+- {"kind":"lesson","lesson":"api-oidc-keys-sender-binding","change":"Scope the ID-token prohibition to the OAuth resource API access-token contract, preserving purpose/audience validation."}
+- {"kind":"lesson","lesson":"api-short-long-polling","change":"Give request-rate symbol explicit requests-per-second units."}
+- {"kind":"lesson","lesson":"api-persistent-gateway-fanout","change":"Correct a stale note claiming that its now-conceptual quiz supplies numeric sizing inputs."}
+- {"kind":"dictionary-routing","lesson":"api-jwt-validation-pitfalls","change":"Use credential revocation instead of the earlier certificate-specific bare alias."}
+- {"kind":"editorial","lesson":"api-protobuf-wire-size","change":"Remove a dangling lead-in left behind by removing routine substitution."}
+- {"kind":"editorial","lesson":"api-keyset-cursor-contracts","change":"Describe offset/keyset work in plain words in the visible comparison; hidden formula definitions are no longer needed to read it."}
+- {"kind":"dictionary-routing","term":"n-plus-one-problem","change":"Remove three colliding aliases from the reachable N+1 problem entry. Bare N+1 is earlier redundancy, while N+1 query problem/queries correctly belong to the earlier query entry. Keep the corrected reachable definition and stable ID."}
+- {"kind":"shadowed-history","term":"full-jitter","change":"Restore fully shadowed duplicate to baseline; compiled full jitter and retry jitter reach earlier retry-jitter. Keep inherited history rather than claiming a live definition fix in a discarded duplicate."}
+- {"kind":"shadowed-history","term":"short-polling","change":"Restore fully shadowed duplicate to baseline; compiled Short polling and its normalised forms reach earlier msg-short-polling. Its visible definition correctly distinguishes immediate responses and SQS-specific sampling."}
+
+**Scope gaps and exclusions:**
+
+- No substantive source section, question, native executable statement, worked formula or diagram was removed to shorten the module; unsupported overstatements were corrected or qualified. Original archival bytes remain intact.
+- No live OAuth provider, Stripe payment/webhook, browser reconnect fleet, gRPC deployment or PostgreSQL concurrency/load test was performed. SQL statement behavior was checked in controlled SQLite fixtures, not certified as a PostgreSQL production workflow.
+- No reproducible pagination/JSON-protobuf/Redis footprint/Redis latency/connection capacity benchmark is supplied. Explicit hypotheses explain scaling and arithmetic without universal performance claims.
+- Whole-app build, browser render, migration/completion integration and shared tests belong to the coordinating agent; this verifier edits and checks this module only.
+- 371 unchanged glossary entries retain inherited confidence records without unearned upgrades. All definitions/aliases were read semantically and source URLs independently fetched; primary checks focus on standards, product contracts, new and corrected definitions. This is not a fresh sentence-by-sentence primary-source proof of every unchanged dictionary sentence.
+- Archived source has inherited formula/glossary finder hits and ambiguous historical wording. Archives are byte-preserved provenance, inactive in the curriculum. Every remaining active formula-finder hit is a genuine Rule 6 exception or a true false positive; the prior active pseudocode-lint debts were resolved with executed examples.
+- No new representative performance or capacity benchmark; generic speedups, Redis latency, connection-memory and paging-latency claims remain omitted or hypothetical.
+- Root integration owns mobile/render/offline checks. This pass validates content and runnable fixtures, not a deployed payment, OAuth, browser transport or webhook service.
+- Proto declarations were parsed into official protobuf runtime descriptors and exercised, not compiled with protoc. SQL pseudocode requires explicitly supplied parameters, predicates and branching; executed fixtures do not establish a complete production handler.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, api-resource-method-contracts: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-response-status-contracts: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-status-error-distinctions: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-stateless-conditional-requests: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-styles-fetching-tradeoffs: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-graphql-resolvers-costs: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-protobuf-wire-size: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-protobuf-schema-evolution: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-grpc-streaming-selection: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-offset-pagination-costs: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-keyset-cursor-contracts: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-query-validation-errors: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-versioning-compatibility: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-unknown-outcomes-idempotence: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-idempotency-key-contracts: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-idempotency-atomic-recovery: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-backoff-jitter-budgets: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-quota-response-policy: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-token-bucket-refill: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-leaky-fixed-window: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-sliding-window-accuracy: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-shared-limiter-atomicity: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-limiter-failure-placement: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-session-token-revocation: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-jwt-validation-pitfalls: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-oauth-code-pkce: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-oauth-grants-refresh-policy: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-oidc-keys-sender-binding: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-object-access-models: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-short-long-polling: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-sse-reconnect-resume: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-websocket-duplex-contract: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-persistent-gateway-fanout: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-heartbeats-draining-reconnects: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-webhook-signatures-replay: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-webhook-durable-delivery: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-webhook-ordering-state: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, api-gateway-bff-boundaries: Inherited module confidence and implementation-specific application Original source lesson was medium. This independent split review verifies core semantics and local examples, but does not upgrade inherited production/vendor integration or performance confidence. Standards and documented hypotheses are distinguished from deployments.
+- medium confidence, glossary: retrofit: glossary term access-token "Typically minutes" is common guidance, not a spec value.
+- medium confidence, glossary: retrofit: glossary term btree-fan-out Real fan-out depends on page and key size; "often a few hundred" is a hedged typical value.
+- medium confidence, glossary: retrofit: glossary term 4g Real 4G round-trip times vary widely by network and conditions.
+- medium confidence, glossary: retrofit: glossary term websocket-ping-pong Ping cadence ("every few tens of seconds") is common practice, not specified by RFC 6455.
+- medium confidence, glossary: retrofit: glossary term long-polling Typical 20-60 s timeouts are practice, not standardised.
+- medium confidence, glossary: retrofit: glossary term upstream-downstream Usage of upstream/downstream varies between communities (call direction vs data flow).
+- medium confidence, glossary: retrofit: glossary term sla Casual use of SLA to mean a latency target is informal.
+- medium confidence, glossary: retrofit: glossary term connect-rpc Compatibility summary taken from vendor docs; not tested.
+- medium confidence, api-quota-response-policy: RateLimit-Policy/RateLimit draft syntax and effective-window meaning Fetched draft 11 is an Internet-Draft expiring 24 November 2026; implementations and future drafts can differ.
+- medium confidence, api-idempotency-key-contracts: Provider replay behavior and expired draft conventions Current Stripe v1/v2 distinction is documented; no live Stripe integration. Idempotency-Key draft 07 expired without becoming an RFC.
+- medium confidence, api-oauth-grants-refresh-policy: OAuth 2.1 PKCE exception and grant changes Checked current draft; it can change and is not an RFC.
+- medium confidence, api-keyset-cursor-contracts: Illustrative B-tree fan-out and seek page estimate Assumed fan-out 300 is not a database benchmark; actual height, fill, plans and cost vary.
+- medium confidence, api-persistent-gateway-fanout: Hypothetical per-connection memory and fleet capacity Question supplies 40 KB and decimal units as inputs; real connection capacity, CPU and reconnect load were not measured.
+- medium confidence, glossary: ratelimit-headers effective-window draft semantics Primary draft definition checked, but draft and provider-specific reset semantics are time-sensitive.
+- medium confidence, glossary: api-version-change-module historical vendor architecture Verified against Stripe's 2017 publication, not a current production source-code audit.
+- medium confidence, api-webhook-signatures-replay: New HMAC parsing helper demonstrates signature bytes only Matching/tampered bytes execute as taught; the fixture also accepts a correctly signed old timestamp. Provider SDK header decoding, secret selection, freshness, replay detection and business deduplication remain required and are not implemented or production-certified.
+- medium confidence, undefined: Existing contextual estimates and implementation-specific reference definitions Retain prior medium scores for SLA, 4G, Connect, B-tree fan-out, RateLimit headers, access-token lifetimes, long polling, upstream/downstream terminology, heartbeat cadence and version-change modules. This editorial pass does not claim fresh measurements or universal values.
+- medium confidence, undefined: Idempotency-Key revision 08, OAuth 2.1 revision 17 and grpc-web streaming support Verified against checked 3 November 2026 primary snapshots; drafts and implementation capabilities can change. They remain explicitly scoped rather than presented as permanent standards.
+
+
+## system-design / Architecture & Scaling Patterns
+
+55 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- {"scope":"arch-monolith-vs-microservices-q1","detail":"Qualify Shopify as a gradual modularity migration; a monolith can enforce boundaries without implying every Shopify boundary is enforced."}
+- {"scope":"arch-monolith-vs-microservices-q8","detail":"Distinguish explicit modular boundaries from the incomplete static-constant checks provided by Packwerk; remove blanket extraction and tooling guarantees."}
+- {"scope":"arch-scaling-reads-q2","detail":"Mark 95% reads as hypothetical and require lag-tolerant routing instead of assuming all reads distribute equally over six nodes."}
+- {"scope":"arch-scaling-writes-q2","detail":"High cardinality does not guarantee balanced traffic; time buckets bound data size without distributing a single current hot chat."}
+- {"scope":"arch-search-systems-q9","detail":"Replace exact copy-count-to-throughput arithmetic with diagnosis of write work and measured bottlenecks."}
+- {"scope":"arch-batch-vs-stream-q6","detail":"Point the external-effects question to Flink stateful recovery documentation rather than only event-time documentation."}
+- {"scope":"glossary:packwerk","detail":"Static constant checks do not enforce all method calls or data access."}
+- {"scope":"glossary:arch-stack-overflow","detail":"Remove the unsupported performance/topology anecdote."}
+- {"scope":"glossary:queue-age","detail":"Qualify approximate provider-defined age; SQS excludes some poison-pill messages."}
+- {"scope":"glossary:sigterm","detail":"Default shutdown signal can be overridden."}
+- {"scope":"glossary:prestop-hook","detail":"Exec runs in-container; HTTP/sleep actions run through kubelet and consume grace time."}
+- {"scope":"glossary:content-addressed","detail":"Qualify hash collision assumptions, immutability and cache/access policy."}
+- {"scope":"glossary:clickhouse","detail":"Distinguish incremental insert-block processing from refreshable views and later mutations."}
+- {"scope":"glossary:scatter-gather","detail":"Relevant recipients and coordination/tail costs do not imply every additional shard always slows a query."}
+- {"scope":"glossary:memtable","detail":"RocksDB also supports non-skiplist/hash-based buffer implementations."}
+- {"scope":"glossary:temporary-credentials","detail":"Expired credentials reject new requests; an existing S3 download may continue."}
+- {"scope":"glossary:sigv4","detail":"Seven-day URL limit is scoped to S3 and long-term credentials."}
+- {"scope":"glossary:adaptive-bitrate","detail":"Adaptation aims to reduce stalls rather than guaranteeing smooth playback."}
+- {"scope":"glossary:image-formats","detail":"Compression savings depend on content, settings and quality targets."}
+- {"scope":"glossary:mapreduce","detail":"Task replay needs stable input and a safe external-effects protocol."}
+- {"scope":"glossary:shuffle","detail":"Network/spill cost depends on workload; not invariably the largest cost."}
+- {"scope":"glossary:unified-engine","detail":"Beam is a model/SDK executed by a runner."}
+- {"scope":"glossary:arch-factorial","detail":"Include the zero-factorial boundary."}
+- {"scope":"glossary:big-ball-of-mud","detail":"Replace absolute all-to-all coupling and unnecessary historical attribution with the structural meaning."}
+- {"scope":"glossary:flash-sale","detail":"Scheduled timing does not make peak volume predictable."}
+- {"scope":"glossary:video-resolution","detail":"1080p includes progressive scanning; dimensions and consumer/cinema 4K differ."}
+- {"scope":"glossary:hevc","detail":"Remove a universal half-bitrate claim."}
+- {"scope":"glossary:data-platform","detail":"Analytics platforms need not be wholly separate from transactional systems."}
+- {"scope":"arch-team-capability-boundaries","detail":"Paraphrase Conway rather than use an inexact quote and unnecessary compiler anecdote."}
+- {"scope":"arch-bm25-saturation-field-length","detail":"Use field-bearing documents for field-average length and remove unneeded release-history claims."}
+- {"scope":"arch-stream-time-checkpoint-effects; arch-lambda-kappa-replay-paths","detail":"Separate Beam programming model/SDKs from runners and engines; add relevant Flink recovery/sink reading links."}
+- {"scope":"arch-stored-read-model-maintenance","detail":"Qualify join/read costs and link the Materialize product explicitly to prevent wrong-sense glossary resolution."}
+- {"scope":"arch-autoscaling-shared-bottlenecks; arch-hpa-metric-stabilisation","detail":"Remove dangling arithmetic prose and label HPA output as a simplified pre-policy recommendation."}
+
+**Scope gaps and exclusions:**
+
+- No substantive original teaching topic was intentionally omitted. All nine originals map to 41 focused units, retaining 108 question identities and keys, all 84 formula examples and every one of 33 non-program fence bodies; 17 inherited formula cards were corrected or clarified in place.
+- No AWS, Kubernetes, Redis, Elasticsearch, Flink, Kafka, Spark or CDN integration was provisioned. Native execution consists of three Python snippets with explicit fixtures, 94 arithmetic assertions and three finite illustrations; these are not production performance/fault certification.
+- All 41 lessons remain medium as in their nine source lessons. Fetched primary checks establish the reviewed protocol/default/ordering claim groups, while broad architecture recommendations, historical company illustrations and secondary-source ranges do not become a new sentence-by-sentence primary-source certification of every inherited assertion.
+- Inherited accurate glossary entries retain their genuine prior confidence/provenance. All 262 definitions/aliases were semantically read; 12 inaccurate original objects were corrected, the precise new Materialize product entry verified, and known wrong compiled contexts removed. URL fetching by itself is not factual corroboration.
+- Current vendor settings were checked on 2026-10-14. Recheck actual chosen runtime versions, provider limits, quotas, permissions, supported MRSC Regions, connector artifacts and policies before implementation.
+- Jurisdiction-specific legal requirements, representative capacity, native encoder boundary behaviour and actual recovery timings are not established. Lessons explicitly use hypothetical contracts, arithmetic models and measurement requirements.
+- Whole-app generated build, broader tests, iPhone rendering and offline integration are coordinator checks after all module verifications; this verifier changes only active architecture content and its verification record.
+- {"scope":"Source transport","detail":"Older Stanford IR HTML endpoints timed out. The current official Stanford CS124 PDF was downloaded with curl and read; Node fetch in the active link checker still returns TypeError for that PDF. This is retained as a transport exception, not reported as a clean checker pass."}
+- {"scope":"Execution","detail":"Deterministic code/math and state-transition checks ran locally. No production S3, DynamoDB, Kubernetes, Elasticsearch, Flink or multi-region deployment was exercised."}
+- {"scope":"Shared glossary owners","detail":"8 local entries overlap earlier-module names/aliases (11 owner relationships). Existing entries/IDs were preserved; integration must assess the visible owners. JVM heap wording in SD01/06 is one known limitation. No SD01 standby change is requested."}
+- {"scope":"Root integration","detail":"Whole-library generated data, browser/touch/keyboard disclosure behavior and offline checks are delegated to the root; only module source and evidence are changed here."}
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, glossary: conways-law example: four teams building a compiler produce a four-pass compiler Popular paraphrase (Eric Raymond's Jargon File), not Conway's 1968 wording; kept as an illustration.
+- medium confidence, glossary: big-ball-of-mud: from a 1997 paper by Foote and Yoder Presented at PLoP 1997, revised and published 1999; date depends on which version is meant.
+- medium confidence, glossary: HEVC needs roughly half the bitrate of H.264 for similar quality Commonly cited design target; real savings vary with content and encoder (secondary source).
+- medium confidence, glossary: 3G real-world speeds and video segment length 2-10 s Typical ranges from secondary sources; hedged with 'typically'.
+- medium confidence, glossary: arch-stack-overflow historical traffic/server example Original medium score retained; no new analysis of the historical company dataset.
+- medium confidence, glossary: keyframe-gop codec-safe independent chunks Incorrect universal split rule corrected. HLS primary specification checked, but codec-specific random-access, open-GOP and audio-timing behaviour was not tested across encoders.
+- medium confidence, arch-hpa-metric-stabilisation: HPA 15-second sync, 10% default tolerance and 300-second downscale stabilisation Current primary documentation checked; cluster flags, API behaviour and version-specific overrides can differ. No live controller test.
+- medium confidence, arch-search-shards-refresh-query-cost: Elasticsearch routing, refresh and shard defaults Current docs distinguish creation before/after 9.4, Stack/Serverless and explicit refresh settings; defaults remain version/deployment-sensitive, without a native cluster test.
+- medium confidence, arch-multiwriter-conflict-invariants: DynamoDB current cross-continent MRSC triples and overlapping-write conflict handling Fetched current AWS docs confirm supported cross-continent triples, fixed consistency mode and retryable conflict errors; no hosted regional fault/latency experiment.
+- medium confidence, arch-object-model-consistency-limits: S3 throughput, limits, conditional status and bucket-type guarantees Checked current AWS primary docs, with general-purpose/directory and gradual-scaling qualifications. No hosted throughput/race test.
+- medium confidence, arch-stream-time-checkpoint-effects: Flink external exactly-once effects and compatible sinks State/window/JDBC/Kafka docs checked. No native recovery test; selected runtime/connector compatibility, transaction timeouts and output ordering must be validated. Stable 2.3 connector pages currently warn that compatible connector artifacts are not yet available for that version.
+- medium confidence, arch-spark-shuffle-skew-plans: Shuffle skew ratios and mitigations Arithmetic and SQL tuning docs checked. Physical-plan, partial aggregation, AQE operator support and actual scheduling determine realised cost; no Spark execution benchmark.
+- medium confidence, arch-media-rendition-cdn-pipeline: 1.5-minute ideal parallel transcode example and chunk-safe publication The arithmetic is checked under stated equal-cost/60-worker assumptions; no codec/transcoding, CDN or fault test validates realised speed or every format boundary.
+- medium confidence, arch-lambda-kappa-replay-paths: Historical company/architecture examples and replay duration Kreps primary essay independently fetched and 22.5-day model recomputed; retained-history volume, live rate, source/sink capacity and deployment semantics can differ.
+- medium confidence, arch-object-model-consistency-limits: Current S3 limits and per-prefix performance baselines Verified against AWS docs on this date; limits and operational throughput can change and do not predict a specific workload.
+- medium confidence, arch-multiwriter-conflict-invariants: DynamoDB MREC/MRSC topology, Regions and behavior Current official documentation supports the distinctions. Availability and supported Regions are time-sensitive; no live table was provisioned.
+- medium confidence, arch-search-shards-refresh-query-cost: Elasticsearch routing and refresh defaults Checked current official documentation including product/version distinctions; deployments can override settings.
+- medium confidence, arch-hpa-metric-stabilisation: Kubernetes HPA defaults and actual capacity Checked official defaults; feature gates, custom policy, missing metrics and deployment versions change behavior.
+- medium confidence, glossary: Inherited convenience definitions and contextual/secondary-source glossary wording: big-ball-of-mud, cohesion, coupling-software, arch-ide, release-train, merge-conflict, arch-stack-overflow, cto, cut-over, ip-hash, io-bound, max-connections, hpa-tolerance, stabilisation-window, max-surge-unavailable, graceful-shutdown, in-flight-request, termination-grace-period, flash-sale, ipvs, cilium, content-addressed, incremental-view-maintenance, home-timeline, arch-rollup, logical-shard, resharding, amortise, client-side-aggregation, drain-rate, time-series-data, ledger, double-entry, shard-directory, sts, immutable-key, adaptive-bitrate, dash, video-resolution, hevc, video-codec, mobile-3g, sql-like, inverted-index, forward-index, posting-list, boolean-query, token-filter, stemming, stop-words, arch-ascii, relevance, corpus, term-frequency, tf-idf, keyword-stuffing, embedding, re-ranking, coordinating-node, adaptive-replica-selection, arch-heap-memory, data-platform, bounded-unbounded, map-phase, shuffle, reduce-phase, distributed-file-system, data-locality, dag, spark-stage, spark-partition, lazy-evaluation, lineage, narrow-wide, broadcast-join, storage-partitioned-join, aqe, lambda-architecture, tiered-storage, reprocessing, time-travel, oltp, elt, trino, home-region, multi-primary, video-codec-short All definitions and aliases were read semantically. Contextual primary references are identified per term; no claim is made that every inherited generic wording/example has a newly retrieved primary definition.
+
+
+## system-design / Reliability, Operations & Security
+
+64 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- {"lesson":"rel-chaos-hypotheses-game-days","issue":"Unneeded construction/open-source chronology was not established by the fetched original.","fix":"Use primary 2011 account of Monkey/Gorilla and 2015 Kong account; add direct first-party further reading."}
+- {"lesson":"rel-breaker-recovery-static-fallbacks","issue":"Specific Netflix generic-homepage fallback lacked primary confirmation.","fix":"Replace with explicitly illustrative precomputed streaming catalogue and independent playback example."}
+- {"lesson":"rel-canary-evidence-rollout-waves","issue":"Equal-size baseline was claimed to improve random-noise separation.","fix":"Require comparable workload and suitable test; matching hosts may reduce workload bias but shrinking control does not improve precision."}
+- {"lesson":"rel-trace-context-tail-collection","issue":"Claimed metrics alone only reveal checkout slowness.","fix":"Qualify aggregate checkout metric; dependency metrics can diagnose too."}
+- {"lesson":"rel-inflight-work-bulkhead-pools","issue":"Claimed every subsequent request waits longer.","fix":"State sustained backlog/typical delay growth while individual waits vary."}
+- {"lesson":"rel-transport-storage-security-limits","issue":"TLS1.2 minimum/1.3 preferred omitted July 2026 RFC9852 update.","fix":"New TLS protocols must support and default to TLS 1.3; TLS 1.2 optional non-default compatibility; older TLS excluded; cite current primary standard."}
+- {"lesson":"rel-recovery-targets-isolated-backups","issue":"Object Lock protection omitted documented owning-account deletion exception.","fix":"Qualify ordinary object operations and require account/key protection; correct two owned glossary definitions."}
+- {"lesson":"rel-identity-secrets-zero-trust","issue":"Historical facts needed directly inspectable source evidence.","fix":"Verify complaint page 6 WAF-role/list/copy mechanism and Capital One 100m/6m counts; add original case and incident-facts links and replace inaccessible glossary source."}
+- {"glossary":"annual-failure-rate","issue":"Annualised exposure-based rate conflated with exact annual failure fraction.","fix":"Define observed population/exposure rate; qualify example and replace Wikipedia source with primary manufacturer-independent operator report."}
+- {"glossary":"crash-failure","issue":"Claimed only suspicion possible across a network without model qualification.","fix":"Scope indistinguishability to timeout-only asynchronous observation; distinguish independent process-exit evidence."}
+- {"glossary":"control-group","issue":"Similar-sized groups presented as definitional requirement.","fix":"Define simultaneous comparable baseline; host-size matching optional and sample equality not required."}
+- {"glossary":"reflection-attack","issue":"Conflated reflection with necessarily larger amplified replies.","fix":"Reflection redirects replies using spoofed source; amplification requires larger replies."}
+- {"lesson":"rel-admission-goodput-priority","issue":"Adaptive LIFO attribution unavailable and newest-first implied still-waiting callers guaranteed.","fix":"Remove incidental Facebook attribution; qualify usefulness heuristic, starvation and deadline/admission requirements; update owned adaptive-lifo definition and q11 distractor explanation/answer."}
+- {"lesson":"rel-admission-goodput-priority","question":"rel-overload-protection-q4","issue":"WorkedExample repeated routine capacity fractions and categorical all-requests-late statement.","fix":"Use mechanism-based goodput/admission explanation and qualify increasing deadline misses under sustained overload."}
+- {"glossary":"release-it-book","issue":"2007 first-edition date not established by fetched publisher page.","fix":"Retain author/topic and publisher-confirmed 2018 second edition; remove incidental unverified date."}
+
+**Scope gaps and exclusions:**
+
+- No production fault injection, live cloud/KMS account calls, real regional/DNS failover, Kubernetes rollout or deployed collector/rollout-controller experiment was performed. Vendor/default/configuration and timing claims are qualified.
+- Executable examples are dependency-injected teaching fragments. Quota concurrency, durable cross-process idempotency, production admission fairness and full collector deployment are outside the examples; no untested complete service is claimed.
+- The declarative circuit-breaker YAML is an illustrative policy, parsed and checked for internal values; it is not a named library configuration or a live breaker execution.
+- The official ACM pages for Maurer and DiRT still return HTTP 403. Active links now use accessible first-party Google SRE evidence; the original Maurer article was independently read in a PDF reprint. The Backblaze 3-2-1 source now responds HTTP 200.
+- The 2019 DOJ complaint corroborates WAF-role credential acquisition, bucket listing and copying; it does not spell out the lower-level SSRF/metadata chain. Lesson history is narrowed to that primary evidence, and the metadata question is explicitly illustrative.
+- All 38 active lesson bodies, 97 question records, 105 formula occurrences and 207 glossary entries were read. Primary sources corroborate central/current/uncertain claims by topic, rather than one unique primary citation per prose sentence. All lesson records remain medium confidence.
+- Original archived lessons/questions intentionally remain byte-identical to baseline, including their old formula formatting. Active content has no remaining actual formula-lint violation.
+- Whole-release preview, phone navigation, app tests and publication are owned by the parent; this handoff certifies the scoped content review.
+- No production fault injection, cloud/KMS calls, regional/DNS failover, deployed Kubernetes rollout or full distributed collector experiment. Examples are explicitly bounded teaching fragments.
+- Retained Python code executed with supplied adapters, including real OTel API; retry/admission atomicity implementation and cross-process persistence are outside these snippets.
+- ACM adaptive-LIFO article returned 403. Removed Facebook attribution and caller-usefulness guarantee; primary Google SRE supports the LIFO mechanism. No inaccessible reprint was used.
+- Primary sources corroborate factual mechanisms by topic, not one unique citation per sentence. All 207 owned glossary definitions/aliases were semantically read; visible cross-module owner errors are separately listed and not silently treated as fixed.
+- Archived originals, module manifest, question IDs/owners and migrations remain unchanged. Root owns whole-library generated build, mobile disclosure/browser and offline QA.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, rel-identity-secrets-zero-trust: Capital One historical mechanism Primary complaint supports WAF-role credentials, listing and copying, but not every lower-level SSRF/metadata step; history narrowed and question scenario identified as illustrative.
+- medium confidence, rel-chaos-hypotheses-game-days: Historical Netflix chaos tools and DiRT Original first-party engineering posts and Google SRE evidence reviewed; historical accounts are not guarantees of current private implementations. ACM access remains blocked.
+- medium confidence, rel-breaker-recovery-static-fallbacks: Circuit-breaker policy/configuration examples Illustrative declarative policy parsed; library state/threshold documents checked, with no live breaker or production integration experiment.
+- medium confidence, rel-regional-failover-fencing-lag: Real deployment recovery and coordination timing Primary product/architecture sources support mechanisms; numerical scenarios are teaching examples, not deployment benchmarks.
+- medium confidence, rel-trace-context-tail-collection: Collector retention/routing behavior OTel API propagation executed and collector primary documentation read; no full live distributed collector deployment or guaranteed complete trace retention is asserted.
+- medium confidence, rel-jitter-variants-sdk-policy: Current SDK retry policy and opt-in availability Independently read same-day original AWS documentation, including AWS_NEW_RETRIES_2026 opt-in, DynamoDB exceptions and token costs. Runtime/version-specific behavior remains conditional; no live AWS SDK call.
+- medium confidence, rel-breaker-recovery-static-fallbacks: Breaker YAML and vendor slow-call policies Illustrative YAML parsed and vendor documentation read. No production breaker or fallback experiment; unsupported Netflix case removed.
+- medium confidence, rel-trace-context-tail-collection: Tail-sampling collector completeness and migration behavior Native propagation executed and primary collector docs read; no deployed multi-collector experiment, late-span/buffer limits explicit.
+- medium confidence, rel-regional-failover-fencing-lag: Recovery timing and cloud deployment behavior Mechanisms primary-source checked; illustrative timings are not deployment benchmarks, and no actual regional failover was run.
+- medium confidence, rel-chaos-hypotheses-game-days: Historical chaos accounts Original 2011/2015 posts read via web tool after direct HTTP 403; treated as historical described experiments, not confirmation of current private systems.
 

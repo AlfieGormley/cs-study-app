@@ -3,27 +3,27 @@
     "id": "api-rate-limiting-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A sliding window counter limiter allows 50 requests/minute. In the previous minute the client made 40 requests. In the current minute it has made 25, and 36 seconds have elapsed. What's the estimated count, and is the next request allowed?",
+    "prompt": "A sliding-window counter weights the previous fixed window by its remaining time overlap and counts the current window in full. As time advances with no new requests, what happens?",
     "options": [
       {
-        "text": "65; rejected",
-        "explanation": "This adds the full previous count without weighting. Only the part of the previous window that still overlaps the last 60 seconds should count."
+        "text": "The previous window becomes more important.",
+        "explanation": "Its remaining overlap decreases, not increases."
       },
       {
-        "text": "41; allowed",
-        "explanation": "Correct. At 36 seconds into a 60-second window, 40% of the previous window is weighted: 16 of its 40 requests. Add the current 25 to estimate 41, below 50, so allow the request. The worked example shows the calculation."
+        "text": "Its contribution decays, but the estimate is exact only under suitable arrival assumptions.",
+        "explanation": "Correct. Time weighting approximates the distribution within the previous window."
       },
       {
-        "text": "49; allowed",
-        "explanation": "This weights the previous window by 0.6 (the elapsed fraction) instead of 0.4 (the remaining overlap). The weight shrinks as the current window progresses."
+        "text": "The estimate reveals the exact timestamp of every old request.",
+        "explanation": "Two counts discard those timestamps."
       },
       {
-        "text": "25; allowed",
-        "explanation": "This ignores the previous window entirely, which is just a fixed window and suffers the boundary-burst problem."
+        "text": "The current count must be discarded immediately.",
+        "explanation": "Requests already accepted in the current window still lie within the rolling interval."
       }
     ],
     "answer": 1,
-    "workedExample": "```formula\nestimate = prev × (1 − t / W) + curr\nestimate = 40 × (1 − 36 s / 60 s) + 25\nestimate = 40 × 0.4 + 25\nestimate = 16 + 25 = 41\nwhere\nestimate: the approximate number of requests in the last W seconds\nprev: the request count for the whole previous fixed window\ncurr: the request count so far in the current window\nt: the time elapsed since the current window started\nW: the window length, 60 s for a per-minute limit\ns: seconds\nIn words: 36 s into the minute, the sliding window still covers the last 24 s of the previous minute, which is 0.4 of it, so 16 of its 40 requests count, plus the 25 so far: **41**.\n```\n\n41 < 50 → **allow**.\n\nRoughly 9 more requests could be accepted right now before the estimate reaches 50.",
+    "workedExample": "A decreasing overlap means less weight on the old fixed window. This smooths the boundary but cannot reconstruct where requests actually occurred within that window. A late concentrated burst can make the weighted estimate too low; use a timestamp log if exact rolling counts are required.",
     "link": {
       "title": "Cloudflare blog: Counting things, a lot of different things",
       "url": "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/"
@@ -33,7 +33,7 @@
     "id": "api-rate-limiting-q10",
     "level": "advanced",
     "type": "multi",
-    "prompt": "For the sliding-window estimate below, assume the current fixed window has begun but not ended and all previous-window arrivals discussed remain inside the true rolling window.\n\n```formula\nestimate = prev × (1 − t / W) + curr\nwhere\nestimate: the approximate number of requests in the last W seconds\nprev: the request count for the whole previous fixed window\ncurr: the request count so far in the current window\nt: the time elapsed since the current window started\nW: the window length, 60 s for a per-minute limit\n<: less than\nIn words: count this window's requests, plus the share of last window's requests the sliding window still covers.\n```\n\nWhich statements hold? Select all that apply.",
+    "prompt": "A sliding-window counter counts the current fixed window in full and weights the previous count by remaining time overlap. Assume the current window has begun but not ended and the previous-window arrivals discussed all remain inside the true rolling window. Which statements hold? Select all that apply.",
     "options": [
       {
         "text": "It needs only two counters per client, the current and previous windows",
@@ -44,12 +44,12 @@
         "explanation": "True. Uniform weighting assumes an even spread. Bursty or adversarial traffic can make the approximation substantially wrong."
       },
       {
-        "text": "If the previous window's requests all arrived in its last few seconds, it underestimates the true count over the past W seconds",
+        "text": "If the previous window’s requests all arrived in its last few seconds, weighting can underestimate the true rolling count",
         "explanation": "True under the stated timing assumption: all previous arrivals still count in reality, while the approximation discounts them. The excess can be substantial."
       },
       {
         "text": "The weight on the previous window equals the fraction of the current window that has elapsed",
-        "explanation": "False: the weight uses the remaining overlap rather than the elapsed fraction. It starts at one and falls to zero as the current window progresses; the prompt shows the equation."
+        "explanation": "False: the weight uses the remaining overlap rather than the elapsed fraction. It starts at one and falls to zero as the current window progresses."
       },
       {
         "text": "It's exact, like the sliding log, just using less memory",
@@ -61,7 +61,7 @@
       1,
       2
     ],
-    "workedExample": "Test the even-spread assumption with numbers. The window length is 60 seconds, the limit is 100 requests, and 30 seconds have elapsed in the current window.\n\n- Previous window: 80 requests, **all** in its last 10 s.\n- Estimate:\n\n```formula\nestimate = 80 × (1 − 30 s / 60 s) + curr\nestimate = 40 + curr\nwhere\nestimate: the limiter's approximate count over the last 60 s\ncurr: the requests so far in the current window\ns: seconds\nIn words: only half of the previous window's 80 requests are counted.\n```\n\n- Truth: the rolling window contains all 80 previous requests, plus all requests so far in the current window.\n\nThe estimate is 40 too low, so up to 40 extra requests could slip through. This is a counterexample, not the global worst case: later times with sufficiently late previous arrivals can undercount even more. Cloudflare’s reported low misclassification rate describes its historical measured workload, not an adversarial bound.",
+    "workedExample": "Two counters save memory by discarding individual timestamps. The overlap weight shrinks as time advances, implicitly treating arrivals as evenly spread within the previous window. If they were concentrated near its end and still all lie in the rolling window, that fractional weight undercounts them. A timestamp log can retain the timing needed for an exact count.",
     "link": {
       "title": "Cloudflare blog: Counting things, a lot of different things",
       "url": "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/"

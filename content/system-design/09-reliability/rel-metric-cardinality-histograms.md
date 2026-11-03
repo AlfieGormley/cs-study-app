@@ -47,37 +47,19 @@ The common types (as in Prometheus and OpenTelemetry):
 With fixed-cardinality, periodically exported aggregates, metric storage primarily scales with series count, sample frequency and retention rather than individual requests. Instrumentation work still scales with observations. A million requests per second still produces one time series per combination.
 
 > [!warning] Cardinality explosions
-> Never put unbounded values like user IDs, request IDs or full URLs in metric labels. Every distinct combination of label values is a separate time series, so the label counts multiply (see the formula below).
+> Never put unbounded values like user IDs, request IDs or full URLs in metric labels. Every distinct combination of label values is a separate time series, so increasing label diversity increases storage and indexing work.
 
-The number of series one metric can create is the product of how many values each label can take:
+Label choices determine how many series can exist:
 
-```formula
-N = v_1 v_2 ... v_k
-N = 10 × 5 × 100 = 5,000
-N = 5,000 × 1,000,000 = 5,000,000,000
-where
-N: the maximum number of time series for one metric name
-v_1, v_2, ... v_k: the number of distinct values of each label (here 10 routes, 5 status codes, 100 hosts, then 1 million user IDs)
-k: the number of labels on the metric
-In words: 10 routes, 5 status codes and 100 hosts give at most 5,000 series; assess that against the backend’s capacity. Adding a user_id label with a million users multiplies that to as many as 5 billion series, far beyond what an ordinary metrics system can store.
-```
+Every distinct combination of labels creates a series. Adding user identity can multiply even a small set of routes, statuses and hosts into an enormous collection; classic histogram buckets add further series.
 
-It is a maximum: only combinations that actually occur create series. But an unbounded label means there is no ceiling at all.
+Only combinations that occur create series. An unbounded label has no configured cardinality ceiling.
 
 ### Percentiles, not averages
 
-Averages hide the tail. The mean adds every latency and divides by the count, so one huge value barely moves it:
+Averages hide the tail. A mean alone does not describe the slowest users:
 
-```formula
-m = (99 × 10 ms + 1 × 5,000 ms) / 100
-m = (990 + 5,000) ms / 100
-m = 5,990 ms / 100 ≈ 60 ms
-where
-m: the mean (average) latency, in milliseconds (ms)
-ms: milliseconds; 5 s = 5,000 ms
-≈: approximately equal to (rounded)
-In words: 99 requests at 10 ms and one at 5 seconds average about 60 ms, which looks fine, yet 1 user in 100 waited 5 seconds.
-```
+If 99 requests take 10 milliseconds and one takes five seconds, the mean is about 60 milliseconds. That single mean does not reveal the five-second experience. Inspect the distribution and explicit latency-threshold counts.
 
 Use percentiles instead. The **p99** (99th percentile) is the latency that 99% of requests beat; p50 is the median. Track p50, p95, p99 and p99.9.
 

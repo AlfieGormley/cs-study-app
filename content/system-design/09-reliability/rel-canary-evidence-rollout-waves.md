@@ -25,30 +25,13 @@ The key is **comparison**: the canary's error rate and latency are judged agains
 
 Considerations from the SRE workbook:
 
-- The canary must get enough traffic to be statistically meaningful. 1% of a 100 req/s service is one request a second; a 0.1% error-rate increase would take a long time to detect (see the formula below).
+- The canary must get enough traffic to be statistically meaningful. 1% of a 100 req/s service is one request a second; a 0.1% error-rate increase would take a long time to detect.
 - Bake time must cover slow-to-appear problems: memory leaks, cache expiry, daily batch jobs.
 - Canary populations can be hosts, a percentage of requests, or specific users (internal staff first).
 
-How much evidence does a small canary collect? Multiply its traffic by the extra error rate you hope to spot:
+A small canary sees few opportunities for a rare regression to appear. At one request per second, an added error probability of 0.1% produces only a few extra errors per hour on average. That is an evidence-volume illustration, not a significance test.
 
-```formula
-r_c = fR
-r_c = 0.01 × 100 req/s = 1 req/s
-X = r_c Δe t
-X = 1 req/s × 0.001 × 3,600 s = 3.6
-where
-r_c: the request rate reaching the canary, in requests per second (req/s)
-f: the fraction of traffic sent to the canary, here 1% = 0.01
-R: the service's total request rate, here 100 req/s
-X: the expected extra errors caused by the bad version during the observation time, assuming stable request and error rates
-Δe: delta e, the increase in error rate caused by the new version, here 0.1% = 0.001
-t: how long you watch, here one hour = 3,600 seconds (s)
-req/s: requests per second
-s: seconds
-In words: a 1% canary on a 100 req/s service sees 3,600 requests an hour, and a 0.1% regression adds only about 3.6 extra errors in that hour, easily lost in normal noise.
-```
-
-To detect small regressions sooner, send the canary more traffic, run it longer, or compare it with a baseline group of the same size so random variation is easier to separate from a real change.
+To collect more evidence for small regressions, send the canary more representative traffic or run it longer. Use a simultaneous baseline with comparable workload and per-host load, and choose a suitable statistical test. Matching host counts can reduce workload differences, but reducing the baseline sample does not itself improve statistical precision.
 
 ### Staged rollouts at scale
 
@@ -69,6 +52,13 @@ A mature pipeline does all of this without humans watching graphs:
 3. Bake; check SLO burn rates, errors and latency.
 4. Proceed in waves, or **automatically roll back** on regression.
 5. Block deploys when the error budget is exhausted (see the SLO lesson) or outside safe hours.
+
+> [!analogy] Real-world analogy: trying a new recipe on a small batch
+> A small test batch limits waste, but tasting one piece cannot reveal every problem with ingredients or storage time.
+>
+> **How it maps:** The batch maps to limited release exposure; representative sampling and waiting map to canary evidence and bake time.
+>
+> **Where it stops:** Production cohorts can differ, and failures can be correlated or delayed. A successful sample does not prove the whole release safe.
 
 ## Key takeaways
 

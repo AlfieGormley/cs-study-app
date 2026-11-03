@@ -13,13 +13,13 @@ Stored read models can go further: maintain the answer before anybody asks. This
 
 Taken further, you compute the answer **before anyone asks**:
 
-- **Fan-out on write for feeds**: when someone posts, push the post ID into each follower's precomputed timeline (in Redis). Reading a feed becomes one list fetch. Twitter used this approach for most users.
+- **Fan-out on write for feeds**: when someone posts, push the post ID into each follower's precomputed timeline (in Redis). Reading a feed becomes one list fetch.
 - **Leaderboards**: maintain a Redis sorted set updated on each score change, rather than sorting millions of rows per request.
 - **Rollups**: hourly and daily aggregate tables for dashboards instead of scanning raw events.
 - **Search autocomplete**: precomputed top-N completions per prefix.
 
 > [!warning] Precomputation has an edge case
-> Fan-out on write breaks for celebrities. A user with 50 million followers would trigger 50 million timeline writes per post. Twitter's hybrid approach: fan out on write for normal users, and merge celebrity posts in at read time.
+> Fan-out on write breaks for celebrities. A user with 50 million followers would trigger 50 million timeline writes per post. A hybrid approach: fan out on write for normal users, and merge celebrity posts in at read time.
 
 ## Choosing a technique
 

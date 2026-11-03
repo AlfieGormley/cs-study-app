@@ -2,7 +2,7 @@
 id: arch-regional-distance-recovery-objectives
 title: Budgeting distance and recovery objectives
 level: advanced
-minutes: 4
+minutes: 3
 summary: Relate propagation delay, replication acknowledgement and RPO/RTO to a chosen regional failure model.
 sourceLesson: arch-multi-region
 ---
@@ -10,22 +10,12 @@ sourceLesson: arch-multi-region
 A cloud region may offer several availability zones, each with separate infrastructure and possibly multiple data centres. A correctly configured multi-AZ workload can tolerate specified zone failures, but a region label alone does not guarantee application availability. So why go **multi-region**?
 
 - **Disaster recovery**: whole regions do fail, or partially fail in ways that look total (control-plane outages, bad deploys of regional services, major network events).
-- **Latency**: long paths impose propagation delay. Light in optical fibre travels at roughly two-thirds of its speed in a vacuum, about 200 km every millisecond, so distance alone sets a minimum delay (worked out below). Serving Australian users from Australia matters.
+- **Latency**: long paths impose propagation delay. Light in optical fibre travels at roughly two-thirds of its speed in a vacuum, about 200 km every millisecond, so distance alone sets a minimum delay (illustrated below). Serving Australian users from Australia matters.
 - **Data residency**: laws and contracts may require data about EU residents, or a particular government's citizens, to stay in specific places.
 
 The minimum one-way delay over a fibre path is just distance divided by speed:
 
-```formula
-t = d / v
-t = 17000 km / (200 km/ms) = 85 ms
-where
-t: the one-way propagation delay, in milliseconds (ms)
-d: the length of the fibre path, in kilometres (km); here a hypothetical 17,000 km route
-v: the speed of light in fibre, about 200 km per millisecond (km/ms), roughly two-thirds of its speed in a vacuum
-km: kilometres
-ms: milliseconds, thousandths of a second
-In words: 17,000 km of fibre costs at least 85 ms each way, so at least 170 ms for a round trip, before any routing or equipment delay.
-```
+Distance imposes a minimum travel time before processing or queuing. A hypothetical 17,000 km fibre path takes about 85 ms one way at the stated speed, with a round trip taking at least 170 ms.
 
 This is a floor, not a prediction: real routes are longer than the straight line, and routers and queues add more. Measure actual round-trip times (RTTs).
 
@@ -34,9 +24,6 @@ It's also expensive and hard. Extra regions add infrastructure and operating cos
 ## The fundamental trade-off
 
 Synchronous acknowledgment latency depends on required replicas, distance, storage and protocol. Benchmark the chosen deployment.
-
-> [!note] Evidence gap
-> Generic cross-AZ/region latency and recovery-time estimates are omitted because no measured deployment establishes them. Numeric quiz examples state hypothetical inputs.
 
 That gives you a choice for each piece of data:
 

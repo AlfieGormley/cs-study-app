@@ -1,6 +1,6 @@
 ---
 id: rel-recovery-targets-isolated-backups
-title: Recovery targets and isolated backups
+title: Recovery objectives and isolated backups
 level: intermediate
 minutes: 5
 summary: Translate recovery objectives into restorable, isolated data copies.
@@ -48,22 +48,19 @@ Good backup practice:
 
 - **Point-in-time recovery (PITR)**: periodic full snapshots plus continuous write-ahead log archiving. Postgres with WAL archiving, MySQL binlogs, and AWS RDS PITR can recover to supported points within the available, continuous backup/log history, up to the latest restorable point. Your RPO is set by how often log segments actually leave the server: RDS, for example, typically uploads logs every five minutes, so its latest restorable time is usually a few minutes behind.
 - **3-2-1 rule**: 3 copies, on 2 different media or services, with 1 off-site.
-- **Immutability**: enforced write-once retention (such as S3 Object Lock compliance mode) protects retained object versions from deletion, including by administrators. Governance mode can be bypassed by authorized users. Protect encryption keys too: immutable ciphertext is useless if its key is destroyed.
+- **Immutability**: enforced write-once retention (such as S3 Object Lock compliance mode) protects retained object versions from deletion through ordinary object operations, including administrator operations. Governance mode can be bypassed by authorized users. Protect the owning account against deletion and protect encryption keys too: immutable ciphertext is useless if its account or usable key is lost.
 - **Separate account or project**: backups stored where the production credentials cannot reach.
 - **Test restores regularly**. A backup that has never been restored is a hope, not a backup.
 
 > [!warning] The restore you didn't test
 > Google's SRE book chapter on data integrity makes the point bluntly: nobody really wants backups, they want restores. Automate restore tests and measure how long a full restore takes, because that time is your RTO floor for backup-based recovery.
 
-### Restore time maths
+### Measure the full restore path
 
 Restore time often dominates RTO. The time to copy data back is its size divided by the speed you can actually restore at:
 
-```formula
+```formula reference
 T = D / B
-T = 20 TB / (500 MB/s)
-T = 20,000,000 MB / (500 MB/s)
-T = 40,000 s ≈ 11.1 h
 where
 T: the time to restore the data, in seconds (s) or hours (h)
 D: the amount of data to restore, here 20 terabytes (TB)
@@ -77,7 +74,14 @@ h: hours
 In words: copying 20 TB back at 500 MB/s takes about 11 hours; provisioning and other independent recovery work may overlap, while dependent replay or validation adds time.
 ```
 
-Plus applicable log replay, validation and any rebuild work required by the backup format; physical database backups generally already include indexes. If the business wants a 1-hour RTO, a restore-from-backup strategy can't meet it.
+Plus applicable log replay, validation and any rebuild work required by the backup format; physical database backups generally already include indexes. An observed full restore taking eleven hours cannot meet a one-hour RTO; that target needs a faster, tested restoration route.
+
+> [!analogy] Real-world analogy: a copied notebook and an older saved edition
+> Keeping two notebooks synchronised copies an accidental deletion too. An older saved edition lets you recover what was erased.
+>
+> **How it maps:** Current copies map to replication; independently retained history maps to backup and point-in-time recovery.
+>
+> **Where it stops:** The recovered edition may lack later valid changes. Storage isolation, usable keys, log continuity and restore testing decide what actually survives.
 
 ## Key takeaways
 

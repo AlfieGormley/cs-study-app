@@ -42,7 +42,7 @@ RFC 8725 (JWT Best Current Practices) exists because these mistakes keep happeni
 1. **Algorithm confusion.** A server expects RS256 but the library honours the header's `HS256`, then verifies the HMAC using the RSA *public* key as the secret. The attacker, who knows the public key, can forge tokens.
 1. **Not validating claims.** Validate the claims required by your token profile, including expiry, issuer and audience, and enforce `nbf` when present. A token issued for `billing-api` must not be accepted by `admin-api`.
 1. **Trusting key hints in the header.** `kid`, `jku` and `x5u` tell the verifier which key to use, or where to fetch it. If the verifier fetches keys from whatever URL the token names, the attacker just points it at their own key. Only look `kid` up in your own allow-listed JWKS.
-1. **Long lifetimes.** Since you can't easily revoke, keep access tokens short (typically 5–15 minutes) and use refresh tokens.
+1. **Long lifetimes.** Since you can't easily revoke, choose short access-token lifetimes to bound exposure, and enforce account policy when refreshing. The appropriate lifetime depends on the threat model and credential revocation design.
 1. **Storage in the browser.** `localStorage` is readable by any script on the page, so one XSS bug leaks every token. An `HttpOnly` cookie can't be read by JavaScript (though you then need CSRF protection).
 1. **Using a JWT as a session.** Stuffing roles into a 24-hour JWT means a demoted admin stays an admin for a day.
 

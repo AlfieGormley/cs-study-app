@@ -17,24 +17,13 @@ The AWS Builders' Library describes the principle: protect **goodput** (useful c
 
 ### How to decide what to shed
 
-- **Concurrency limits**: cap in-flight requests (e.g. 100). Above that, reject. Size the cap with Little's law (see the formula below), plus a margin. Adaptive versions (like Netflix's concurrency-limits library) adjust the cap from observed latency, TCP-congestion style.
-- **Queue time**: if a request waited in the queue longer than the client's timeout, drop it if its useful work is tied to that deadline. Durable accepted jobs may still need completion even after a client disconnects. Some systems go further: Facebook's "adaptive LIFO" serves the queue newest-first when it builds up, because the newest requests are the ones whose clients are still waiting.
+- **Concurrency limits**: cap in-flight requests (e.g. 100). Above that, reject. Use Little’s law as a starting estimate, then load-test the cap against latency and burst requirements. Adaptive versions (like Netflix's concurrency-limits library) adjust the cap from observed latency, TCP-congestion style.
+- **Queue time**: if a request waited in the queue longer than the client's timeout, drop it if its useful work is tied to that deadline. Durable accepted jobs may still need completion even after a client disconnects. A system can switch from oldest-first to newest-first as the queue builds up (adaptive LIFO), favouring requests whose callers are more likely still waiting. This is a heuristic, not a guarantee; it can starve older work and still needs deadlines and rejection.
 - **Priority / criticality**: shed lower-priority traffic first. Google tags requests as `CRITICAL_PLUS`, `CRITICAL`, `SHEDDABLE_PLUS` and `SHEDDABLE`, and sheds from the bottom.
 
-Sizing a concurrency limit with Little's law:
+Choose a concurrency limit from measured workload behaviour:
 
-```formula
-C = XW(1 + m)
-C = 2,000 req/s × 0.04 s × 1.25 = 100
-where
-C: the concurrency limit, the most requests allowed in flight at once
-X: the throughput the server can sustain at healthy latency, in requests per second (req/s), here 2,000
-W: the healthy latency at that throughput, in seconds (s), here 40 ms = 0.04 s
-m: the safety margin as a fraction, here 25% = 0.25
-req/s: requests per second
-s: seconds
-In words: a server doing 2,000 req/s at 40 ms has about 80 requests in flight when healthy; allowing 25% headroom gives a cap of 100. At fixed throughput, rising in-flight work means longer average time in system; distinguish service time, network waiting and queueing by measurement.
-```
+Use measured healthy throughput and mean latency to estimate typical in-flight work, then test a bounded cap with headroom. For example, a service averaging 80 in-flight requests might start testing a cap of 100; bursts and latency targets determine whether that choice works.
 
 The numbers here are illustrative. The admission check might look like this in code:
 

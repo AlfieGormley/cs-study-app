@@ -15,22 +15,13 @@ Sharding assumes load spreads evenly. Real traffic is skewed: a celebrity's post
 
 DynamoDB, for example, supports at most 1,000 write units/s and 3,000 read units/s per partition. Units are not generally requests: an ordinary write consumes one unit per 1 KiB, while strongly consistent reads consume one per 4 KiB; transactional operations cost more. The units a write consumes depend on the item's size, rounded up:
 
-```formula
-U = ⌈S / 1 KiB⌉
-U = ⌈2.5 KiB / 1 KiB⌉ = ⌈2.5⌉ = 3
-where
-U: write units consumed by one standard write
-S: the item's size, in kibibytes (KiB); here 2.5 KiB
-KiB: kibibyte, 1,024 bytes
-⌈ ⌉: ceiling: round up to the next whole number
-In words: every started kibibyte of item costs one write unit, so a 2.5 KiB item costs 3.
-```
+A standard write rounds item size up to whole kibibytes for capacity accounting. A 2.5 KiB item therefore consumes three write units.
 
 So one partition takes at most 1,000 small (≤ 1 KiB) writes a second, or about 333 writes a second of 2.5 KiB items. A single item receiving 10,000 writes/s will throttle no matter how much total capacity the table has.
 
 Mitigations:
 
-1. **Key salting / write sharding**: spread one logical key across several physical keys, here 10. This is illustrative routing pseudocode, not executable Python; choose a salt randomly, update that sub-counter, and sum the sub-counters when reading:
+1. **Key salting / write sharding**: spread one logical key across several stored keys, here 10. This is illustrative routing pseudocode, not executable Python; choose a salt randomly, update that sub-counter, and sum the sub-counters when reading:
 
 ```
 key = "post:42#" + rand(0..9)
@@ -38,20 +29,9 @@ write: one of 10 sub-keys
 read:  sum all 10
 ```
 
-Writes spread 10 ways; reads must gather 10 items (fine for counters):
+Reading the total requires combining all partial counters. Separate reads are not automatically a simultaneous snapshot.
 
-```formula
-C = c_0 + c_1 + ... + c_9
-where
-C: the true count for post 42
-c_0: the count stored under sub-key post:42#0
-c_1: the count under post:42#1
-...: and so on for the remaining sub-keys
-c_9: the count under post:42#9
-In words: the real total is the sum of the 10 partial counters.
-```
-
-Each sub-key gets about a tenth of the writes, so ten sub-keys lift the cap about tenfold, at the cost of 10 reads per lookup.
+Balanced random selection gives each sub-key roughly a tenth of the writes. A capacity gain still requires suitable physical partition placement and spare table capacity; ten logical keys do not guarantee ten independent physical partitions.
 
 2. **Better key choice**: `date` concentrates today's writes on one logical key. Physical splitting depends on the store, sort keys and indexes; do not equate a partition-key value with one permanent physical partition. A well-distributed device_id (or device_id + date) reduces this concentration.
 3. **Batch the hot key**: aggregate increments in memory or a stream processor and write once per second.

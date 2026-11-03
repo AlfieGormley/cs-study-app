@@ -16,7 +16,7 @@ Request/response servers are easy to scale because any server can handle any req
 An idle connection consumes a socket, buffers, TLS state and application state. Measure memory and active traffic costs for the actual stack; idle capacity does not establish throughput under load.
 
 > [!note] Content gap: connection capacity measurements
-> No reproducible benchmark accompanies the generic per-connection memory and per-server capacity estimates previously presented here. Those estimates are omitted; the quiz supplies explicit hypothetical sizing inputs.
+> No reproducible benchmark accompanies the generic per-connection memory and per-server capacity estimates previously presented here. Those estimates are omitted; the quiz tests which workloads and resources a capacity plan must cover.
 
 Limits to tune: file descriptors (`ulimit -n`), ephemeral ports on proxies, kernel socket buffers and TLS memory.
 

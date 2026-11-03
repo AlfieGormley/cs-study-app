@@ -34,7 +34,7 @@ Back up data (and infrastructure as code) to another region. In a disaster, prov
 
 ### 2. Pilot light
 
-The *core* data layer runs continuously in the DR region (e.g. a cross-region database replica), but application servers are off or scaled to zero. In a disaster, scale up the app tier and switch traffic.
+The *core* data layer runs continuously in the DR region (e.g. a cross-region database replica), but application servers are off or scaled to zero. In a disaster, start or expand the application fleet and switch traffic.
 
 - RPO: minutes (replication lag). RTO: tens of minutes.
 - Cost: the replica plus minimal infrastructure.
@@ -66,7 +66,7 @@ Two or more regions serve production traffic simultaneously. Losing one means ro
 
 - Backup/restore, pilot light, warm standby and active-active trade running cost for recovery work.
 - Illustrative RPO/RTO bands are planning categories, never guarantees.
-- Active-active still needs survivor headroom and an explicit multi-region write model; asynchronous writes can be lost.
+- Active-active still needs survivor headroom and an explicit policy for writes across regions; asynchronous writes can be lost.
 
 ## Further reading
 

@@ -24,7 +24,7 @@ The OWASP Top 10:2025 ranks the most critical web application risks. The categor
 | A07 Authentication Failures | MFA, rate-limited login, managed IdP |
 | A08 Software or Data Integrity Failures | signed artefacts, verified updates |
 | A09 Security Logging and Alerting Failures | audit logs, detections that page |
-| A10 Mishandling of Exceptional Conditions | fail closed, safe error handling |
+| A10 Mishandling of Exceptional Conditions | fail closed, safe handling of unexpected errors |
 
 What changed from the 2021 list:
 
@@ -42,7 +42,7 @@ Broken access control is number one: insecure direct object references like `GET
 
 - The 2025 list groups SSRF with Broken Access Control and expands supply-chain coverage.
 - Enforce object authorisation server-side and validate unexpected inputs and outputs.
-- Design exceptional security conditions to fail closed while preserving safe error handling and useful audit evidence.
+- Design exceptional security conditions to fail closed while preserving safe handling of unexpected errors and useful audit evidence.
 
 ## Further reading
 

@@ -43,7 +43,7 @@ Limitations:
 - **Text only** (UTF-8). Binary needs a text encoding such as base64.
 - Over HTTP/1.1, browsers allow only ~6 connections per domain, so many tabs with SSE can exhaust them. HTTP/2 multiplexes streams, subject to negotiated stream limits.
 
-SSE is underused. Live feeds, notifications, progress bars and streaming LLM responses (OpenAI's and Anthropic's APIs both stream tokens over SSE) are a perfect fit.
+SSE suits live feeds, notifications, progress bars and streaming text when the application mainly needs server-to-client updates.
 
 ## Key takeaways
 - EventSource reads UTF-8 events from a long-lived HTTP response.

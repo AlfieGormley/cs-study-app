@@ -1,19 +1,19 @@
 ---
 id: arch-hpa-metric-stabilisation
-title: Calculating and stabilising HPA capacity
+title: Reading and stabilising HPA recommendations
 level: basic
 minutes: 3
-summary: Trace the HPA replica formula and explain why readiness, tolerance and stabilisation affect its result.
+summary: Explain HPA recommendations and why readiness, tolerance and stabilisation affect actual capacity.
 sourceLesson: arch-stateless-web-tier
 ---
 
-A Kubernetes Deployment sets a desired replica count. Its HorizontalPodAutoscaler adjusts that count from observed metrics; this unit works through the recommendation, rather than assuming scaling is instantaneous.
+A Kubernetes Deployment sets a desired replica count. Its HorizontalPodAutoscaler adjusts that count from observed metrics; a recommendation still needs scheduled, ready pods before it becomes usable capacity.
 
 ## HPA replica recommendations
 
-For a CPU utilization target, percentages are relative to configured CPU requests, not a node's total capacity. The HPA's job is to pick a pod count that would bring the average metric back to the target. If 4 pods average 90% CPU and you want 60%, the same total work spread over more pods brings each one down. The simplified rule from the Kubernetes documentation is:
+For a CPU utilisation target, percentages are relative to configured CPU requests, not a node's total capacity. The HPA's job is to pick a pod count that would bring the average metric back to the target. If 4 pods average 90% CPU and you want 60%, the same total work spread over more pods brings each one down. The simplified rule from the Kubernetes documentation is:
 
-```formula
+```formula reference
 R_new = ⌈R × M / T⌉
 where
 R_new: the number of pod replicas the HPA will ask for
@@ -26,19 +26,6 @@ In words: scale the pod count by how far the metric is above or below target, th
 ```
 
 For this example, assume equal CPU requests and valid metrics for every pod. Missing metrics and not-yet-ready pods can alter the controller's recommendation.
-
-For example, 4 pods averaging 90% CPU against a 60% target:
-
-```formula
-R_new = ⌈4 × 90 % / 60 %⌉
-R_new = ⌈360 % / 60 %⌉ = ⌈6⌉
-R_new = 6
-where
-R_new: the replica count (number of pods) the HPA asks for
-⌈ ⌉: ceiling: round up to a whole number
-%: per cent of each pod's CPU request
-In words: 4 pods at 90 % carry 360 % of one pod's CPU request in total; spread over 6 pods that is 60 % each, exactly on target.
-```
 
 The rule assumes the load divides evenly across pods and stays the same while new pods start. In practice it is recalculated every few seconds (15 s by default), so the count converges over several steps.
 

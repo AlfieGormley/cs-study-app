@@ -9,8 +9,8 @@ sourceLesson: api-auth
 
 ## Other grants
 
-- **Client credentials**: machine-to-machine, no user. A backend service exchanges its client id and secret for a token.
-- **Device code**: TVs and CLIs with no browser. The device shows a code; you approve on your phone.
+- **Client credentials**: machine-to-machine, no user. A backend authenticates to obtain a token for its own authority, using the configured method such as a client secret, signed assertion or certificate.
+- **Device code**: Limited-input devices and CLIs that use a separate browser for approval. The device shows a code; you approve on your phone.
 - **Refresh token**: exchange a long-lived refresh token for a new access token. Use **rotation**: each refresh issues a new refresh token and invalidates the old one, so reuse of a stolen one is detectable.
 
 > [!warning] Deprecated grants

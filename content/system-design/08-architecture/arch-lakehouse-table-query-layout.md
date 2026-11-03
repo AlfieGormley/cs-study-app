@@ -40,9 +40,9 @@ A common layering is **bronze** (raw), **silver** (cleaned, deduplicated, confor
 - Both, with one codebase? **Kappa-style streaming plus replay**, or a unified engine.
 - Retain sufficient raw data or suitable snapshots for the required rebuild horizon, subject to deletion and retention requirements. Reproducible replay also needs relevant schemas, code and external inputs.
 
-### A query-layout thought experiment
+### Reading only the data the query needs
 
-Suppose a table has equal-sized columns and equal daily volumes. A one-column query needs only that column in columnar files; a date-partitioned layout can then exclude unrelated days before reading data. Compression reduces the remaining payload further. These savings multiply in the ideal model used by the question, but real queries also read metadata and may need predicate columns, row groups or extra pages. They are not a production benchmark. A table format contributes snapshot and schema rules; it does not automatically guarantee good file sizes, cataloguing or query plans.
+Suppose a table has equal-sized columns and equal daily volumes. A one-column query needs only that column in columnar files; a date-partitioned layout can then exclude unrelated days before reading data. Compression reduces the remaining payload further. These mechanisms can combine, but real queries also read metadata and may need predicate columns, row groups or extra pages. They are not a production benchmark. A table format contributes snapshot and schema rules; it does not automatically guarantee good file sizes, cataloguing or query plans.
 
 ## Key takeaways
 - Warehouses provide analytical query services; lakes store raw files; lakehouse formats define tables over those files.

@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Draw the timeline:\n\n```\nlast copy   disaster        restored\n   │◀─RPO─▶│◀─────RTO──────▶│\n```\n\nBoth targets are limits on a gap in time:\n\n```formula\nt_d − t_c ≤ RPO\nt_r − t_d ≤ RTO\nwhere\nt_d: the disaster time in minutes from a common origin\nt_c: the last surviving recovery point’s time on the same clock, in minutes\nt_r: the restoration time on the same clock, in minutes\nRPO: Recovery Point Objective, the most data loss allowed in minutes; here five minutes\nRTO: Recovery Time Objective, the most downtime allowed in minutes; here one hour is 60 minutes\n≤: \"is at most\"\nIn words: the data lost (from the last good copy to the disaster) must be no more than the RPO, and the outage (from the disaster to recovery) must be no more than the RTO.\n```\n\n1. \"Lose up to 5 minutes of orders\" looks *backwards* from the disaster to the last good copy: a **five-minute RPO**. This means replication or backups must keep a usable recovery point no more than five minutes behind; merely starting a copy every five minutes is insufficient.\n2. \"Back online within 1 hour\" looks *forwards*: a **one-hour RTO**. That rules out a multi-hour restore and points to pilot light or warm standby.",
+    "workedExample": "The tolerated loss of recent orders defines the recovery point objective. The allowed time to restore service defines the recovery time objective. A usable recovery point must actually exist within the loss limit; merely starting a copy periodically is insufficient. Verify the complete restoration route against the downtime target.",
     "link": {
       "title": "Disaster recovery options in the cloud (AWS whitepaper)",
       "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
@@ -33,27 +33,27 @@
     "id": "rel-disaster-recovery-q2",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Your 30 TB database is backed up nightly to another region. A restore runs at an effective **400 MB/s**, followed by about 2 hours of log replay and validation. The business asks for an RTO of 4 hours. Can backup-and-restore meet it?",
+    "prompt": "A representative restore drill takes about 21 hours to copy a database and another two hours for dependent replay and validation. The business requires service recovery within four hours. Can this backup-and-restore path meet the target?",
     "options": [
       {
-        "text": "Yes, it takes about 3 hours in total",
-        "explanation": "This underestimates the copy phase. 30 TB at 400 MB/s is about 21 hours, not 1 hour; check the unit conversion (TB to MB is a factor of 10⁶)."
+        "text": "Yes, because replay is the only part that counts as recovery",
+        "explanation": "The target covers downtime until useful service is restored, including the required copy."
       },
       {
-        "text": "Yes, because the backup is in another region",
-        "explanation": "Location determines whether the backup survives the disaster, not how fast it can be restored. RTO depends on restore throughput and steps."
+        "text": "Yes, if the backup is in another region",
+        "explanation": "Isolation helps the copy survive; it does not shorten the measured restore."
       },
       {
-        "text": "No: around 23 hours in total; you need pilot light or warm standby with a live replica",
-        "explanation": "Correct. 30,000,000 MB / (400 MB/s) = 75,000 s ≈ 20.8 h, plus 2 h replay ≈ 23 h. A continuously replicated database in the DR region avoids the bulk restore entirely."
+        "text": "No: choose and test a faster restoration route, such as a suitably provisioned replicated standby",
+        "explanation": "Correct. The observed copy phase alone exceeds the target; a different path must still prove durability, fencing, capacity and routing."
       },
       {
-        "text": "No, but only because the RPO is 24 hours",
-        "explanation": "Without usable intervening log archives, nightly snapshots can leave about 24 hours of data at risk, which may also be unacceptable, but the question is about RTO, which fails on restore time."
+        "text": "No, solely because backups cannot protect data",
+        "explanation": "Backups can protect recoverable history. The demonstrated problem is recovery duration."
       }
     ],
     "answer": 2,
-    "workedExample": "```formula\nT = D / B + T_replay\nT = 30 TB / (400 MB/s) + 2 h\nT = 30,000,000 MB / (400 MB/s) + 2 h\nT = 75,000 s + 2 h\nT ≈ 20.8 h + 2 h ≈ 22.8 h\nwhere\nT: the total time to recover from the backup, in hours (h)\nD: the data to restore, here 30 terabytes (TB)\nB: the effective restore throughput, here 400 megabytes per second (MB/s)\nT_replay: the time for log replay and validation after the copy, here about 2 h\nTB: terabytes; 1 TB = 1,000,000 MB (decimal units)\nMB: megabytes\nMB/s: megabytes per second\ns: seconds; 3,600 s = 1 h\nh: hours\n≈: approximately equal to (rounded)\nIn words: copying 30 TB at 400 MB/s takes about 21 hours, and replay adds 2 more, so recovery takes nearly a day against a 4-hour target.\n```\n\nCompared with the 4-hour RTO, it misses by about 19 hours.\n\nOptions: keep a cross-region replica (pilot light) so recovery is \"promote and scale the app tier\" (tens of minutes), or warm standby (minutes). Nightly snapshots without intervening log archives can leave about 24 hours of data at risk; compare that separately with the agreed RPO.",
+    "workedExample": "Compare the measured stages with the business deadline. The copy alone is too slow, and dependent replay adds time. A live recovery copy can avoid that bulk copy during the incident, but its lag and the complete failover still need testing. Keep RPO and RTO separate.",
     "link": {
       "title": "Disaster recovery options in the cloud (AWS whitepaper)",
       "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
@@ -109,7 +109,7 @@
       },
       {
         "text": "Using RAID 10 on the database servers",
-        "explanation": "RAID protects against disk failure. It faithfully stores the attacker's encrypted data, offering no protection against logical or malicious changes."
+        "explanation": "RAID protects against disk failure. It faithfully stores the attacker's encrypted data, offering no protection against logical mistakes or malicious changes."
       }
     ],
     "answer": 2,

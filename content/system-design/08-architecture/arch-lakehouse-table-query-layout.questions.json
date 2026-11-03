@@ -33,27 +33,27 @@
     "id": "arch-batch-vs-stream-q12",
     "level": "advanced",
     "type": "single",
-    "prompt": "Analysts query a 2 TB table of events with 200 columns of roughly equal size. A typical query sums one column, filtered by date. Moving from row-oriented JSON to compressed columnar Parquet, partitioned by date, roughly how much data does a one-day query read? Assume 365 days of data and 5× compression. Assume equal per-day volume, decimal units, the date predicate is fully resolved by partition pruning, and ignore metadata/encoding overhead. Compare with an unpartitioned JSON scan.",
+    "prompt": "Analysts sum one metric for one day from a large event table. Which storage design helps avoid reading unrelated payload while still providing a consistent table snapshot?",
     "options": [
       {
-        "text": "About 2 TB, because every query must parse the whole table.",
-        "explanation": "Wrong. That's the JSON case. Columnar layout and partitioning both let the engine skip most of the data."
+        "text": "Unpartitioned JSON files with clearer filenames alone.",
+        "explanation": "Names do not provide column pruning or atomic table metadata commits."
       },
       {
-        "text": "About 10 GB: one column out of 200 is 10 GB uncompressed for the whole year.",
-        "explanation": "Wrong. That ignores partition pruning by date and compression, both of which shrink it further."
+        "text": "A larger object-store bucket without changing file layout.",
+        "explanation": "More space does not make the query skip irrelevant columns or days."
       },
       {
-        "text": "About 5.5 GB: one day is 1/365 of the table.",
-        "explanation": "Wrong. That applies partition pruning but still reads all 200 columns of that day."
+        "text": "Read every object and discard unrelated rows after parsing.",
+        "explanation": "That still incurs the unnecessary input work."
       },
       {
-        "text": "About 5–6 MB: one column, one day, compressed.",
-        "explanation": "Correct. 2 TB ÷ 200 columns = 10 GB per column; ÷ 365 days ≈ 27 MB; ÷ 5 compression ≈ 5.5 MB."
+        "text": "Columnar files with suitable date pruning, compression and a table format used by compatible readers.",
+        "explanation": "Correct. These address different concerns: columns, date ranges, payload size and committed table metadata."
       }
     ],
     "answer": 3,
-    "workedExample": "1. Row JSON: read everything, about 2 TB.\n2. Columnar, pruned and compressed: divide by each saving in turn:\n\n```formula\nB_col = S / C = 2 TB / 200 = 10 GB\nB_day = B_col / D\nB_day = 10 GB / 365 ≈ 27.4 MB\nB = B_day / k\nB ≈ 27.4 MB / 5 ≈ 5.5 MB\nwhere\nB_col: one column for all days, before compression\nB_day: one column for one day, before compression\nB: bytes the one-day, one-column query reads\nS: table size, 2 terabytes (TB)\nC: number of columns, 200 (only 1 is read)\nD: days of data, 365 (only 1 is read)\nk: compression ratio, 5\nTB: terabyte, 1,000 GB\nGB: gigabyte, 1,000 MB\nMB: megabyte, a million bytes\n≈: approximately equal to\nIn words: one column out of 200, one day out of 365, compressed 5×: about 5.5 MB instead of 2 TB.\n```\n\n3. The ideal ratio is 200 × 365 × 5 = 365,000× fewer payload bytes under these assumptions; actual I/O includes metadata and layout effects. This is why warehouses and lakehouses store columnar data.\n\n```\n2e12 / 200 / 365 / 5\n  ≈ 5.5e6 bytes\n```",
+    "workedExample": "1. Columnar files let the engine read required columns.\n2. Date partition or metadata pruning can skip unrelated data.\n3. Compression reduces the remaining payload, while metadata and predicate work remain.\n4. A compatible table-format reader chooses one committed snapshot; the format does not automatically fix poor layouts or plans.",
     "link": {
       "title": "Wikipedia: Column-oriented DBMS",
       "url": "https://en.wikipedia.org/wiki/Column-oriented_DBMS"

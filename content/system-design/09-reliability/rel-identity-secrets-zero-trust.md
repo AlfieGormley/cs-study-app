@@ -33,7 +33,7 @@ Secrets are database passwords, API keys, signing keys and tokens. Rules:
 
 ## Zero trust
 
-The traditional model was a castle and moat: a hard perimeter (VPN, firewall) and a soft, trusted interior. Once an attacker got in, by phishing a laptop for example, they could move laterally.
+A perimeter firewall or VPN does not establish that every request inside the network is trustworthy. An attacker who compromises an internal device may use its access to move laterally.
 
 **Zero trust** (Google's BeyondCorp, NIST SP 800-207) assumes the network is hostile everywhere:
 
@@ -43,13 +43,12 @@ The traditional model was a castle and moat: a hard perimeter (VPN, firewall) an
 - **Least privilege per request**, enforced by policy engines (e.g. Open Policy Agent) close to each resource.
 - **Continuous verification** and logging rather than a one-time login.
 
-```
-Castle-and-moat    Zero trust
-┌──────────────┐   [svc A]─mTLS─▶[svc B]
-│ trusted LAN  │     ▲ identity + policy
-│ A ──▶ B ──▶ C│     │ on every call
-└──────────────┘   [user+device]─▶[proxy]
-```
+> [!analogy] Real-world analogy: checking access inside a building
+> A pass through the main entrance need not open every locked room.
+>
+> **How it maps:** The entrance check resembles a network perimeter; permission checks at each room resemble authorisation at individual resources.
+>
+> **Where it stops:** Software policies evaluate identities and context continuously. Physical location is not proof of trust, and no single identity check grants unlimited later access.
 
 ## Key takeaways
 
@@ -62,3 +61,5 @@ Castle-and-moat    Zero trust
 - [Secrets management cheat sheet (OWASP)](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html)
 - [NIST SP 800-207: Zero Trust Architecture](https://csrc.nist.gov/pubs/sp/800/207/final)
 - [AWS Well-Architected Security Pillar](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/welcome.html)
+- [United States v. Paige Thompson: case documents (US Department of Justice)](https://www.justice.gov/usao-wdwa/united-states-v-paige-thompson)
+- [2019 cybersecurity incident facts (Capital One)](https://www.capitalone.com/digital/facts2019/)

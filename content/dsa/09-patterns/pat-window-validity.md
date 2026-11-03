@@ -25,19 +25,16 @@ for hi in range(len(a)):
     record(hi - lo + 1)    # valid now
 ```
 
-`hi - lo + 1` is the window's length, because both ends are included:
-
-```formula
-L = hi − lo + 1
-L = 5 − 3 + 1 = 3
-where
-L: the number of elements in the window a[lo..hi]
-lo: the index of the window's first element
-hi: the index of the window's last element
-In words: a window from index 3 to index 5 holds positions 3, 4 and 5, three elements; forgetting the + 1 is a classic off-by-one bug.
-```
+`hi - lo + 1` is the window's length, because both ends are included: a window from index 3 to index 5 holds positions 3, 4 and 5, three elements. Forgetting the `+ 1` is a classic off-by-one bug.
 
 If the empty window is valid and add/remove/valid/record each cost O(1), both pointers only move forwards, so each element is added once and removed no more than once: **O(n) total**, even with the inner `while`. That amortised argument is the reason the pattern is fast.
+
+> [!analogy] Real-world analogy: an inchworm crawling along a ruler
+> An inchworm moves by stretching its head forwards, then pulling its tail up behind it. Head and tail only ever move forwards, so however often it stretches and bunches up, each end passes every mark on the ruler at most once.
+>
+> **How it maps:** the head is `hi`, which advances one element per step; the tail is `lo`, which catches up whenever the window becomes invalid. Because neither end goes backwards, there are at most about twice as many moves as elements: the linear-time argument.
+>
+> **Where it stops:** a real inchworm pulls its tail up whenever it likes. The algorithm moves `lo` only when the validity rule says so, and that rule must be monotonic, as the warning below explains. Otherwise pulling the tail forwards can throw away an answer.
 
 > [!warning] The precondition: monotonicity
 > These variable-window templates need **monotonic** validity: every subwindow of a valid window stays valid for the longest/shrink-when-invalid template; every superwindow of a valid window stays valid for the shortest/shrink-while-valid template. Merely being able to make some invalid window valid by growing is insufficient. "Sum at most k", with non-negative numbers and a non-negative limit k, qualifies. With **negative numbers**, removing an element can *increase* the sum, so the window can't tell which way to move. Use prefix sums instead (the prefix-sum units).

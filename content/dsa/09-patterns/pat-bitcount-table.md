@@ -15,9 +15,8 @@ Here n is a nonnegative integer upper bound. The table stores counts for every v
 
 Calling a bit-at-a-time or set-bit-clearing routine on every integer through n takes O(n log n) word operations overall; a constant-time native-word popcount changes that comparison. The following DP uses O(n) table operations and O(n) entries: `i >> 1` is `i` with its last bit dropped, and we've already computed it.
 
-```formula
+```formula reference
 B(i) = B(⌊i / 2⌋) + (i mod 2)
-B(7) = B(3) + 1 = 2 + 1 = 3
 where
 B(i): the number of 1 bits in i (`bits[i]` in the code); B(0) = 0
 i: an integer from 1 to n
@@ -51,6 +50,6 @@ The alternative recurrence `bits[i] = bits[i & (i - 1)] + 1` reuses the lowest-b
 ## Further reading
 - [Bit manipulation — cp-algorithms](https://cp-algorithms.com/algebra/bit-manipulation.html)
 - [Enumerating submasks — cp-algorithms](https://cp-algorithms.com/algebra/all-submasks.html)
-- [Bit Twiddling Hacks — Sean Eron Anderson, Stanford](https://graphics.stanford.edu/~seander/bithacks.html)
+- [Bit Twiddling Hacks — Sean Eron Anderson, Stanford (archived copy)](https://web.archive.org/web/20250605031917/https://graphics.stanford.edu/~seander/bithacks.html)
 - [Hamming weight — Wikipedia](https://en.wikipedia.org/wiki/Hamming_weight)
 - [Binary cheatsheet — Tech Interview Handbook](https://www.techinterviewhandbook.org/algorithms/binary/)

@@ -7,7 +7,7 @@ sourceLesson: pat-heaps
 summary: For the largest values, the minimum root is the weakest retained member.
 ---
 
-Here n is the number of scored numeric inputs and k is the requested number to keep. Comparisons have constant cost; values must provide consistent ordering.
+Here n is the number of scored numeric inputs and k is the requested number to keep. Comparisons have constant cost; values must provide consistent ordering. The Trees & Heaps module's "Python priority queues and streaming top-k" and the Sorting & Searching module's "Keeping top-k from a stream" and "Quickselect keeps one partition" units cover the mechanics; this unit is about choosing between them.
 
 ## Pattern 1: top-K
 
@@ -22,24 +22,7 @@ Options:
 | Max-heapify all, pop k | O(n + k log(n + 1)) | O(n) storage; O(1) heapify auxiliary |
 | Randomised quickselect | O(n) expected | O(1) auxiliary with iterative in-place partition |
 
-To see why the size-k heap pays off when k is much smaller than n, compare the dominant terms:
-
-```formula
-W_sort ≈ n log_2(n)
-W_heap ≈ n log_2(k)
-W_sort ≈ 10^6 × 20 = 2 × 10^7
-W_heap ≈ 10^6 × 3.3 ≈ 3.3 × 10^6
-where
-W_sort: an illustrative comparison-growth expression for sorting all n items, not an exact comparison count
-W_heap: an illustrative logarithmic-work expression for scanning n values with a size-k min-heap; replacements and actual comparisons depend on input and implementation
-n: the number of items; here 10^6
-k: how many of the largest items you want; here 10
-log_2: the base-2 logarithm, the number of halvings from the argument down to 1; log_2(10^6) ≈ 20 and log_2(10) ≈ 3.3
-≈: approximately equal to
-In words: each heap operation only climbs a tree log_2(k) levels deep instead of log_2(n), so for the top 10 of a million items these two expressions have a ratio of about six; the size-k heap holds only 10 candidate items. This ratio is not an actual comparison count or measured speedup.
-```
-
-These are rough counts that ignore constant factors; the memory saving (k items instead of n) is often the bigger win.
+Why does the size-k heap pay off when k is much smaller than n? Every arrival is compared with the root once. In a random arrival order almost all of them lose that comparison and are ignored; only the winners pay for a replacement, which walks a tree about log k levels deep instead of log n. For the top 10 of a million items, the heap's tree is only 3 levels below the root, while a comparison sort of a million items in random order needs roughly 20 comparisons per item (the base-2 logarithm of a million is about 20, and no comparison sort can average fewer than about 18.5 per item at this size). Values arriving in increasing order are the heap's worst case: every arrival wins and pays for a replacement, but each replacement is still only about 3 levels deep. These are rough growth figures that ignore constant factors; the memory saving (k items instead of n) is often the bigger win, and it lets the heap work on a stream. As k approaches n, the advantage disappears.
 
 The size-k heap is a standard option. The counter-intuitive part: to keep the k **largest**, use a **min**-heap. Its root is the smallest of your current top k, the "weakest member", which is exactly what a newcomer must beat.
 

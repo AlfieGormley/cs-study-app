@@ -17,19 +17,6 @@ A 1-D DP has a state described by a single index or amount: `dp[i]` for a positi
 - **Recurrence**: the last move was a 1-step (from i − 1) or a 2-step (from i − 2). Those are disjoint (no route is counted in both), so add them.
 - **Base**: `ways[0] = 1` (one way to stand still), `ways[1] = 1`.
 
-```formula
-ways[0] = 1
-ways[1] = 1
-ways[i] = ways[i − 1] + ways[i − 2]
-ways[5] = ways[4] + ways[3] = 5 + 3 = 8
-where
-ways[i]: the number of different sequences of 1-steps and 2-steps that end exactly on step i
-i: the step number, 0 at the bottom; the rule applies for i of 2 or more
-ways[i − 1]: routes whose last move was a single step from i − 1
-ways[i − 2]: routes whose last move was a double step from i − 2
-In words: every route to step i ends with either a 1-step or a 2-step, so the count is the routes to the step below plus the routes to the step two below.
-```
-
 ```python
 def climb(n):
     # Reject values outside the recurrence.
@@ -43,22 +30,11 @@ def climb(n):
     return b
 ```
 
-The call `climb(5)` returns 8. The counts are Fibonacci shifted by one position:
-
-```formula
-ways[i] = F(i + 1)
-ways[5] = F(6) = 8
-where
-ways[i]: the number of ordered routes to step i using steps of size one or two
-i: a nonnegative whole-number stair position
-F(k): the Fibonacci number at position k, counting from values zero and one
-k: a Fibonacci position
-In words: Staircase counts start with one empty route and one single-step route, so they are the next Fibonacci number.
-```
+The call `climb(5)` returns 8. The counts 1, 1, 2, 3, 5, 8, ... are the Fibonacci numbers shifted along by one, because the recurrence is the same and only the starting values differ.
 
 If you can take steps of size 1, 2 or 3, the recurrence gains a third term. In general, for any set of allowed step sizes:
 
-```formula
+```formula essential
 ways[i] = Σ ways[i − s]   for s ∈ S
 where
 ways[i]: the number of ordered step sequences that reach step i exactly
@@ -70,18 +46,9 @@ s: one allowed step size from S
 In words: the routes to step i are grouped by their last step size, so add up the routes to each step that is one allowed jump below i.
 ```
 
-A remainder below step zero counts as zero routes. With step sizes one, two and three:
+A jump that would start below step zero counts as zero routes. With step sizes one, two and three, step 3 can be reached last from step 2, step 1 or the ground, so it has 2 + 1 + 1 = 4 routes: 111, 12, 21 and 3.
 
-```formula
-S = {1, 2, 3}
-ways[3] = ways[2] + ways[1] + ways[0]
-ways[3] = 2 + 1 + 1 = 4
-where
-S: the allowed positive step sizes
-ways[i]: the count of ordered routes to step i with sizes from S
-i: a nonnegative stair position
-In words: Three possible final step sizes give four routes to the third stair.
-```
+Notice what is being counted: **ordered** sequences. 1 + 2 and 2 + 1 are different routes, because grouping by the *last* step keeps them apart. Counting unordered collections of step sizes needs a different loop structure, covered with coin change later in this module.
 
 ## Key takeaways
 - Group routes by their final allowed step.

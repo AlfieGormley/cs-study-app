@@ -7,15 +7,15 @@ sourceLesson: pat-prefix-sums
 summary: Count frequencies of earlier running totals, including one empty prefix.
 ---
 
-Here n is the array length and k is a target sum. The preceding padded prefix convention represents the empty prefix with total zero.
+Here n is the array length and k is a target sum. The preceding padded prefix convention represents the empty prefix with total zero. The Hash Tables & Hashing module's "Counting subarrays with prefix sums" unit develops the same map from the hashing side; here it is the prefix-sum pattern's main counting tool.
 
 ## Subarray sum equals k
 
 **Problem.** Count the nonempty contiguous subarrays whose sum is exactly `k`. Values may be negative.
 
-A sliding window fails because of the negatives (the sliding-window units). Prefix sums turn the question around:
+A sliding window fails because of the negatives (the sliding window units). Prefix sums turn the question around:
 
-```formula
+```formula essential
 S(i, j) = k
 P[j + 1] − P[i] = k
 P[i] = P[j + 1] − k

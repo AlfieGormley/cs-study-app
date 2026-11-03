@@ -11,12 +11,18 @@ Here n is the input length. The preceding examples remove each stored candidate 
 
 ## Why it's O(n): the amortised argument
 
-Count operations per element rather than per loop iteration:
+Count operations per element rather than per iteration of a loop:
 
 - each index is pushed exactly once: n pushes;
 - each index is popped no more than once: at most n pops.
 
-So the combined pushes and pops number at most twice the input length; loop tests, comparisons and output writes add O(n) more work. A single step may pop many elements, but then those elements are gone and can't be popped again.
+So the combined pushes and pops number at most twice the input length; loop tests, comparisons and output writes add O(n) more work. A single step may pop many elements, but then those elements are gone and can't be popped again. The Complexity Analysis module's amortised-analysis units develop this style of counting in general.
+
+## Greedy digit removal uses a deletion budget
+
+To make a nonnegative decimal number as small as possible after removing a fixed number of digits, scan its digits left to right. While deletions remain and the kept last digit is larger than the incoming digit, delete that last digit. At the first differing position, keeping the smaller incoming digit wins lexicographically for equal-length digit strings. If deletions remain after the scan, remove that many trailing digits. Strip leading zeros for the returned numeric representation and return zero if nothing remains.
+
+The deletion budget matters: after it is exhausted, the retained digits need not stay monotonic. Each digit is still appended once and removed at most once, so the scan is linear in the number of input digits. This greedy use shares the stack’s total-operation proof, not every invariant of next-greater search.
 
 ## Recognising the pattern
 
@@ -28,6 +34,8 @@ So the combined pushes and pops number at most twice the input length; loop test
 | Max/min of each window | Monotonic deque |
 | DP over a sliding max/min | Monotonic deque |
 | Remove k digits for smallest | Increasing stack (greedy) |
+
+What these share is a one-way discard rule that follows arrival order. A newcomer removes the most recent survivors, either because it answers them (next greater) or because it outlasts and outranks them (window maximum, previous greater, digit removal); expiry, where used, removes the oldest. Every removal therefore happens at an end of the structure, and nothing removed is needed again. When the item to evict or report can sit anywhere in arrival order, use a heap or balanced tree instead: keeping the k largest values seen so far evicts the smallest retained value whenever it arrived, and priorities unrelated to arrival order behave the same way.
 
 ## Pitfalls
 
@@ -42,12 +50,6 @@ So the combined pushes and pops number at most twice the input length; loop test
 - Largest rectangle uses smaller-height boundaries; the code assigns equal heights asymmetrically (previous strictly smaller, next smaller-or-equal) to cover their full span.
 - A monotonic deque gives the max or min of every sliding window in O(n), while a heap with unbounded lazy deletion can take O(n log n).
 - Store indices, choose strict or non-strict comparisons deliberately, and flush leftovers.
-
-## Greedy digit removal uses a deletion budget
-
-To make a nonnegative decimal number as small as possible after removing a fixed number of digits, scan its digits left to right. While deletions remain and the kept last digit is larger than the incoming digit, delete that last digit. At the first differing position, keeping the smaller incoming digit wins lexicographically for equal-length digit strings. If deletions remain after the scan, remove that many trailing digits. Strip leading zeros for the returned numeric representation and return zero if nothing remains.
-
-The deletion budget matters: after it is exhausted, the retained digits need not stay monotonic. Each digit is still appended once and removed at most once, so the scan is linear in the number of input digits. This greedy use shares the stack’s total-operation proof, not every invariant of next-greater search.
 
 ## Key takeaways
 - Count total pushes and pops across the scan rather than multiplying loop bounds.

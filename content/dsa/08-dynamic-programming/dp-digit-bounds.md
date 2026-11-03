@@ -56,45 +56,33 @@ def count_digit_sum(N, k):
 
 `count_digit_sum(100, 5)` is 6 (5, 14, 23, 32, 41, 50). `count_digit_sum(2024, 10)` is 120.
 
-**Complexity**: count the states:
-
-```formula
-states = positions × sums × 2
-states ≤ 20 × 172 × 2 = 6,880
-work ≤ states × 10 = 68,800
-where
-states: the number of possible (pos, s, tight) combinations; the factor 2 is the two values of tight, True and False
-positions: digit positions, at most 19 for N ≤ 10^18, plus 1 for the end, so 20
-sums: possible digit sums so far, 0 to 9 × 19 = 171, so 172 values
-work: an upper bound on digit choices tried, 10 per state (digits 0 to 9)
-N: the upper limit of the range being counted
-≤: at most
-In words: the memo table has one entry per position, running sum and tight flag, and each entry tries at most ten digits.
-```
-
-Many of those states are unreachable, and exceeding the target digit sum prunes more. Exact counts may require growing integers.
-
-> [!note] Content gap
-> The original microsecond running-time prediction is omitted because no reproducible benchmark supports it.
+**Complexity**: count the states. For a bound up to 10¹⁸ there are at most 20 positions (including the end), at most 172 possible digit sums (0 to 171) and 2 values of `tight`: a few thousand states (at most 6,880), each trying at most ten digits. Many of those states are unreachable, and exceeding the target digit sum prunes more. Compare that with enumerating up to 10¹⁸ numbers.
 
 Two standard moves:
 
 - **Ranges**: count in [L, R] using the counts up to each end:
 
-```formula
+```formula reference
 count(L, R) = f(R) − f(L − 1)
 where
 count(L, R): how many integers from L to R inclusive have the property
 f(x): how many integers from 0 to x inclusive have the property (f(−1) = 0)
 L: the lower end of the range, 0 or more
 R: the upper end of the range
-In words: everything up to R, minus everything below L, leaves exactly the numbers from L to R.
+In words: count everything from zero up to the upper end, then subtract everything from zero up to one below the lower end; what is left is exactly the range.
 ```
 
 - **Leading zeros**: if the property cares about them (e.g. "no two adjacent equal digits", where 007 shouldn't count as having adjacent zeros), add a `started` flag to the state.
 
 > [!tip] The intuition
 > Once you've placed a digit smaller than N's digit, you're "free": every remaining combination is below N. That's why the `tight=False` states are shared between many prefixes and get cached. `tight=True` is a single path that hugs N.
+
+> [!analogy] Real-world analogy: words that come before "dog" in a dictionary
+> To list the three-letter words that come before "dog" alphabetically, look at the first letter. Start with a, b or c and any two letters may follow. Start with d and you are still pinned: the second letter can be at most o, and if it is exactly o, the third letter is pinned too.
+>
+> **How it maps:** "dog" is the bound N and each letter is a digit. Still matching the bound's letters so far is `tight=True`, so the next letter is capped by the bound's letter. Once you pick a smaller letter, you are free (`tight=False`), and every "free" continuation from the same position looks the same, which is what the cache reuses.
+>
+> **Where it stops:** a dictionary also lists shorter words, and "do" comes before "dog". Digit DP pads every number to the same length with leading zeros, so it needs a separate `started` flag whenever leading zeros would change the property being counted.
 
 ## Key takeaways
 - The tight flag records whether the prefix still matches the bound.

@@ -37,7 +37,9 @@ Each item can be taken at most once. The code assumes positive integer weights, 
 - Skip it: `K[i-1][c]`.
 - Take it, if it fits: `K[i-1][c-w] + v`.
 
-```formula
+Keep the larger. An item heavier than the current weight limit can only be skipped.
+
+```formula reference
 K[i][c] = K[i − 1][c]   if w_i > c
 K[i][c] = max(K[i − 1][c],
   K[i − 1][c − w_i] + v_i)   if w_i ≤ c
@@ -54,18 +56,7 @@ max: the larger of the two options
 In words: either skip item i and keep the best for the earlier items, or, if it fits, take it, gaining its value but losing its weight from the capacity.
 ```
 
-No items give zero value. With the items above:
-
-```formula
-K[3][7] = max(K[2][7], K[2][3] + 5)
-K[3][7] = max(5, 4 + 5) = 9
-where
-K[i][c]: the best value using the first i items within capacity c
-i: the number of items considered
-c: the capacity in whole kilograms
-max: the larger value
-In words: Adding item C to the best earlier three-kilogram packing beats skipping it.
-```
+No items give zero value. For example, when item C (4 kg, value 5) is considered at weight limit 7, skipping it keeps the best earlier value, 5; taking it adds 5 to the best earlier packing of the remaining 3 kg, which is 4 (item B). Taking it wins: 9.
 
 For the items above (rows count considered items; columns give weight limits zero through seven):
 

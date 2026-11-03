@@ -13,7 +13,7 @@ The earlier prefix-subtraction idea extends to grids. The example uses exact int
 
 For a grid, let `P[r][c]` be the sum of the rectangle from `(0, 0)` up to but not including row `r` and column `c`. Build it with inclusion–exclusion:
 
-```formula
+```formula reference
 P[r+1][c+1] = g[r][c]
   + P[r][c+1]
   + P[r+1][c]
@@ -59,21 +59,7 @@ The query subtracts the strip above and the strip to the left, then adds back th
   +-----+-------+      + D
 ```
 
-The drawing’s letters identify four regions. In the formula below, each letter denotes that region’s cell sum:
-
-```formula
-T = A + B + C + D
-S_A = T − (B + D) − (C + D) + D
-S_A = A
-where
-T: the total cell sum over all four regions
-A: the cell sum in the selected lower-right region
-B: the cell sum in the upper-right region
-C: the cell sum in the lower-left region
-D: the cell sum in the upper-left region
-S_A: the recovered sum in the selected region
-In words: remove the upper strip and left strip from the total, then restore their shared corner; only the selected region remains.
-```
+In the drawing, A is the wanted rectangle. The table entry at its bottom-right corner covers all four regions; the strip above covers B and D, the strip to the left covers C and D, so D has been removed twice and is added back once.
 
 For the grid
 
@@ -92,22 +78,22 @@ P = 0  0  0  0  0
     0  9 17 21 28
 ```
 
-and the rectangle rows 1–2, columns 1–2 (the cells 6, 3, 2, 0) comes from four lookups:
+and any rectangle comes from four lookups:
 
-```formula
+```formula essential
 A = P[r2+1][c2+1] − P[r1][c2+1]
   − P[r2+1][c1] + P[r1][c1]
-A = P[3][3] − P[1][3] − P[3][1] + P[1][1]
-A = 21 − 4 − 9 + 3 = 11
 where
 A: the sum of the rectangle from row r1 to row r2 and column c1 to column c2, all inclusive
 P[r][c]: the sum of all cells above row r and left of column c
-r1: the top row of the rectangle; here 1
-r2: the bottom row; here 2
-c1: the left column; here 1
-c2: the right column; here 2
-In words: take everything up to the bottom-right corner, remove the strip above and the strip to the left, then add back the top-left block that was removed twice; 6 + 3 + 2 + 0 = 11 checks it.
+r1: the top row of the rectangle
+r2: the bottom row
+c1: the left column
+c2: the right column
+In words: take everything up to the bottom-right corner, remove the strip above and the strip to the left, then add back the top-left block that was removed twice.
 ```
+
+For rows 1–2 and columns 1–2 (the cells 6, 3, 2 and 0), the four table entries are 21, 4, 9 and 3, and 21 − 4 − 9 + 3 = 11, which matches 6 + 3 + 2 + 0.
 
 This is the **summed-area table** from computer graphics, introduced for texture mapping in 1984. The Viola–Jones face detector used it (as the "integral image") to evaluate rectangular features in constant time, which helped make real-time face detection practical in the early 2000s.
 

@@ -15,26 +15,25 @@ Many interval algorithms begin with **sorting**. For merging, tracking the curre
 
 For valid closed intervals `[a, b]` and `[c, d]` (each start no later than its end), the overlap test is:
 
-```formula
+```formula essential
 a ≤ d and c ≤ b
-1 ≤ 6 and 2 ≤ 3
 where
 a: the start of the first interval
 b: the end of the first interval, with a ≤ b
 c: the start of the second interval
 d: the end of the second interval, with c ≤ d
 ≤: "is less than or equal to"
-In words: two closed intervals overlap exactly when both conditions hold, that is, when each one starts no later than the other ends; the worked line checks [1, 3] against [2, 6], which pass both tests, so they overlap.
+In words: two closed intervals overlap exactly when each one starts no later than the other ends.
 ```
 
-That is, each starts before (or when) the other ends. The predicate uses two endpoint comparisons, whatever the interval lengths, and works for any ordered values: integers, times or real numbers. It's easier to remember the negation: they do not overlap if either interval ends strictly before the other starts.
+For example, [1, 3] and [2, 6] overlap: 1 is no later than 6, and 2 is no later than 3. The predicate uses two endpoint comparisons, whatever the interval lengths, and works for any ordered values: integers, times or real numbers. It's easier to remember the negation: they do not overlap if either interval ends strictly before the other starts.
 
 > [!warning] Closed or start-inclusive, end-exclusive?
 > Do `[1, 3]` and `[3, 5]` overlap? Under the closed interval convention (both ends included), yes: they share the point 3. For meetings, usually no: a meeting ending at 3:00 frees the room for one starting at 3:00. That's a **start-inclusive, end-exclusive** interval `[start, end)`, and for nonempty intervals the test becomes strict (see the formula below). The meeting and scheduling code below assumes positive duration and finite, consistently ordered numeric endpoints. Empty intervals require separate handling. Endpoint semantics affect overlap tests and event ties; merging adjacent half-open intervals is a separate policy, since their union can be consecutive even though they do not overlap.
 
 For half-open intervals the touching case no longer counts:
 
-```formula
+```formula reference
 a < d and c < b
 where
 a: the start of the first interval [a, b), included
@@ -57,9 +56,8 @@ def merge(intervals):
     out = []
     for s, e in intervals:
         if out and s <= out[-1][1]:
-            # overlaps: extend the end
-            # Containment must not shorten
-            # the block.
+            # Overlap: extend the end, but
+            # never shorten the block.
             out[-1][1] = max(out[-1][1], e)
         else:
             # A separate block begins after

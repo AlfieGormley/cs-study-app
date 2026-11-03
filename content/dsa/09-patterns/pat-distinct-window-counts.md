@@ -7,7 +7,7 @@ sourceLesson: pat-sliding-window
 summary: Every valid start between the left and right edges contributes one ending window.
 ---
 
-Here n is the input length and k is an integer distinct-value budget. Values must be hashable; count-map operations have expected constant cost.
+Here n is the input length and k is an integer distinct-value budget. The Hash Tables & Hashing module's "A sliding window with at most k distinct keys" unit builds the count map used here; this unit adds the counting trick. Values must be hashable; count-map operations have expected constant cost.
 
 ## Counting windows: the at-most trick
 
@@ -43,17 +43,7 @@ def exactly(a, k):
 
 These functions count nonempty subarrays; a negative distinct budget gives 0, and `exactly(a, 0)` gives 0. Values must be hashable.
 
-The subtraction works because every subarray with at most k distinct values has either exactly k or at most k − 1:
-
-```formula
-E(k) = M(k) − M(k − 1)
-E(2) = M(2) − M(1) = 12 − 5 = 7
-where
-E(k): the number of nonempty subarrays with exactly k distinct values (`exactly(a, k)`)
-M(k): the number with at most k distinct values (`at_most(a, k)`)
-k: the number of distinct values asked for, a whole number
-In words: count everything with at most k distinct values, then take away everything with at most k − 1; what is left has exactly k.
-```
+The subtraction works because every subarray with at most k distinct values has either exactly k or at most k − 1. Count everything with at most k, take away everything with at most k − 1, and what is left has exactly k.
 
 For `[1, 2, 1, 2, 3]` with k = 2: twelve subarrays have at most two distinct values (all 15 except the three that end with 3 and also contain both 1 and 2), and five have at most one (the five single elements, since no two neighbours are equal). So exactly 7 subarrays have exactly two distinct values.
 

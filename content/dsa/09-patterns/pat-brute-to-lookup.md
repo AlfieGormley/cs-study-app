@@ -7,7 +7,7 @@ sourceLesson: pat-approach
 summary: A brute-force solution supplies a correctness baseline and exposes repeated work.
 ---
 
-The input has n elements. This unit turns a scan of all pairs into a lookup of earlier values, preserving original indices.
+The input has n elements. This unit shows the routine's middle steps on one example: a scan of all pairs becomes a lookup of earlier values. The Hash Tables & Hashing module's "Two-sum and complement lookup" unit covers the hash-map side in more depth; the focus here is how you get from the slow version to the fast one.
 
 ## Step 3: brute force
 
@@ -27,18 +27,7 @@ def two_sum_brute(a, target):
     return None
 ```
 
-The two loops look at every pair of positions once. The number of pairs tells you the cost:
-
-```formula
-N_pairs = (n(n − 1)) / 2
-N_pairs = 4 × 3 / 2 = 6
-where
-N_pairs: the number of different (i, j) pairs with i before j, which is how many times the `if` line runs in the worst case
-n: the number of elements in the array; here 4
-i: the index (position, counting from 0) of the first number in a pair
-j: the index of the second number in a pair, always greater than i
-In words: each of the n elements is paired with each of the n − 1 others, and halving removes the double count of (i, j) and (j, i); 4 elements give 6 pairs, and 100,000 elements give about 5 billion.
-```
+The two loops look at every pair of positions once, so in the worst case the `if` line runs about half of n squared times: 4 elements give 6 pairs, and 100,000 elements give about 5 billion. (The Complexity Analysis module's "Comparing every pair" unit counts these pairs exactly.)
 
 That is O(n²) time and O(1) extra space: the work grows with the square of n, while the memory used beyond the input stays fixed. You don't always need to code the brute force; saying it and its cost is usually enough.
 
@@ -46,19 +35,7 @@ That is O(n²) time and O(1) extra space: the work grows with the square of n, w
 
 Look for wasted work. Three useful questions are:
 
-1. **What is the bottleneck?** In two sum, the inner loop: for each `a[i]`, we search the rest of the array for `target - a[i]`, the one value that would complete the pair:
-
-```formula
-y = T − x
-y = 6 − 2 = 4
-where
-y: the complement, the value that must already be in the array to pair with x
-T: the target sum (`target` in the code); here 6
-x: the current element (`a[i]` or `x` in the code); here 2
-In words: once you know the target and the current number, only one partner can work, so the question becomes "have I seen 4?" rather than "which pair works?".
-```
-
-That single partner is what makes a lookup structure useful in the next question.
+1. **What is the bottleneck?** In two sum, the inner loop: for each `a[i]`, we search the rest of the array for `target - a[i]`, the one value that would complete the pair. With target 6 and current value 2, only a 4 can work, so the question becomes "have I seen 4?" rather than "which pair works?". That single partner is what makes a lookup structure useful.
 2. **Is there a data structure that answers that inner question faster?** "Have I seen value v?" is a hash-set lookup: O(1) on average.
 3. **Am I recomputing something?** Running totals, window contents and "best so far" values can usually be carried forward instead of recomputed.
 
@@ -76,7 +53,7 @@ def two_sum(a, target):
     return None
 ```
 
-Now it is expected O(n) time under constant-cost, well-distributed hashing and O(n) space. Numeric examples assume exact arithmetic; large Python integers add bit-length costs. We traded memory for time, which is the most common trade in this whole module.
+Now it is expected O(n) time under constant-cost, well-distributed hashing and O(n) space. We traded memory for time, which is the most common trade in this whole module.
 
 > [!note] Why check before inserting?
 > If `x` is exactly half the target (say target 6 and a current value of 3), inserting first would let `x` pair with itself. Checking first means a value can only pair with an *earlier* element.

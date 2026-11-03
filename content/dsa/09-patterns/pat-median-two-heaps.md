@@ -20,18 +20,26 @@ Re-sorting each time is O(n log n) per query. Instead, split the numbers into tw
 
 Keep every element of `lo` no larger than every element of `hi`, and keep the sizes balanced: `len(lo)` equals `len(hi)` or exceeds it by one. Then the median sits at the tops:
 
-```formula
+```formula reference
 m = a   if |lo| > |hi|
 m = (a + b) / 2   if |lo| = |hi|
-m = (3 + 5) / 2 = 4
 where
 m: the median of all numbers seen so far
 a: the top of lo, the largest number in the smaller half
 b: the top of hi, the smallest number in the larger half
 |lo|: the number of items in the max-heap lo
 |hi|: the number of items in the min-heap hi
-In words: with an odd count, lo holds the extra item and its top is the middle value; with an even count, the median is the average of the two middle values, here 3 and 5 after adding 5, 15, 1 and 3.
+In words: with an odd count, lo holds the extra item and its top is the median; with an even count, the median is the average of the two tops.
 ```
+
+For example, after adding 5, 15, 1 and 3, the tops are 3 and 5, so the median is 4.
+
+> [!analogy] Real-world analogy: a class photo split down the middle
+> A photographer splits a class into a shorter half on the left and a taller half on the right, with the tallest of the short half and the shortest of the tall half standing next to each other in the centre. The middle height is right there at the join. When a new child arrives, they go to the correct side, and if one side gets too big, the person at the join steps across.
+>
+> **How it maps:** the short half is the max-heap `lo`, the tall half is the min-heap `hi`, and the two people at the join are the heap tops. Stepping across is the rebalancing move that keeps the halves the same size or `lo` one bigger.
+>
+> **Where it stops:** in the photo everyone stands in height order, but a heap only guarantees its top; the rest of each half is in heap order, not sorted. That is enough here, because the median only ever needs the two people at the join.
 
 ```
   lo (max-heap)      hi (min-heap)

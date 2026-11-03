@@ -11,28 +11,22 @@ sourceLesson: dp-advanced
 
 > Given distances between n cities, find the shortest tour that starts at city 0, visits every city exactly once, and returns.
 
-Brute force fixes city 0 as the start and tries every order of the rest:
+Brute force fixes city 0 as the start and tries every order of the other n − 1 cities: (n − 1)! orders (n − 1 factorial, the product 1 × 2 × … × (n − 1)). For just 20 cities that is about 120 quadrillion tours. Hopeless.
 
-```formula
-tours = (n − 1)!
-(20 − 1)! = 19! ≈ 1.2 × 10^17
-where
-tours: the number of orderings brute force must check
-n: the number of cities; the tour-closing recurrence applies for at least two cities, while zero or one city returns zero
-!: factorial, the product of every whole number from 1 up to the number (4! = 1 × 2 × 3 × 4 = 24)
-≈: approximately equal to
-In words: after fixing the start, the remaining n − 1 cities can be visited in (n − 1)! different orders.
-```
+The key observation: once you've visited a set of cities and are standing at city j, the **order** you visited them in no longer matters for the rest of the tour. Only the set and the current city do. That's the state. This DP was published independently in 1962 by Richard Bellman and by Michael Held and Richard Karp, which is why it is also called Bellman–Held–Karp.
 
-That is 120 quadrillion tours for just 20 cities. Hopeless.
-
-The key observation: once you've visited a set of cities and are standing at city j, the **order** you visited them in no longer matters for the rest of the tour. Only the set and the current city do. That's the state.
+> [!analogy] Real-world analogy: a sales rep's ticked-off list
+> A sales rep driving round a region keeps a list of towns with a tick next to each one visited. To plan the rest of the trip they need two things: which towns are ticked and where they are parked now. The order of this morning's visits is irrelevant to the cheapest way to finish.
+>
+> **How it maps:** the ticked list is the visited-set bitmask and the current town is j, so (ticks, current town) is the DP state. Two morning routes that end in the same town with the same ticks share one state, and only the shorter of them is worth keeping.
+>
+> **Where it stops:** the rep plans one trip forwards. The DP must compute an answer for every possible list of ticks and every possible current town, about n × 2ⁿ states, which is why it is only practical for roughly two dozen cities or fewer.
 
 **State**: `dp[mask][j]` records length of the shortest path that starts at 0, visits exactly the cities in `mask`, and ends at j.
 
 **Recurrence**: extend a path by one unvisited city k. Written "pulling" from the state before k was added:
 
-```formula
+```formula essential
 dp[S ∪ {k}][k] = min(dp[S][j] + d[j][k])
    for j ∈ S, k ∉ S
 dp[{0}][0] = 0

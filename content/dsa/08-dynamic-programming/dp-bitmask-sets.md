@@ -11,20 +11,9 @@ Every DP so far has had states indexed by positions, lengths or weight limits. T
 
 ## Bitmask DP
 
-When the state needs to know **which items from a small set have been used**, encode that set as the bits of an integer (a **bitmask**): bit j is 1 if item j is in the set. Each item is either in or out, so:
+When the state needs to know **which items from a small set have been used**, encode that set as the bits of an integer (a **bitmask**): bit j is 1 if item j is in the set. Each item is either in or out, so every extra item doubles the number of possible sets: n items give 2ⁿ subsets, about a million for 20 items.
 
-```formula
-subsets = 2^n
-2^20 = 1,048,576 ≈ 10^6
-where
-subsets: the number of different sets (bitmasks) that can be formed from the items
-n: the number of items
-2^n: n copies of 2 multiplied together
-≈: approximately equal to
-In words: every item doubles the number of possible sets, because each existing set can either include it or not.
-```
-
-With n items there are 2ⁿ subsets, so practical limits depend on the number of dimensions, transitions, representation and available resources; the following table shows growth, not a hardware guarantee.
+That doubling is why bitmask DP is only for small sets. Practical limits depend on how many other dimensions the state has, how many transitions each state tries, and the available memory and time. The table shows growth for a state that also records one of n endpoints with up to n transitions each (as in the travelling-salesman DP next), not a hardware guarantee.
 
 | Items | Subsets | Endpoint slots | Work proxy |
 |---|---|---|---|
@@ -33,19 +22,9 @@ With n items there are 2ⁿ subsets, so practical limits depend on the number of
 | 20 | ~10⁶ | ~2 × 10⁷ | ~4 × 10⁸ |
 | 25 | ~3.4 × 10⁷ | ~8 × 10⁸ | ~2 × 10¹⁰ |
 
-```formula
-slots = n 2^n
-work = n^2 2^n
-where
-slots: the allocated entries when a DP also records one of n possible endpoints
-work: a rough upper-work expression with up to n transitions per entry
-n: the number of items
-In words: Adding an endpoint and transition choice multiplies subset growth by one factor of the item count each.
-```
+Each extra item multiplies the subsets by 2, and the endpoint and transition choices each add another factor of the item count, which is why the work column grows so fast.
 
-For example, start with cities zero, one and three included. Setting the bit for city two adds it; testing that bit before adding it reports absence. The following expression fragment assumes `mask` holds decimal 11, `j` is 2 and `n` is 5. It shows operations rather than printing their results.
-
-The bit operations you need:
+The bit operations you need (for example, with `mask` = 11, binary `01011`, meaning items 0, 1 and 3, and `j` = 2, testing gives 0 because item 2 is absent, and adding it gives 15):
 
 ```python
 mask & (1 << j)     # is j in the set?

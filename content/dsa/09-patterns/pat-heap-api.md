@@ -7,7 +7,9 @@ sourceLesson: pat-heaps
 summary: A min-heap exposes its minimum at the root without sorting every element.
 ---
 
-A binary heap gives you the minimum (or maximum) of a changing collection in O(1), and inserts or removes the root in O(log(n + 1)) heap comparisons, where n is the number of items in the heap. The log is there because a heap is a balanced tree a number of levels logarithmic in its size, and an insert or removal walks one path from top to bottom; the + 1 just keeps the bound meaningful when n is 0 or 1. Removing an arbitrary item needs a way to locate it. Python list resizing makes individual operations occasionally linear; the standard bound is amortised and assumes constant-cost comparisons. Many problems that look like "sort everything" only need the *best few* items, or the *current* best, and a heap can avoid sorting the entire collection.
+A binary heap gives you the minimum (or maximum) of a changing collection in O(1), and inserts or removes the root in O(log(n + 1)) heap comparisons, where n is the number of items in the heap. The log is there because a heap is a complete binary tree whose height grows logarithmically with its size, and an insert or removal walks one path between the root and a leaf. (Writing n + 1 avoids the logarithm of zero, which is undefined, for an empty heap.) Removing an arbitrary item needs a way to locate it. Python list resizing makes individual operations occasionally linear; the standard bound is amortised and assumes constant-cost comparisons.
+
+Many problems that look like "sort everything" only need the *best few* items, or the *current* best, and a heap can avoid sorting the entire collection. The Trees & Heaps module explains how heaps work ("Heap order and implicit array layout", "Bottom-up heapify and heapsort"); these units are about recognising when a problem needs one.
 
 The following units develop three patterns built on that one idea.
 

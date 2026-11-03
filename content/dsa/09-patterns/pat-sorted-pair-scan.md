@@ -53,6 +53,13 @@ lo hi  a[lo]+a[hi]  action
 2  3   4+6 = 10     found (2, 3)
 ```
 
+> [!analogy] Real-world analogy: spending a gift card on exactly two items
+> A shop shelf is arranged by price, cheapest on the left, and you want two different items that use up a gift card exactly. Pick up the cheapest and the dearest. If together they cost too much, the dearest item is hopeless: even the cheapest partner left overshoots, so put it back for good and try the next dearest. If they cost too little, the cheapest item can never reach the total, even with the dearest partner, so put that back instead.
+>
+> **How it maps:** the shelf order is the sorted array, your two hands are `lo` and `hi`, and putting an item back for good is moving a pointer inwards. Each comparison rules out one item, which is why the scan is linear.
+>
+> **Where it stops:** a shopper might change their mind and pick up an item again; the algorithm never does, and that is only safe because the shelf is sorted. On an unsorted shelf the argument collapses. This code also stops at the first pair that fits rather than listing every one.
+
 Each step discards one element for good, so at most one fewer step than the array length: O(n) time, O(1) space. Compare the hash-map version of two sum (the earlier approach units), which is expected O(n) under constant-time, well-distributed hashing but needs O(n) extra memory and works on unsorted input.
 
 > [!tip] Three sum
@@ -62,7 +69,7 @@ Each step discards one element for good, so at most one fewer step than the arra
 
 A palindrome scan compares the two outer values. If they differ, the sequence is not a palindrome; if they match, discard both and check the inner range. Each inward move is justified by an equality already checked. A merge of two sorted sequences instead keeps one forward index per input and takes the smaller current value.
 
-For the existing `count_less` question, if the two endpoint values sum below the target, the left endpoint pairs successfully with every remaining position up to the right endpoint. Count that whole block, then discard the left endpoint. Otherwise discard the right endpoint. This rule depends on sortedness just as pair-sum search does.
+The same scan can **count** pairs whose sum is below a target. If the two endpoint values sum below the target, the left endpoint pairs successfully with every remaining position up to the right endpoint. Count that whole block, then discard the left endpoint. Otherwise discard the right endpoint. This rule depends on sortedness just as pair-sum search does.
 
 ## Key takeaways
 - Sortedness proves which endpoint cannot participate in a remaining answer.

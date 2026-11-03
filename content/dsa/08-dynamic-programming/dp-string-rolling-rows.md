@@ -32,7 +32,14 @@ def lcs_length(a, b):
     return prev[-1]
 ```
 
-With m the length of `a` and n the length of `b`, memory falls from O(m·n) to O(n). Make the **shorter** string the columns to get O(min(m, n)), where min picks the smaller length.
+With m the length of `a` and n the length of `b`, memory falls from O(m·n) to O(n). Make the **shorter** string the columns to get O(min(m, n)), where min picks the smaller length. The time is unchanged: every cell is still computed once.
+
+> [!analogy] Real-world analogy: a tear-off day calendar
+> A tear-off calendar shows only today's page. To plan today you glance at yesterday's notes, then tear yesterday off and throw it away.
+>
+> **How it maps:** each page is a table row. Computing row i needs only row i − 1, so the rolling version keeps just those two "pages" and discards everything older, which is where the memory saving comes from.
+>
+> **Where it stops:** a DP row is only useful if every cell's dependencies are on the current or previous page. A recurrence that reaches back several rows needs that many rows kept. And once pages are torn off, you can't retrace which choices led to today: the traceback history is gone, just as below.
 
 You can go down to a **single row**, but recurrences that read the diagonal `[i-1][j-1]` need a saved copy, because by the time you reach column j you've overwritten column j − 1 with the current row:
 
@@ -54,7 +61,7 @@ for i, x in enumerate(a, 1):
         diag = up  # next cell's diag
 ```
 
-The catch: with rolling rows you **lose the stored history for a direct traceback**, because the earlier rows are gone. If you need both linear memory and the alignment itself, use **Hirschberg's algorithm**, which finds the midpoint of the optimal path with a forward and a backward pass and recurses. For nonempty strings it retains O(mn) time and O(m + n) space including output; the exact constant depends on the implementation. Repeated full recomputation is another space/time tradeoff.
+The catch: with rolling rows you **lose the stored history for a direct traceback**, because the earlier rows are gone. If you need both linear memory and the alignment itself, use **Hirschberg's algorithm**, which finds where an optimal path crosses the middle row, using a forward and a backward pass, and recurses on the two halves. For nonempty strings it retains O(mn) time and O(m + n) space including output; the exact constant depends on the implementation. Repeated full recomputation is another space/time tradeoff.
 
 ## Key takeaways
 - Only the previous row is needed to compute the next one.

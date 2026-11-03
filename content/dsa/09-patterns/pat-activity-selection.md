@@ -7,7 +7,7 @@ sourceLesson: pat-intervals
 summary: Choose the compatible activity that finishes earliest.
 ---
 
-Here n is the number of positive-duration half-open intervals. Touching endpoints are allowed; minimise removals by maximising the number retained.
+Here n is the number of positive-duration half-open intervals. Touching endpoints are allowed; minimise removals by maximising the number retained. The Recursion, Backtracking & Greedy module teaches this greedy rule and its proof ("Greedy choice and interval scheduling" and "Proving earliest-finish greedy"); this unit shows how the interval-pattern problem "remove the fewest intervals" reduces to it.
 
 ## Non-overlapping intervals: the greedy choice
 
@@ -31,9 +31,9 @@ def max_non_overlapping(ivs):
 
 Sorting by start instead fails: `[[1, 100], [2, 3], [4, 5]]` would keep `[1, 100]` first and block the other two.
 
-## Why replacing the first choice is safe
+## Why the greedy choice is safe
 
-Take an optimal compatible schedule and compare its first interval with the earliest-finishing interval. Replacing that first choice with the earliest-finishing one leaves no later finish time, so every later selected interval remains compatible. The replacement keeps the same number of intervals. Apply the argument again to the intervals that can start after that finish.
+In short: swap the first interval of any optimal schedule for the earliest-finishing interval. The swap finishes no later, so everything after it still fits, and the count is unchanged. Repeating the argument on what remains shows greedy keeps as many as any schedule can.
 
 This is a statement about unweighted counts and positive-duration half-open intervals. An early-finishing interval with a small reward need not belong to an optimal weighted interval schedule, whose objective is total reward rather than interval count. The algorithm sorts in O(n log n) time and scans in O(n), where n is the interval count. The scan uses constant extra state; Python’s in-place sort may still allocate linear temporary storage.
 

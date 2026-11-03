@@ -47,7 +47,7 @@ Notice the single `row` array. Before the update, `row[c]` still holds the value
 
 **Minimum path sum** (each cell has a cost; find the cheapest right/down path) uses the same shape with `min` instead of `+`:
 
-```formula
+```formula reference
 D[0][0] = g[0][0]
 D[r][c] = g[r][c]
   + min(D[r − 1][c], D[r][c − 1])

@@ -50,22 +50,14 @@ x     tails
 18    [2, 3, 7, 18]
 ```
 
-Length 4. Here n is the number of input elements. Each costs one binary search on `tails`, plus an amortised O(1) append or O(1) replacement:
+Length 4. Here n is the number of input elements. Each one costs a single binary search on `tails` (at most about log₂ n comparisons) plus an O(1) append or replacement, so the total is O(n log n): for 100,000 elements, roughly 1.7 million comparisons rather than the quadratic DP's 5 billion. The memory is O(n) slots for `tails`.
 
-```formula
-T = O(n log_2(n + 1))
-T(10^5) ≈ 10^5 × 17 = 1.7 × 10^6
-where
-T: an upper bound on the comparison work for lis_fast; the numeric line is a rough full-length binary-search work estimate, not the actual count for a particular input
-n: the number of elements in the input array, positive
-log_2(n): the base-2 logarithm of n, the number of halvings a binary search needs on n items (about 17 for 100,000)
-log: logarithm; the base only changes a constant factor
-O(...): Big-O, growing at most in proportion to the expression inside
-≈: approximately equal to
-In words: n binary searches on a list of at most n items, each taking about log_2(n) comparisons.
-```
-
-The memory is O(n) slots for `tails`.
+> [!analogy] Real-world analogy: dealing cards into piles
+> Deal a shuffled deck one card at a time. Put each card on the leftmost pile whose top card is at least as high as it; if there is no such pile, start a new pile on the right. This is a simplified version of the patience (solitaire) game that gives the algorithm its other name, patience sorting.
+>
+> **How it maps:** the top cards of the piles, read left to right, are the `tails` array, and they are always in increasing order. Choosing the leftmost allowed pile is the `bisect_left` search, and starting a new pile is the append. The number of piles at the end is the length of the longest increasing subsequence.
+>
+> **Where it stops:** the visible top cards are not themselves an increasing subsequence of the deal order, just as `tails` isn't. Recovering an actual subsequence needs extra bookkeeping: a link from each card to the top of the pile on its left at the moment it was placed.
 
 > [!warning] tails is not the LIS
 > On `[3, 1, 4, 1, 5, 9, 2, 6]` the final `tails` is `[1, 2, 5, 6]`. That isn't a subsequence at all: the 2 comes *after* the 5 in the input. The *length* is right (4, e.g. `[3, 4, 5, 9]`), but the contents of `tails` mix different subsequences. To reconstruct, store for each element the index of the element before it in the subsequence (the tail at position k − 1 when it was placed).
@@ -75,10 +67,6 @@ The memory is O(n) slots for `tails`.
 ## Real-world use
 
 - **LIS** underlies patience diff (used by Bazaar and available in Git as `git diff --patience`), which matches unique lines between files and keeps a longest increasing subsequence of unique-line matches, not necessarily an unbroken run.
-
-## A return-value pitfall
-
-The LIS can end before the final input position: return the largest ending length, not merely the final entry.
 
 ## Key takeaways
 - Sorted minimum tails allow binary search for each new value.

@@ -13,7 +13,7 @@ A palindromic subsequence may skip input characters. Keep an interval state, but
 
 The characters need not be next to each other, so it's a classic interval DP:
 
-```formula
+```formula essential
 L[i][j] = L[i + 1][j − 1] + 2
   if i < j and s_i = s_j
 L[i][j] = max(L[i + 1][j], L[i][j − 1])

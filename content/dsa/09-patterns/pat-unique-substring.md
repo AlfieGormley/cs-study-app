@@ -7,7 +7,7 @@ sourceLesson: pat-sliding-window
 summary: Store each character’s last position to jump past a duplicate.
 ---
 
-The earlier variable-window rule now tracks unique characters. Here n is the string length measured in Python code points; dictionary operations use the expected constant-cost hash model.
+The earlier variable-window rule now tracks unique characters. The Hash Tables & Hashing module's "A sliding window without repeated characters" unit introduces the last-position map; here it is one instance of the variable-window template. Here n is the string length measured in Python code points; dictionary operations use the expected constant-cost hash model.
 
 ## Longest substring without repeating characters
 

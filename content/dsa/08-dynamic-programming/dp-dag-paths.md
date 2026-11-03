@@ -9,7 +9,7 @@ sourceLesson: dp-advanced
 
 ## DP over DAGs: the unifying view
 
-Draw each state as a node and each "depends on" relation as an edge. For the finite recurrences here, dependencies are acyclic, so this graph is a **DAG**. More general cyclic Bellman equations may instead require iterative methods. Then:
+Draw each DP state as a node and each "depends on" relation as an edge. For the finite recurrences here, dependencies are acyclic, so this graph is a **DAG**. More general cyclic Bellman equations may instead require iterative methods. Then:
 
 - **Bottom-up evaluation** is processing nodes in topological order.
 - **Memoisation** is DFS on that DAG with caching.
@@ -37,23 +37,7 @@ def longest_path(n, edges, order):
     return max(best, default=0)
 ```
 
-The inner line is the **relaxation** step:
-
-```formula
-best[v] = max(best[v], best[u] + w)
-T = O(V + E)
-where
-best[v]: the largest total weight of any path found so far that ends at vertex v
-u: a vertex whose value is already final (it comes earlier in the topological order)
-v: the vertex at the end of the edge from u
-w: the weight of the edge from u to v
-max: the larger of the two values
-T: the running time
-V: the number of vertices (n in the code)
-E: the number of edges
-O(...): Big-O, growing at most in proportion to the expression inside
-In words: a path to v can be the best path to u plus the edge u to v; processing vertices in topological order means every u is final before its edges are used, and every vertex and edge is handled once.
-```
+The inner line is the **relaxation** step: a path to v can be the best path to u plus the edge from u to v, so keep whichever is larger. Processing vertices in topological order means every u is final before its outgoing edges are used, so one pass is enough. Each vertex and edge is handled once: O(V + E) for V vertices and E edges.
 
 Given consecutively numbered vertices starting at zero, valid edges with integer weights and a complete topological order, this computes the best path starting anywhere, allowing a zero-edge path of value 0. For single-source **shortest paths**, initialise only the source to 0 and all other distances to +∞, use min-relaxation, and return the distance array rather than its maximum. Negative edge weights are valid in a DAG.
 

@@ -36,13 +36,11 @@ def subset_sum(nums, T):
 
 Variants change only the combiner:
 
-- **Count** subsets summing to T: `cnt[s] += cnt[s - x]`, with `cnt[0] = 1`.
+- **Count** subsets summing to T: `cnt[s] += cnt[s - x]`, with `cnt[0] = 1`. Keep the loop over s **downwards**: an upward loop would let one input be used several times and count multisets instead of subsets.
 - **Minimum items** to reach T: `+∞` sentinel value and `min(..., dp[s - x] + 1)`.
 
 > [!tip] Bitset trick
-> A Python integer can encode reachable sums. Start with `mask = 1` and `limit = (1 << (T + 1)) - 1`; for each nonnegative input not exceeding the target, update `mask = (mask | (mask << x)) & limit`. Skip inputs greater than the target, then test `(mask >> T) & 1`. Masking bounds retained and temporary lengths by O(T + 1) bits. Without masking, storage instead grows with the sum of all inputs. Packed word operations can improve constants, but a shift is not constant-time on arbitrary-size integers.
->
-> Content gap: fixed 64× or Python speedup claims are omitted because no pinned benchmark supports them.
+> A Python integer can encode reachable sums. Start with `mask = 1` and `limit = (1 << (T + 1)) - 1`; for each nonnegative input not exceeding the target, update `mask = (mask | (mask << x)) & limit`. Skip inputs greater than the target, then test `(mask >> T) & 1`. Masking bounds retained and temporary lengths by O(T + 1) bits. Without masking, storage instead grows with the sum of all inputs. Packing many sums into each machine word can improve the constant factor, but a shift is not constant-time on arbitrary-size integers.
 
 ## Key takeaways
 - A Boolean table records exactly reachable sums.

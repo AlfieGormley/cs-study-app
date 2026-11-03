@@ -19,7 +19,7 @@ For `[10, 9, 2, 5, 3, 7, 101, 18]`, one LIS is `[2, 3, 7, 18]`, length 4.
 - **Recurrence**: the element before `a[i]` is some earlier `a[j] < a[i]`, or there is none and `a[i]` stands alone.
 - **Answer**: `max(L)`, not `L[n-1]`, because the LIS can end anywhere.
 
-```formula
+```formula essential
 L[i] = 1 + max(0, L[j] for j < i
          with a[j] < a[i])
 answer = max(L[0], ..., L[n − 1])
@@ -34,16 +34,7 @@ n: the number of elements in the array
 In words: element i either starts a new subsequence of length 1, or extends the longest subsequence ending at a smaller, earlier element.
 ```
 
-For the input `[10, 9, 2, 5, 3, 7]`, the final value 7 can follow the earlier values 2, 5 or 3. Their ending lengths are 1, 2 and 2:
-
-```formula
-L[5] = 1 + max(1, 2, 2) = 3
-where
-L[i]: the longest strictly increasing subsequence ending at zero-based index i
-i: an input position; here position five holds the value seven
-max: the largest listed value
-In words: Append seven to a best earlier subsequence of length two, making length three.
-```
+For the input `[10, 9, 2, 5, 3, 7]`, the final value 7 can follow the earlier values 2, 5 or 3, whose best ending lengths are 1, 2 and 2. Appending 7 to one of the length-2 subsequences (2, 5 or 2, 3) gives length 3.
 
 ```python
 def lis_quadratic(a):

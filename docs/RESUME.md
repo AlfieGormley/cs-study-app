@@ -1,3 +1,13 @@
+# Current continuation: 2026-11-03
+
+The user resumed the rewrite with a new agent. The durable current progress record is
+`.handoffs/concept-first/cf2-progress.json`; author/verifier evidence continues under `evidence/cf3-*`.
+At resumption, main was `78ca331` (50/60 modules, 1,432/1,845 lessons reviewed and published).
+DSA08 and DSA09 are verified and undergoing release QA (52/60 modules, 1,520/1,845 lessons).
+Continue all remaining retained modules using distinct authors and independent verifiers. Preserve
+the draft checkout and publish only verified modules via `release/`. The primary checkout is dirty
+with unrelated work. Earlier pause instructions below are historical, superseded by this resume.
+
 # Concept-first rewrite: RESUMED (2026-10-29)
 
 The user resumed the paused concept-first rewrite on 2026-10-29 using the durable handoff in

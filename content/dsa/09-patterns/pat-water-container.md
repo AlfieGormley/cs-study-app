@@ -13,7 +13,7 @@ Here n is the number of nonnegative heights. The input need not be sorted: the m
 
 **Problem.** `h[i]` is a nonnegative height of a vertical line at position `i`. Choose two lines that, with the x-axis, hold the most water. The water a pair of lines can hold is limited by the shorter line:
 
-```formula
+```formula essential
 A = (j − i) min(h[i], h[j])
 where
 A: the area of water held between lines i and j, in square units (width × height)
@@ -50,20 +50,7 @@ def max_area(h):
     return best
 ```
 
-For `[1, 8, 6, 2, 5, 4, 8, 3, 7]` the answer is 49, from the lines at positions 1 and 8:
-
-```formula
-A = (j − i) min(h[i], h[j])
-A = (8 − 1) × min(8, 7)
-A = 7 × 7 = 49
-where
-A: the area of water held, in square units
-i: the left line's position; here 1
-j: the right line's position; here 8
-h[i]: the height at position i; here h[1] = 8 and h[8] = 7
-min: the smaller of its two inputs
-In words: the best pair is 7 positions apart and 7 tall (the shorter of 8 and 7), giving 49.
-```
+For `[1, 8, 6, 2, 5, 4, 8, 3, 7]` the answer is 49, from the lines at positions 1 and 8: they are 7 positions apart and the shorter of their heights (8 and 7) is 7.
 
 > [!note] The proof is the pattern
 > Two pointers are only correct when you can argue that the move discards nothing useful. If you can't say *why* a move is safe, you don't yet have a two-pointer solution; you have a guess.

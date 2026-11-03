@@ -34,12 +34,11 @@ Now `best[c - w]` may already contain copies of this item, which is exactly what
 
 The earlier coin-change problem is unbounded knapsack: "minimum coins" is min-count knapsack, "number of ways" is counting knapsack.
 
-**Bounded knapsack** (item i available up to a limited number of times) can be solved by splitting each item into bundles of 1, 2, 4, ... copies, plus a final remainder, so that every count from 0 to the limit is a sum of distinct bundles:
+**Bounded knapsack** (item i available up to a limited number of times) can be solved by splitting each item into bundles of 1, 2, 4, ... copies, plus a final remainder, so that every count from 0 to the limit is a sum of distinct bundles. Each bundle is then a single 0/1 item:
 
-```formula
+```formula reference
 k_i = 1 + 2 + 4 + ... + 2^{t − 1} + r
 bundles = O(log_2(k_i + 1))
-k_i = 13 = 1 + 2 + 4 + 6
 where
 k_i: how many copies of item i are available
 t: how many power-of-two bundles fit (1, 2, 4, ... up to 2^{t − 1})
@@ -48,7 +47,7 @@ r: the remainder bundle, whatever is left after the powers of two (0 up to 2^t �
 bundles: the number of 0/1 items produced for item i
 log_2(k_i + 1): the base-2 logarithm of k_i + 1, roughly how many times you can halve it
 O(...): Big-O, growing at most in proportion to the expression inside
-In words: split k_i copies into doubling bundles plus a leftover; any count up to k_i can be made by picking some bundles, and there are only about log_2(k_i) of them.
+In words: split the available copies into doubling bundles (1, 2, 4, ...) plus a leftover; any count up to the limit can be made by picking some bundles, and the number of bundles grows only with the logarithm of the limit.
 ```
 
 With 13 copies, bundles of 1, 2, 4 and 6 replace 13 separate items with 4; any count from 0 to 13 is a sum of distinct bundles (for example 9 = 1 + 2 + 6). A limit of 0 contributes no items.

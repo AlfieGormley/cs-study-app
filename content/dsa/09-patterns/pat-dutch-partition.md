@@ -47,7 +47,7 @@ def sort_colours(a):
 
 Why is it safe to advance `mid` after swapping with `lo`? If `lo < mid`, the swapped-in value comes from the known 1s region. If `lo == mid`, the swap is with itself and the current value has just been identified as 0. In either case advancing is safe.
 
-Each step either advances `mid` or shrinks `hi`, so the unknown region shrinks every iteration: O(n) time, O(1) space. Three-way partitioning is also how quicksort copes with many duplicate keys.
+Each step either advances `mid` or shrinks `hi`, so the unknown region shrinks every iteration: O(n) time, O(1) space. Three-way partitioning is also how quicksort copes with many duplicate keys (the Sorting & Searching module's "Bounded stacks and duplicate-aware partitions" unit).
 
 ## Recognising the pattern
 

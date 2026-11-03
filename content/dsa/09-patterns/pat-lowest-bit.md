@@ -61,7 +61,7 @@ That is the step a **Fenwick tree** uses to advance update indices (`i += i & -i
 ## Further reading
 - [Bit manipulation — cp-algorithms](https://cp-algorithms.com/algebra/bit-manipulation.html)
 - [Enumerating submasks — cp-algorithms](https://cp-algorithms.com/algebra/all-submasks.html)
-- [Bit Twiddling Hacks — Sean Eron Anderson, Stanford](https://graphics.stanford.edu/~seander/bithacks.html)
+- [Bit Twiddling Hacks — Sean Eron Anderson, Stanford (archived copy)](https://web.archive.org/web/20250605031917/https://graphics.stanford.edu/~seander/bithacks.html)
 - [Hamming weight — Wikipedia](https://en.wikipedia.org/wiki/Hamming_weight)
 - [Binary cheatsheet — Tech Interview Handbook](https://www.techinterviewhandbook.org/algorithms/binary/)
 - [GCC bit-operation builtins](https://gcc.gnu.org/onlinedocs/gcc/Bit-Operation-Builtins.html)

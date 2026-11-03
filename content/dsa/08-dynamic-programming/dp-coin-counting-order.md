@@ -65,12 +65,11 @@ For coins `{1, 2, 5}` and amount 5:
 - `count_combinations` returns **4**: {5}, {2, 2, 1}, {2, 1, 1, 1}, {1, 1, 1, 1, 1}.
 - `count_orderings` returns **9**, because it counts 1 + 2 + 2, 2 + 1 + 2 and 2 + 2 + 1 separately (and similarly for the others).
 
-Why? With coins in the outer loop, after processing coin c, `dp[a]` counts ways using **only the coins seen so far**. Written as a two-dimensional recurrence, that loop computes:
+Why? With coins in the outer loop, after processing coin c, `dp[a]` counts ways using **only the coins seen so far**. A combination either uses none of the newest coin type or at least one of it, and the two counts are added:
 
-```formula
+```formula reference
 N[j][a] = N[j − 1][a] + N[j][a − c_j]
 N[j][0] = 1
-N[3][5] = N[2][5] + N[3][0] = 3 + 1 = 4
 where
 N[j][a]: the number of combinations (order ignored) of the first j coin types that add up to exactly a
 j: how many coin types have been processed so far, 1 to k
@@ -83,6 +82,13 @@ In words: a combination either uses none of the newest coin type or at least one
 ```
 
 For coins {1, 2, 5} and amount 5, there are three ways using only ones and twos, plus the single combination using a five. The 1-D code stores only the latest row, so `dp[a] += dp[a - c]` performs this addition in place. Each combination is built in one canonical order (all 1s, then all 2s, then 5s), so it's counted once. With the amount outer, every coin is a candidate for the "last coin" of every amount, which counts sequences.
+
+> [!analogy] Real-world analogy: a fruit bowl versus a playlist
+> A fruit bowl holding two apples and a banana is the same bowl whichever fruit went in first. A playlist of the same three songs in a different order is a different playlist.
+>
+> **How it maps:** a coin combination is a fruit bowl: only how many of each coin matters. An ordered sequence is a playlist. Coins in the outer loop is like filling bowls one fruit type at a time (all apples first, then all bananas), so each bowl can be built in only one way and is counted once. Amounts in the outer loop asks "which song plays last?" for every total, so the same songs in a new order count again.
+>
+> **Where it stops:** you can see a bowl and tell what's in it. The DP never stores the collections themselves, only how many there are, so the loop order is the only thing preventing double counting.
 
 > [!warning] Know which one you need
 > "Number of combinations" (coin change) puts items in the outer loop. "Number of sequences" (climbing stairs with step set S, or LeetCode's "combination sum IV", which despite its name counts orderings) puts the target outer.

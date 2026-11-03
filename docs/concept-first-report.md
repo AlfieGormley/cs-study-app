@@ -1,6 +1,6 @@
 # Concept-first library review
 
-Status: **in progress**. 50/60 modules and 1432/1845 active lessons have current independent editorial reviews.
+Status: **in progress**. 52/60 modules and 1520/1845 active lessons have current independent editorial reviews.
 
 This report counts only active lesson IDs from module.json. Retired subjects (os, architecture, theory, languages; see `content/retired-subjects.json`) are excluded. Pending modules have not been certified by keyword scans or by renderer tests.
 
@@ -26,8 +26,8 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | [dsa / Sorting & Searching](../content/dsa/05-sorting-searching/verification.json) | Reviewed | 46 | 96 | 53 → 30 | 6 / 24 | 42 → 0 | 195 | 270 | 7 |
 | [dsa / Graphs](../content/dsa/06-graphs/verification.json) | Reviewed | 37 | 82 | 58 → 33 | 8 / 25 | 57 → 0 | 177 | 236 | 7 |
 | [dsa / Recursion, Backtracking & Greedy](../content/dsa/07-design-techniques/verification.json) | Reviewed | 40 | 71 | 49 → 19 | 5 / 14 | 57 → 2 | 149 | 227 | 7 |
-| dsa / Dynamic Programming | Pending review | 46 | — | — | — | — | — | — | — |
-| dsa / Problem-Solving Patterns | Pending review | 42 | — | — | — | — | — | — | — |
+| [dsa / Dynamic Programming](../content/dsa/08-dynamic-programming/verification.json) | Reviewed | 46 | 80 | 67 → 31 | 11 / 20 | 87 → 0 | 157 | 242 | 7 |
+| [dsa / Problem-Solving Patterns](../content/dsa/09-patterns/verification.json) | Reviewed | 42 | 89 | 37 → 17 | 8 / 9 | 40 → 0 | 105 | 262 | 11 |
 | dsa / Advanced Structures & Algorithms | Pending review | 49 | — | — | — | — | — | — | — |
 | [dsp / Samples, Signals and Levels](../content/dsp/01-signals/verification.json) | Reviewed | 9 | 27 | 16 → 7 | 1 / 6 | 12 → 0 | 69 | 142 | 2 |
 | [dsp / Systems, Convolution and Filters](../content/dsp/02-filters/verification.json) | Reviewed | 9 | 27 | 10 → 5 | 0 / 5 | 11 → 0 | 55 | 105 | 5 |
@@ -657,6 +657,95 @@ None recorded in this editorial review.
 - medium confidence, tech-greedy-fails-approximation: Karlin, Klein and Oveis Gharan gave the first ratio below 1.5 for general metric TSP The ratio (randomised, 3/2 - epsilon, epsilon > 10^-36) is from the arXiv abstract; "first" rests on Wikipedia (Christofides algorithm; TSP: the 2011 improvement covered only graphic TSP). "Theoretical breakthrough rather than practical improvement" is an inference from the size of epsilon.
 - medium confidence, tech-greedy-fails-approximation: For every number of cities there are (arbitrary) distance tables on which nearest neighbour returns the worst tour Gutin, Yeo and Zverovich 2002 via Wikipedia (Nearest neighbour algorithm; TSP); the paper itself was not read. The metric logarithmic bound is confirmed from the Rosenkrantz-Stearns-Lewis 1977 abstract.
 - medium confidence, tech-greedy-fails-canonical: Pearson (2005) canonicity test runs in time polynomial in the number of denominations Title and bibliographic data confirmed via Crossref; the paper body was not read.
+
+
+## dsa / Dynamic Programming
+
+67 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- dp-overlap-and-state: Bellman said he chose 'dynamic' 'partly because it sounded impressive' -> paraphrase of the quoted autobiography (conveys multistage, time-varying decisions; cannot be used pejoratively; shielded mathematics from Secretary of Defense Wilson), keeping Russell and Norvig's 1952-before-1953 caveat.
+- dp-large-knapsack-capacities: meet in the middle 'roughly twenty million steps' counted only the binary searches and omitted the running-best-value step that makes the search valid -> 'record the best value seen so far ... a few tens of millions of steps (about twenty million comparisons for the searches, plus a sort of similar size)'.
+- dp-held-karp-states analogy limit: 'only practical for a few dozen cities at most' (36 cities is about 2.5e12 states) -> 'roughly two dozen cities or fewer', consistent with the bitmask growth table.
+- dp-method-q8 correct-option explanation: set-of-lengths version does 'roughly 50 times less character work' -> 'roughly a hundred times smaller (about 2 million rather than 200 million operations)', matching the worked example (ratio 95).
+- dp-knapsack-q7 option 0: 'Counting every order would give a much larger number (20 here)' -> 20 is ordered sequences that also repeat values; every order of the three real subsets gives 1 + 2 + 6 = 9 (enumerated).
+- dp-interval-tree-q12 option 3: rod cutting described 'Like burst balloons' -> 'Unlike burst balloons, choosing the first action works here' (the first cut costs the piece length whichever mark is chosen).
+- dp-knapsack-q3 worked example: '4 numbers x 11 sums, about 44 updates' -> an upper bound of 44 (the backward loop performs 26 updates for [1, 5, 11, 5]).
+
+**Scope gaps and exclusions:**
+
+- All seven long lessons and their eighty questions are preserved as fourteen byte-identical archival files; all active question IDs, types, levels, answer keys and option counts remain unchanged.
+- Full Hirschberg, CYK, Knuth-optimised BST, Manacher, Viterbi, RNA predictor, rerooting, FPTAS, assignment solver and branch-and-cut implementations remain conceptual or application context, matching the original scope rather than claiming new implementations.
+- No physical-phone run, production runtime benchmark, C++ payload allocation experiment, PostgreSQL extension integration or live NumPy benchmark was performed; work expressions are labelled accordingly.
+- Optional exercise-site naming provenance remains medium where access is blocked; required lesson/question links all load.
+- Full app compilation, mobile layout, progress migration, PWA and publication integration belong to the coordinator after this scoped verification.
+- No 390 px render or offline check in this pass (scoped build, link, lint, glossary, audit and code checks only).
+- Frontmatter minutes are frozen at baseline while bodies changed (23,979 -> about 24,700 words over 46 lessons, mostly analogies); a few lessons (dp-state-recurrence-base, dp-evaluation-strategies, dp-held-karp-states) may read about one minute longer than stated.
+- The author removed editorial 'Content gap' notes; the omissions remain: no benchmarked timings for Held-Karp, matrix chain, banded edit distance, digit DP or bitset subset sum; no implementations of Hirschberg, CYK, Knuth-optimised BST, Manacher, FPTAS scaling or rerooting.
+- Formula lint: 28 heuristic hits in active files, all Rule 6 (Big-O prose with n defined, code spans, plain numeric statements, one analogy false positive).
+- Glossary coverage: 98 candidates, mostly bold labels (State, Recurrence, Transitions, How it maps, Where it stops), string examples (ABCBDAB, BABCA) and emphasis phrases; FEN no longer appears.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, dp-overlap-and-state: Bellman’s retrospective naming explanation His autobiographical account is quoted in fetched CMU notes. It is presented as a later recollection, not an independently established chronology.
+- medium confidence, dp-evaluation-strategies: CPython recursion limits and native-call behaviour Current official CPython source and 3.11 documentation were read. The text says usually and distinguishes configuration, existing depth, implementation and call path; these facts can change by runtime/version.
+- medium confidence, dp-lis-binary-search: Bazaar’s historical adoption of patience diff Inherited medium-confidence historical provenance remains; Git’s current unique-line/LIS mechanism was independently read in its actual source, but Bazaar history is supported by the cited secondary account.
+- medium confidence, dp-string-applications-and-band: Current Git diff choices and PostgreSQL fuzzystrmatch API Official current documentation fetched and read; these product choices are version-sensitive. No product runtime benchmark or PostgreSQL integration execution is claimed.
+- medium confidence, dp-matrix-chain-table: NumPy multi_dot and einsum optimisation defaults Official documentation fetched and read. The text distinguishes optimal matrix-chain parenthesisation from True selecting greedy einsum search; API behaviour is version-sensitive.
+- medium confidence, dp-tree-cover-and-applications: Summarised RNA folding application history The original Nussinov paper and supporting literature were fetched; the inherited original-Zuker mirror did not return a normal readable primary paper. Keep this as noncrossing-model application context rather than a newly implemented biological predictor.
+- medium confidence, dp-held-karp-resources: Concorde benchmark context The solver’s official site confirms exact symmetric-TSP benchmark use. Instance success is explicitly distinguished from a worst-case guarantee; no benchmark was rerun.
+- medium confidence, glossary: Problem-site names and definitions: Combination Sum IV, Target Sum, Last Stone Weight II, Ones and Zeroes, Burst Balloons and Decode Ways The six definitions are self-contained and relevant recurrences/reductions were checked. Optional site URLs return 403 in this review; preserved inherited naming confidence is not promoted on the strength of mathematical fixtures alone.
+- medium confidence, dp-recognition-checklist: Input-size signals for possible algorithms Explicitly prompts to estimate transitions, storage and arithmetic cost, not a hardware-independent feasibility guarantee.
+- medium confidence, dp-overlap-and-state: Russell and Norvig note Bellman's first paper using the term (1952) predates Wilson becoming Secretary of Defense (1953) Quoted from Wikipedia's Dynamic programming history section citing AIMA 3rd edition; the book text itself was not read (no legitimate full copy). The autobiography quote likewise comes from that secondary source.
+- medium confidence, dp-lis-binary-search: Patience diff was used by Bazaar Supported by the patiencediff package description (code extracted from the Bazaar code base) and Cohen's own post; the unchanged bazaar-vcs glossary claim that it was Bazaar's default diff method was not independently re-checked in this pass.
+- medium confidence, dp-interval-state-order: q5: 2 s for 500 matrices suggests about 16 s for 1,000 The operation ratio is exact ((n^3 - n)/6: 8.00002); the timing is an extrapolation, which the question and worked example state.
+
+
+## dsa / Problem-Solving Patterns
+
+43 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- pat-amortised-dominance: the author's new monotonic-vs-heap paragraph said heaps are needed when there is 'no such dominance', citing 'the k-th largest value so far'; that case does have permanent discards (a size-k min-heap evicts losers forever). Rewritten: monotonic structures work when every removal happens at an end of arrival order; a heap or balanced tree is needed when the item to evict can sit anywhere in arrival order.
+- pat-mask-subsets: 'both are exponential' -> 'neither is polynomial: the DP grows exponentially and the order count factorially, which is faster still' (Wikipedia, Held-Karp: Theta(2^n n^2) vs superexponential Theta(n!)); 'one more city roughly doubles' -> 'about 2.2' (2^21 x 441 / (2^20 x 400) = 2.205).
+- pat-next-greater-stack analogy: framed as a 'queue' (linking the FIFO queue entry) although the mechanism is last-in-first-out; rewritten as people waiting one behind another, the newcomer checking the most recent waiter first.
+- pat-xor-cancellation analogy limit: 'the result is still just whatever fails to cancel' -> 'the XOR of everything that fails to cancel, which need not be any value in the input'.
+- Bit Twiddling Hacks (graphics.stanford.edu) refuses connections on 443 from this machine and from a server-side fetch: 8 lesson Further-reading links, pat-bits-q1/q3 links and the kernighan-method glossary source moved to the Internet Archive copy dated 2025-06-05 (content checked: power-of-2 and Kernighan sections, Wegner 1960 attribution).
+- pat-tripled-bits-q1: link titled 'Counting individual bits modulo three' pointed to Bit Twiddling Hacks, which has no such section -> cp-algorithms 'Bit manipulation'.
+- pat-bits-q9: after the author's rewrite into a Held-Karp scaling question its link (submask enumeration) no longer supported it -> Wikipedia 'Held-Karp algorithm'.
+- pat-sliding-window-q10 option B: 'pulled the sum back under k' although the prompt sets a limit of 2 and the condition is 'at most' -> 'back within the limit'.
+- pat-approach-q1 option D and pat-heaps-q4 option A cited 'the worked calculation', which the author had removed -> refer to the worked example's growth figures.
+- Wrong-sense dictionary links in edited lessons: 'Half-open event ties' (pat-meeting-concurrency takeaway) opened TCP half-open; 'allocation' in the clicker analogy opened memory allocation; 'per loop iteration' (pat-amortised-dominance) opened an EXPLAIN ANALYZE term. All reworded.
+- pat-top-k-values (and pat-heaps-q3 worked example): 'many arrivals need just one comparison' and 'about 20 comparisons per item' held only under unstated assumptions; now stated: random arrival order (about 115 expected replacements for the top 10 of a million), increasing order as the worst case (every arrival replaces, still 3 levels), a comparison sort in random order, and the information-theoretic floor of about 18.5 comparisons per item at n = 10^6.
+
+**Scope gaps and exclusions:**
+
+- No population-wide interview success/failure survey, generic runtime threshold, hardware throughput figure, physical-phone benchmark or production deployment measurement. Practical advice and numeric models are labelled accordingly.
+- This is a patterns catalogue. Three sum, circular next greater, daily temperatures, weighted scheduling, Held–Karp, exact external frequency aggregation and sliding median are described as adaptations or covered in earlier modules rather than each receiving a complete production implementation.
+- No turnkey approximate heavy-hitter/sketch recipe: candidate recovery and error/probability parameters are not specified.
+- Direct Crow 1984 and Wegner 1960 originals were not retrieved; exact arithmetic, prefix constructions and bit algorithms were verified independently, and indirect historical claims remain medium.
+- Whole-release generated dictionary, phone route rendering, offline update/migration and deployment checks are performed by the coordinating agent after this scoped verification.
+- No 'binary search on the answer' lesson in this module (taught in dsa/05 sort-search-monotone-shipping); backtracking templates are in dsa/07; fast/slow pointers are referenced to dsa/02.
+- No 390 px render or offline check was run in this pass (scoped build, link, lint, glossary and code checks only).
+- Frontmatter 'minutes' are frozen while visible words rose about 16% (mostly collapsed analogies and cross-reference sentences).
+- C/C++ claims (x & (1 == 0) yields 0; truncating remainder since C99) were checked against cppreference but not executed this pass (no C compiler in the permitted container); the prior verification executed them under Clang.
+- Formula lint: 279 heuristic hits in the directory scan (122 outside Big-O), all Rule 6 Big-O prose, plain numeric statements, code spans or traces in code fences; archival originals untouched.
+- Glossary coverage: 116 candidates, all bold step labels ('Width', 'Height', 'Compare the sizes', ...), analogy labels and 'Single number' (covered by 'Single number problem'; a bare alias would capture ordinary English).
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, pat-clarify-examples: Interview routine, suggested practice allocation, pattern hints and input-size table Practical guidance and illustrative growth models, not a universal interview scoring rule, runtime threshold or throughput measurement; explicit caveats are retained.
+- medium confidence, pat-brute-to-lookup: Interview routine, suggested practice allocation, pattern hints and input-size table Practical guidance and illustrative growth models, not a universal interview scoring rule, runtime threshold or throughput measurement; explicit caveats are retained.
+- medium confidence, pat-input-growth: Interview routine, suggested practice allocation, pattern hints and input-size table Practical guidance and illustrative growth models, not a universal interview scoring rule, runtime threshold or throughput measurement; explicit caveats are retained.
+- medium confidence, pat-pattern-hypotheses: Interview routine, suggested practice allocation, pattern hints and input-size table Practical guidance and illustrative growth models, not a universal interview scoring rule, runtime threshold or throughput measurement; explicit caveats are retained.
+- medium confidence, pat-test-costs: Interview routine, suggested practice allocation, pattern hints and input-size table Practical guidance and illustrative growth models, not a universal interview scoring rule, runtime threshold or throughput measurement; explicit caveats are retained.
+- medium confidence, pat-grid-prefix: Historical attribution of the summed-area table to Crow 1984 Read the original Viola–Jones 2001 paper, its four-reference construction and Crow 1984 bibliography. Direct Crow mirror retrieval was blocked; original Crow paper was not independently read in full.
+- medium confidence, pat-lowest-bit: Kernighan/Wegner historical attribution The glossary now explicitly attributes the 1960 priority report to Sean Anderson citing Knuth; original Wegner paper and K&R exercise were not retrieved. The algorithm itself is independently verified.
+- medium confidence, glossary: Kernighan/Wegner historical attribution Retained medium confidence in kernighan-method; source reports attribution indirectly, and wording now says so.
+- medium confidence, pat-bit-operators (and 7 other bit lessons, pat-bits-q1, pat-bits-q3): Bit Twiddling Hacks is cited through an Internet Archive snapshot (2025-06-05) rather than the live Stanford page The canonical host refused connections from two networks on 2026-11-01; the archived copy is the same document but its permanence depends on the Internet Archive. Revert to the live URL if it returns.
+- medium confidence, pat-bit-language: In C/C++ `x & 1 == 0` parses as `x & (1 == 0)` and yields 0 Confirmed from cppreference's precedence table and the earlier verifier's Clang run, but not re-executed in this pass.
 
 
 ## dsp / Samples, Signals and Levels

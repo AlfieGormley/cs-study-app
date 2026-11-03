@@ -11,21 +11,7 @@ Each input list contains valid closed intervals, sorted by start and internally 
 
 ## Intersecting two sorted lists
 
-For two sorted lists of internally non-overlapping **closed** intervals, keep one current interval from each list. Their shared range begins at the later start and ends at the earlier end. Keep it when its start is no later than its end: a single-point overlap is valid for closed intervals.
-
-```formula
-I = [max(a, c), min(b, d)]
-I = [max(5, 1), min(10, 5)] = [5, 5]
-where
-I: the intersection candidate, kept only if its first endpoint is no greater than its second
-a: the first interval's start; here 5
-b: the first interval's end; here 10
-c: the second interval's start; here 1
-d: the second interval's end; here 5
-max: the larger of two inputs
-min: the smaller of two inputs
-In words: take the later start and earlier end; closed ranges [5, 10] and [1, 5] share the point 5.
-```
+For two sorted lists of internally non-overlapping **closed** intervals, keep one current interval from each list. Their shared range begins at the later start and ends at the earlier end. Keep it when its start is no later than its end: a single-point overlap is valid for closed intervals. For example, [5, 10] and [1, 5] share the range from the later start, 5, to the earlier end, 5: the single point [5, 5].
 
 Advance whichever interval ends first. That interval cannot meet any later interval in the other list: later intervals start beyond the current one's end. If the two end times tie, advancing either is safe; advancing both is also safe under the strict internal non-overlap contract for closed intervals.
 

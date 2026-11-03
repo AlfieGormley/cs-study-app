@@ -11,19 +11,19 @@ sourceLesson: dp-1d
 
 > Given coin denominations and an amount, what's the fewest coins that make the amount exactly (unlimited supply of each)?
 
-Kozen and Zaks prove that, for a denomination system starting with one, any failure of greedy has a counterexample smaller than the sum of its two largest coins. For the exact set below, checking all amounts below 300 against the DP therefore establishes the all-amount result.
+The obvious approach is **greedy**: keep taking the largest coin that fits. With coins `{1, 3, 4}` and amount 6, greedy takes 4 + 1 + 1 = 3 coins, but 3 + 3 uses only 2. Taking the 4 looked best locally, but it left a remainder (2) that only small coins can make.
 
-Greedy (largest fitting coin first) is optimal for the unlimited-supply denomination set {1, 2, 5, 10, 20, 50, 100, 200}, but not arbitrary sets. The code below deduplicates positive integer denominations and requires a nonnegative integer amount. With coins `{1, 3, 4}` and amount 6, greedy takes 4 + 1 + 1 = 3 coins; the optimum is 3 + 3 = 2 coins.
+Greedy does happen to be optimal for some systems, such as the UK set {1, 2, 5, 10, 20, 50, 100, 200} with unlimited supply. Proving that takes work: Kozen and Zaks showed that, for a system containing a 1, if greedy ever fails, it already fails on some amount smaller than the sum of the two largest coins. So for the UK set, checking every amount below 300 against the DP settles it for all amounts. For an arbitrary set, use the DP.
+
+The code below deduplicates positive integer denominations and requires a nonnegative integer amount.
 
 - **State**: `dp[a]` records fewest coins to make amount a.
-- **Recurrence**: the last coin used is some coin c no bigger than a; remove it and what's left is a smaller amount solved the same way.
+- **Recurrence**: the last coin used is some coin c no bigger than a; remove it and what's left is a smaller amount solved the same way. Take the coin whose remainder needs the fewest coins, and add one for the coin itself.
 - **Base**: `dp[0] = 0`. Unreachable amounts stay `+∞`.
 
-```formula
+```formula reference
 dp[0] = 0
 dp[a] = 1 + min(dp[a − c])   for c ≤ a
-dp[6] = 1 + min(dp[5], dp[3], dp[2])
-dp[6] = 1 + min(2, 1, 2) = 2
 where
 dp[a]: the fewest coins that add up to exactly a, or +∞ if a can't be made
 a: the amount of money, a whole number from 0 up to the target
@@ -33,7 +33,8 @@ min: the smallest value, taken over every coin c no larger than a; +∞ if no co
 In words: choose the last coin; the rest of the amount is a smaller problem, so take the coin that leaves the cheapest remainder and add one.
 ```
 
-The example uses coins {1, 3, 4}: for amount 6 the last coin is 1, 3 or 4, leaving 5, 3 or 2.
+The example uses coins {1, 3, 4}: for amount 6 the last coin is 1, 3 or 4, leaving 5, 3 or 2, which need 2, 1 and 2 coins. The best remainder is 3, so amount 6 needs 1 + 1 = 2 coins. The DP doesn't guess which coin is best; it tries them all.
+
 ```python
 def min_coins(coins, amount):
     # Validate every supplied value first.
@@ -67,28 +68,11 @@ def min_coins(coins, amount):
 
 For coins `{1, 3, 4}`: `dp = [0, 1, 2, 1, 1, 2, 2]`, so `dp[6] = 2`. For `{1, 2, 5}` and 11, it's 3 (5 + 5 + 1).
 
-**Complexity**: there are A + 1 amounts and each tries every coin:
-
-```formula
-T = O(k + A × (k + 1)) = O(A × k)
-M = O(A + k)
-where
-T: the running time, counting each comparison and addition as one step
-M: the memory used, in table slots
-A: the target amount (amount in the code), a positive whole number
-k: the number of distinct coin denominations, positive
-O(...): Big-O, growing at most in proportion to the expression inside
-In words: every amount from 1 to A checks every coin, so the work is about the amount times the number of coins.
-```
-
-For amount 10,000 with 5 coins that is about 50,000 steps. Note that this depends on the **value** of A, not the number of digits used to write it. That's pseudo-polynomial time, examined in “Numeric value versus encoded input size”.
+**Complexity**: for a target amount A and k coin types, every amount from 1 to A tries every coin, so the work is O(A·k) with O(A) table slots. For amount 10,000 with 5 coins that is about 50,000 steps. Note that this depends on the **value** of A, not the number of digits used to write it. That's pseudo-polynomial time, examined in “Numeric value versus encoded input size”.
 
 ## Real-world use
 
 - The **change-making problem** models cash selection, but a real drawer has limited stock and may need a bounded formulation.
-
-> [!note] Content gap
-> Claims about how most currencies were designed or which algorithms shops use are omitted because no authoritative survey or implementation evidence was verified.
 
 ## Pitfalls
 

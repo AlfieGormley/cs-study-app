@@ -11,7 +11,7 @@ A **monotonic stack** is an ordinary stack with one rule: its contents stay sort
 
 The magic is in the pops. In the left-to-right next-element scan, a pop can identify the first later value satisfying the chosen strict or non-strict comparison. Other scan directions and previous-element variants use different invariants. Questions of the form "for each element, find the nearest element to the left/right that is greater/smaller" all fall to this.
 
-Each element is pushed once and popped no more than once, so the whole scan of n elements is **O(n)**, even though there's a `while` inside the `for`.
+Each element is pushed once and popped no more than once, so the whole scan of n elements is **O(n)**, even though there's a `while` inside the `for`. The Arrays, Lists, Stacks & Queues module's "Monotonic stacks and total-work counting" unit introduces the structure; these units treat it as a pattern to recognise and vary.
 
 ## Next greater element
 
@@ -46,6 +46,13 @@ result: [4, 2, 4, -1, -1]
 ```
 
 (The stack holds indices; values are shown for readability.)
+
+> [!analogy] Real-world analogy: waiting for someone taller to arrive
+> People arrive at a viewing spot one at a time, and each wants to know the height of the first person to arrive after them who is taller. Those still waiting stand one behind another, the most recent arrival last. A newcomer checks the most recent waiter first: if that person is shorter, they have their answer and leave, and the newcomer checks the next most recent. When the newcomer meets someone at least as tall, or nobody is left, the newcomer starts waiting too.
+>
+> **How it maps:** the people still waiting are the stack of unanswered indices, the most recent waiter is the stack top, the newcomer is `x`, and each person who leaves is a pop that writes `res[...] = x`. No one still waiting is shorter than a later arrival who is also waiting, because that later person would have answered them; that is why the waiting heights never increase from first to last.
+>
+> **Where it stops:** real people could look around at everyone; the algorithm only ever compares the newcomer with the most recent waiter. Whether an equal height counts as an answer is a choice the code must make explicitly with `<` or `<=`, and people never answered get −1.
 
 Note `a[2] = 2` doesn't pop `a[0] = 2`: the problem says *strictly* greater, so the comparison is `<`. Using `<=` would answer "next greater or equal". Getting this right matters a lot with duplicates.
 

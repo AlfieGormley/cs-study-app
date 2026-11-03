@@ -60,21 +60,19 @@ The table counts unit-cost arithmetic and integer slots rather than bits. In its
 | Tabulated | O(n) | O(n) |
 | Two variables | O(n) | O(1) |
 
-This gives the rule of thumb for the cost of any DP. The exact cost is the work summed over every state you evaluate; multiplying the number of states by the most work any one state needs gives a quick upper bound:
+This gives the rule of thumb for the cost of any DP. The exact cost is the work summed over every DP state you evaluate; multiplying the number of states by the most work any one state needs gives a quick upper bound:
 
-```formula
+```formula reference
 T ≤ S w_max
-T_fib = O(n + 1)
 where
 T: the total running time of the DP, in basic steps
 S: the number of distinct states (subproblems) evaluated
 w_max: the most work any single state does, not counting the states it looks up
 ≤: less than or equal to
-T_fib: the running time of memoised or tabulated Fibonacci
-n: the nonnegative Fibonacci position asked for; there are at most n + 1 states, each using bounded unit-cost work
-O(...): Big-O, an upper growth bound up to a constant factor; for positive positions this is conventionally written O(n)
-In words: count the subproblems, multiply by the work each one does on its own, and you have an upper bound on the running time.
+In words: count the subproblems, multiply by the most work any one of them does on its own (not counting the lookups of other subproblems), and you have an upper bound on the running time.
 ```
+
+For Fibonacci there are n + 1 states, each doing one addition, so the work is O(n). A DP with only n states can still be slow if each state scans many earlier states: that per-state work is the other half of the bound.
 
 > [!tip] What the formula leaves out
 > Add any preprocessing, the work to reconstruct the chosen solution, and the cost of arithmetic on very large numbers (operand bits) when they matter.

@@ -15,7 +15,7 @@ Represent the chain by a dimension list `p`: each matrix’s row count is its en
 
 **Recurrence**: the **last** multiplication splits the chain into `(i..k)` and `(k+1..j)`. The left product’s rows come from the first matrix and its columns from the split. The right product shares that inner dimension and ends with the final matrix’s column count. The final cost is their three dimensions multiplied together:
 
-```formula
+```formula essential
 C[i][j] = min(C[i][k] + C[k + 1][j]
   + p_i p_{k+1} p_{j+1})   for i ≤ k < j
 C[i][i] = 0
@@ -30,16 +30,7 @@ min: the smallest value over every split point k
 In words: try every place for the last multiplication, add the best costs of the two halves to the cost of that final multiply, and keep the cheapest.
 ```
 
-A single matrix needs no multiplications. For the dimensions `[10, 30, 5, 60]`, try the two final splits:
-
-```formula
-C[0][2] = min(27,000, 4,500) = 4,500
-where
-C[i][j]: the minimum scalar multiplication count for matrices i through j
-i, j: zero-based first and last matrix positions
-min: the smallest candidate cost
-In words: The split after the second matrix produces the cheaper final multiplication.
-```
+A single matrix needs no multiplications. For the dimensions `[10, 30, 5, 60]`, the final multiplication can come after the first matrix (cost 27,000 in total) or after the second (4,500), so `C[0][2]` is 4,500.
 
 ```python
 def matrix_chain(p):
@@ -77,7 +68,7 @@ The table fills diagonal by diagonal:
 ```
 
 > [!note] Where this matters
-> Numerical libraries face this directly: `numpy.linalg.multi_dot` chooses the multiplication order for a chain of arrays using this DP, and `numpy.einsum` with `optimize=True` uses its greedy contraction-order search, which need not find the global optimum. Database query optimisers solve a harder cousin when ordering joins.
+> Numerical libraries face this directly. `numpy.linalg.multi_dot` chooses an optimal multiplication order for a chain of arrays; its source follows the textbook matrix-chain DP (three arrays use a direct cost comparison). `numpy.einsum` with `optimize=True` uses a greedy contraction-order search, which need not find the global optimum. Database query optimisers solve a harder cousin when ordering joins.
 
 ## Key takeaways
 - The final multiplication defines two independent subchains.

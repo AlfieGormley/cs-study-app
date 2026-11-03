@@ -13,26 +13,7 @@ sourceLesson: dp-method
 
 **State.** `ok[i]` is True if the suffix `s[i:]` can be split into words.
 
-**Recurrence.** The first decision is which word starts at position i. For each word `w`, if `s` has `w` at position i and the rest can be split, we're done:
-
-```formula
-ok[i] = OR of ok[i + |w|]
-  for each w with m(w, i)
-ok[n] = True
-where
-ok[i]: True if the suffix of s starting at position i can be split into dictionary words, False otherwise
-i: a position in s, from 0 (the start) to n (just past the end)
-w: one dictionary word
-m(w, i): True if the word w appears in s starting exactly at position i (s.startswith(w, i) in Python)
-|w|: the length of w, in characters
-OR: logical or, True if at least one of the values is True (False if there are none)
-s: the input string
-n: the length of s, in characters
-True: the Boolean value "yes"
-In words: the suffix from i can be split if some dictionary word matches at i and the rest after that word can also be split.
-```
-
-The same rule in Python:
+**Recurrence.** The first decision is which word starts at position i. The suffix from i can be split if some dictionary word matches exactly at i **and** the rest after that word can also be split. In Python:
 
 ```python
 ok[i] = any(s.startswith(w, i)
@@ -97,26 +78,13 @@ i  suffix       ok   via
 
 (Positions 1, 2, 5, 8 and 9 are False.) Following `nxt[i]` from position zero gives `["cat", "sand", "dog"]`. With "cats" listed first you'd get `["cats", "and", "dog"]`; both are valid.
 
-**Complexity.** Count states and the work per state:
-
-```formula
-T = O(nWL + n + W)
-M = O(n + W)
-where
-T: the worst-case running time, counting character comparisons and table steps
-M: the extra memory used, in slots (table entries and word references)
-n: the length of the string s, in characters; there are n + 1 states
-W: the number of words in the dictionary
-L: the length of the longest dictionary word, in characters
-O(...): Big-O, growing at most in proportion to the expression inside
-In words: each of the n + 1 positions tries all W words, and checking a word costs up to L character comparisons.
-```
-
-For example, a 1,000-character string with 500 words of up to 10 characters costs at most about 1,000 × 500 × 10 = 5 million character comparisons. The `+ n + W` terms cover setting up the table and copying the word list; reconstruction copies at most n characters. Compare with brute force, which can explore exponentially many splits of a string like `"aaaa...ab"`.
+**Complexity.** Count states and the work per state. Let n be the string length, W the number of dictionary words and L the longest word's length. There are n + 1 states; each tries all W words, and each `startswith` check compares up to L characters. So the work is O(nWL), with O(n + W) extra memory. A 1,000-character string with 500 words of up to 10 characters needs at most about 5 million character comparisons. Brute force, by contrast, can explore exponentially many splits of a string like `"aaaa...ab"`.
 
 ## Reduce the transition work
 
-When the dictionary is large but words are short, try lengths instead of every word: store words in a set, then look up each substring starting at the current position. In Python, creating and hashing a fresh substring costs work proportional to its length. A trie can instead follow consecutive characters without repeatedly constructing each candidate. For a nonempty dictionary, n is the input length, W the dictionary size and L its positive maximum word length. Expected set lookup with slice-and-hash candidates costs O(nL² + WL) character work including dictionary setup; a trie with constant-cost transitions costs O(nL + WL). These are growth bounds and character-work estimates, rather than wall-clock timings.
+The states are fixed; the cost per state is what you can improve. When the dictionary is large but words are short, try **lengths** instead of words: put the words in a set and, at each position, look up the substrings of length 1 to L. The number of candidates per position now depends on L, not on W.
+
+In Python, each candidate slice is a fresh string that costs work proportional to its length to build and hash, so this is O(nL²) character work plus O(WL) to build the set. A trie (prefix tree) avoids rebuilding slices: walk it one character at a time from position i and stop when no branch continues, for O(nL) plus O(WL) to build it. These are growth estimates, not timings.
 
 ## Key takeaways
 - A suffix state decides whether the rest of the string can be split.

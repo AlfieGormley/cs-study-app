@@ -26,8 +26,9 @@ Once you understand the problem, match its shape against the patterns in this mo
 | Merge k sorted inputs | Heap (k-way) |
 | "Appears once", at most 20 items | Bits, masks |
 | "Have I seen this?" | Hash map/set |
+| Smallest capacity that works | Binary search on the answer |
 
-Other modules cover the rest of the toolkit: binary search, BFS/DFS, backtracking and dynamic programming.
+Other modules cover the rest of the toolkit. Binary search, including searching over candidate answers when a yes/no feasibility test is monotone, is in Sorting & Searching; BFS and DFS are in Graphs; backtracking and greedy choices are in Recursion, Backtracking & Greedy; and dynamic programming has its own module. This module concentrates on the array, interval, stack, heap and bit patterns.
 
 > [!warning] Patterns are hypotheses
 > A cue suggests a pattern; it doesn't prove it fits. "Longest subarray with sum at most k", where k is a limit the problem gives you, looks like a sliding window, but if values can be negative the window logic breaks. Check the pattern's preconditions before you commit.

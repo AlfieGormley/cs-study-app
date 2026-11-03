@@ -22,7 +22,7 @@ The LCS of "ABCBDAB" and "BDCABA" has length four, for example "BCBA".
 
 **Base**: row 0 and column 0 are all 0.
 
-```formula
+```formula essential
 L[i][j] = L[i − 1][j − 1] + 1   if A_i = B_j
 L[i][j] = max(L[i − 1][j], L[i][j − 1])
    otherwise
@@ -83,11 +83,10 @@ def lcs(a, b):
     return ''.join(reversed(out))
 ```
 
-LCS and edit distance are cousins. If only insertions and deletions (indels) are allowed (no substitutions), every character not in the LCS must be deleted from A or inserted from B:
+LCS and edit distance are cousins. If only insertions and deletions (indels) are allowed (no substitutions), the best script keeps a longest common subsequence and changes everything else: every character not in the LCS must be deleted from A or inserted from B. Each kept character saves an edit on **both** sides.
 
-```formula
+```formula reference
 D_id = (m − ℓ) + (n − ℓ) = m + n − 2ℓ
-D_id = 4 + 5 − 2 × 3 = 3
 where
 D_id: the insert/delete-only edit distance between A and B
 m: the length of A
@@ -98,7 +97,7 @@ n − ℓ: the characters of B to insert
 In words: keep the longest common subsequence, delete the rest of A and insert the rest of B.
 ```
 
-The example compares "ABCB" with "BDCAB" from the table above, with LCS length 3.
+For "ABCB" and "BDCAB" from the table above, the LCS has length 3, so one character of A is deleted and two characters of B are inserted: 3 edits.
 
 ## Key takeaways
 - Matching ends extend the diagonal subsequence; mismatches drop one end.

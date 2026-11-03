@@ -17,7 +17,7 @@ The trick is to ask which balloon is burst **last** in an open interval `(i, j)`
 
 Pad the array with 1s at both ends: `a = [1] + nums + [1]`.
 
-```formula
+```formula essential
 B[i][j] = max(B[i][k] + B[k][j]
   + a_i a_k a_j)   for i < k < j
 B[i][i + 1] = 0

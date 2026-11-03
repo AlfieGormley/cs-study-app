@@ -11,35 +11,22 @@ sourceLesson: dp-knapsack
 
 Ask: "Am I choosing a **subset** of items, subject to a **budget** on some additive quantity, while optimising or counting another additive quantity?" If so, the state is (items considered, budget used), and it's knapsack. Examples:
 
-- **Target sum** ("assign + or − to each number to reach T"): it turns into subset counting for nonnegative integer inputs.
+- **Target sum** ("assign + or − to each number to reach T"): it turns into subset counting for nonnegative integer inputs. The numbers given a plus sign form one group; everything else is subtracted. Fixing the plus group's sum fixes the whole expression, so the plus group must sum to exactly half of (the total + the target):
 
-```formula
+```formula reference
 P − (S − P) = T
 P = (S + T) / 2
-P = (5 + 3) / 2 = 4
 where
 P: the sum of the numbers given a + sign
 S: the sum of all the numbers
 S − P: the sum of the numbers given a − sign
 T: the target the signed numbers must add up to
-In words: the plus group minus the minus group must equal T, which fixes the plus group's sum at half of S + T, so count the subsets with that sum.
+In words: the plus group's sum minus the minus group's sum must equal the target, which fixes the plus group's sum at half of (the total of all the numbers + the target), so count the subsets with that sum.
 ```
 
-The example is five ones with target three: count the subsets of sum 4, of which there are 5 (choose which four 1s are positive). The reduction needs a valid integer subset target:
+For five ones with target three, the plus group must sum to 4: count the subsets of sum 4, of which there are 5 (choose which four 1s are positive). Equal-valued positions still count as distinct.
 
-```formula
-|T| ≤ S
-(S + T) mod 2 = 0
-where
-T: the signed-sum target
-S: the total of the nonnegative input numbers
-|T|: the absolute value of T, ignoring its sign
-mod: the remainder after integer division
-≤: less than or equal to
-In words: The target must be within the total’s positive and negative range, and the required subset sum must be an integer.
-```
-
-If either check fails, no assignment exists; equal-valued positions still count as distinct.
+Two checks come first. If the target is further from zero than the total, no assignment can reach it. And if the total plus the target is odd, the plus group would need a fractional sum, so no assignment exists. Skipping that parity check is a real bug: integer division silently rounds the half down, and the code counts subsets for the wrong target.
 
 - **Last stone weight II**: minimum-difference partition.
 - **Ones and zeroes**: knapsack with a two-dimensional budget (count of 0s and 1s), state `dp[zeros][ones]`.

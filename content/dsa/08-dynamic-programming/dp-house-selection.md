@@ -18,7 +18,9 @@ sourceLesson: dp-1d
 - Skip it: `best[i-1]`.
 - Rob it: then house i − 2 is off limits, so `best[i-2] + h[i-1]`.
 
-```formula
+Keep whichever total is larger.
+
+```formula reference
 best[i] = max(best[i − 1],
   best[i − 2] + h[i − 1])
 best[0] = 0
@@ -31,7 +33,7 @@ max: the larger of the values listed
 In words: either leave the last house alone and keep the best plan for the houses before it, or rob it and add its amount to the best plan that stops two houses earlier.
 ```
 
-Taking no houses is allowed, which is why best[1] can be 0 if amounts may be negative.
+With no houses the best total is 0. With one house it is the larger of 0 and that house's amount, because taking no houses is allowed (this matters if amounts may be negative). The state is "the best plan for the first i houses", and the plan's last decision (rob house i − 1 or not) is the only thing the recurrence needs to look at.
 
 Each state needs only the previous two, so two variables suffice:
 
@@ -62,7 +64,7 @@ Answer 12: houses 0, 2 and 4 (2 + 9 + 1).
 > [!note] Why greedy fails here
 > "Take the biggest house, remove its neighbours, repeat" fails on `[2, 3, 2]`: it takes the 3 and must stop, but robbing both 2s gives 4. Local choices interact, and DP's "try both, keep the best" handles that.
 
-**Variant**: houses in a **circle** (first and last adjacent). With at least two houses, run the linear version on `h[1:]` and `h[:-1]` and take the max. Every valid plan excludes at least one end. Return zero for no houses. For one house, return the larger of zero and that house’s amount. Here n is the number of houses. Slicing allocates O(n) extra space; index-bounded passes avoid those copies.
+**Variant**: houses in a **circle** (first and last adjacent). With at least two houses, run the linear version on `h[1:]` and `h[:-1]` and take the max. Every valid plan excludes at least one end. Return zero for no houses. For one house, return the larger of zero and that house’s amount. Here n is the number of houses. Slicing allocates O(n) extra space; passes over index ranges avoid those copies.
 
 ## Real-world use
 

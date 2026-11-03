@@ -25,35 +25,14 @@ sourceLesson: dp-2d
 
 **Base**: `D[i][0] = i` (delete everything), `D[0][j] = j` (insert everything).
 
-```formula
-D[i][j] = D[i − 1][j − 1]   if A_i = B_j
-D[i][j] = 1 + min(D[i − 1][j],
-  D[i][j − 1], D[i − 1][j − 1])   otherwise
-D[i][0] = i
-D[0][j] = j
-where
-D[i][j]: the edit distance between the first i characters of A and the first j characters of B
-A, B: the two strings being compared
-A_i: the ith character of A, counting from 1 (A[i-1] in Python)
-B_j: the jth character of B, counting from 1 (B[j-1] in Python)
-i: how many characters of A are in the prefix, 0 to m; character-reading recurrence lines require both prefixes to be nonempty
-j: how many characters of B are in the prefix, 0 to n
-m: the length of A
-n: the length of B
-min: the smallest of the three values
-In words: if the last characters match, keep them for free; otherwise pay one edit for whichever of delete, insert or substitute leaves the cheapest smaller problem.
-```
+For `horse` → `ros`, the first nonempty prefixes are "h" and "r". They differ, so the cell takes one edit plus the cheapest neighbour: deleting or inserting would leave a distance of 1 to fix, while substituting h → r leaves the empty pair at 0. So that cell is 1.
 
-For `horse` → `ros`, the first nonempty prefixes have different letters, h and r:
-
-```formula
-D[1][1] = 1 + min(1, 1, 0) = 1
-where
-D[i][j]: the edit distance between the first i letters of "horse" and first j letters of "ros"
-i, j: prefix lengths
-min: the smallest candidate
-In words: Substituting the first letter is cheaper than inserting or deleting it.
-```
+> [!analogy] Real-world analogy: fixing a typo with the fewest keystrokes
+> You typed "horse" but meant "ros". With a keyboard you can delete a character, type a missing one, or overtype one character with another, and you want the fewest keystrokes.
+>
+> **How it maps:** deleting is a deletion, typing a missing letter is an insertion and overtyping is a substitution, each costing 1. The edit distance is the smallest keystroke count. The table records the best count for every pair of "first i letters typed" and "first j letters wanted", so each correction builds on smaller ones.
+>
+> **Where it stops:** on a real keyboard, moving the cursor, selecting a word or pasting also costs effort or saves it. Levenshtein distance ignores position entirely and charges exactly 1 for each single-character edit, wherever it happens.
 
 ```python
 def edit_distance(a, b):
@@ -97,31 +76,16 @@ Answer `D[5][3] = 3`: horse → rorse (substitute h→r) → rose (delete r) →
 
 To **reconstruct** the edits, start at the bottom-right and step back to whichever neighbour produced the value: diagonal with equal characters (match), diagonal +1 (substitute), up +1 (delete), left +1 (insert).
 
-**Complexity**: one constant-time step per table cell:
-
-```formula
-T = O((m + 1) × (n + 1)) = O(mn)
-M_roll = O(min(m, n) + 1)
-where
-T: the running time, and also the number of table slots for the full table
-m: the length of string A
-n: the length of string B
-M_roll: the memory needed when only rolling rows are kept (see below)
-min: the smaller of the two lengths
-O(...): Big-O, growing at most in proportion to the expression inside
-In words: the table has a cell for every pair of prefix lengths, and each cell takes a fixed amount of work.
-```
-
-Two 1,000-character strings need about 1,000,000 cells. The O(m × n) form is the usual shorthand for nonempty strings.
+**Complexity**: for strings of lengths m and n, the table has a cell for every pair of prefix lengths, and each cell takes a fixed amount of work: O(mn) time and, for the full table, O(mn) slots. Two 1,000-character strings need about 1,000,000 cells. If you only need the distance, keeping two rows cuts the memory to the shorter length (a later unit shows how).
 
 > [!note] Why "matching characters → take the diagonal" is safe
 > When the last characters match, there's always an optimal alignment that pairs them. You might worry that deleting or inserting could be better, but any such solution can be rearranged into one that pairs the matching ends at no extra cost. Many implementations still take `min` over all three for safety; it gives the same answer.
 
 ## Check basic distance bounds
 
-Useful sanity checks follow directly from reversible edits, required length changes, and substituting the shared-length portion:
+Three sanity checks catch many table bugs. The distance is the same in both directions, because every edit can be reversed. It is at least the difference in lengths, because only insertions and deletions change the length. And it is at most the longer length, because you can always substitute along the shorter string and then insert or delete the rest.
 
-```formula
+```formula reference
 D(A, B) = D(B, A)
 |m − n| ≤ D(A, B) ≤ max(m, n)
 D(A, A) = 0
@@ -132,7 +96,7 @@ m, n: their lengths in code points
 |m − n|: the absolute difference between the lengths
 max: the larger input length
 ≤: less than or equal to
-In words: Distance is symmetric, needs enough insertions or deletions to fix the length, and never exceeds substituting a common-length portion plus the remaining insertions or deletions.
+In words: the distance is symmetric, is at least the difference in lengths, and is at most the longer length.
 ```
 
 These bounds permit substitutions. The separate LCS identity later applies only when substitutions are forbidden.

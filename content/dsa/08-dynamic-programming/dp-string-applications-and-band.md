@@ -16,7 +16,7 @@ sourceLesson: dp-2d
 > [!warning] Quadratic is real
 > Edit distance of two 100,000-character strings is 10¹⁰ cell updates. It's widely believed that no algorithm can do it in strongly subquadratic time: a 2015 result by Backurs and Indyk showed that would refute the Strong Exponential Time Hypothesis. In practice, if you only care whether the distance is at most some threshold k, a **banded** DP fills only a narrow band around the diagonal. That works because every step off the diagonal costs at least one insertion or deletion.
 
-```formula
+```formula reference
 |m − n| > k   gives   D > k
 |i − j| ≤ k
 T = O((k + 1) × max(m, n))

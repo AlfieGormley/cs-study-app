@@ -41,7 +41,7 @@ result: [0, 1, 2], length 3
 
 The same read/write shape solves "move all zeros to the end", "remove all copies of value v" and "keep at most two of each value" (keep an item when `w < 2` or it differs from `a[w - 2]`).
 
-Another same-direction variant is **fast and slow pointers** on a linked list: the slow pointer moves one step, the fast one two. Check equality after advancing: they eventually meet if there's a cycle (Floyd's algorithm). On an acyclic list, stop when fast cannot take another two-step advance; the chosen loop convention determines which middle node is returned for an even-length list.
+Another same-direction variant is **fast and slow pointers** on a linked list, where one pointer moves two steps for each step of the other to find the middle or detect a cycle (Floyd's algorithm). The Arrays, Lists, Stacks & Queues module's "Fast and slow pointers: middle and cycles" unit covers it; its invariant is about distance along the list rather than a kept prefix.
 
 ## Key takeaways
 - The kept prefix contains the distinct values seen so far; the list itself is not resized.

@@ -53,6 +53,8 @@ def fib(n):
     return fib(n - 1) + fib(n - 2)
 ```
 
+`functools.cache` is an unbounded cache, the same as `lru_cache(maxsize=None)`: it keeps every answer for the life of the function, keyed by the arguments.
+
 In a cold-cache (initially empty), single-threaded `@cache` call with n of 2 or more, the body runs once for each value from 0 up to n; later requests hit the cache. The manual version does not cache its constant-time base cases. Counting integer additions and dictionary operations as unit cost gives **O(n) work and O(n) stored numbers**, plus recursive stack space.
 
 The call tree collapses into a chain:

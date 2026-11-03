@@ -24,6 +24,13 @@ Both can evaluate the same recurrence. They may visit different sets of states; 
 | Recursion limit | A risk | No issue |
 | Space tricks | Hard | Easy |
 
+> [!analogy] Real-world analogy: two ways to cook a dinner
+> One cook starts from the main recipe. Whenever a step says "add the sauce", they pause, make the sauce, label the jar and carry on; if the sauce is needed again, they use the jar. Another cook first works through a prep list in a planned order, so every sauce and stock is ready before the main recipe starts.
+>
+> **How it maps:** the first cook is memoisation: sub-recipes are made on demand and the labelled jars are the cache. The pile of half-finished recipes they must come back to is the recursion stack. The second cook is tabulation: the prep list is the evaluation order, and it must put every ingredient before the dishes that use it.
+>
+> **Where it stops:** a kitchen can often reorder prep steps freely, but a DP table order must respect every dependency exactly. And a prep list may make a garnish that nobody ends up using, which is the tabulation cost of filling unreachable states. Both cooks produce the same dinner: the evaluation strategy changes the order and the overheads, never the answer.
+
 ### When memoisation wins
 
 - It's **easier to write**: take the recursive definition and add a cache.

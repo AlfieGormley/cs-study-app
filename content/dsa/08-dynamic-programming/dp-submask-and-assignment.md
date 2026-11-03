@@ -12,29 +12,7 @@ Bitmasks also represent assigned jobs or the occupied boundary of a grid. The ma
 ### Other bitmask DPs
 
 - **Assignment problem**: n workers, n jobs, cost matrix. `dp[mask]` records minimum cost to assign the first `popcount(mask)` workers (popcount is the number of 1 bits in the mask) to the jobs in `mask`. O(n · 2ⁿ). (The Hungarian algorithm does it in O(n³), but the bitmask DP generalises to constraints Hungarian can't handle.)
-- **Set cover / partition into groups**: iterate submasks with `sub = (sub - 1) & mask`, stopping explicitly after zero (otherwise it wraps back to mask). Including the empty submask, the number of pairs is:
-
-```formula
-pairs = 3^n
-3^15 = 14,348,907
-where
-pairs: the number of (mask, submask) pairs, where every bit of the submask is also set in the mask
-n: the number of items (bits)
-3^n: n copies of 3 multiplied together
-In words: each item independently has three options: in the submask, in the mask but not the submask, or outside the mask.
-```
-
-By comparison, independently choosing two arbitrary masks gives:
-
-```formula
-arbitrary = 2^n 2^n = 4^n
-where
-arbitrary: the number of pairs of independently chosen masks
-n: the number of available items
-In words: Each of the two masks independently selects a subset; a submask restriction reduces the total to three choices per item.
-```
-
-Transitions may still add work per pair.
+- **Set cover / partition into groups**: iterate submasks with `sub = (sub - 1) & mask`, stopping explicitly after zero (otherwise it wraps back to mask). Looping over every mask and all its submasks visits 3ⁿ pairs for n items, because each item independently plays one of three roles: outside the mask, in the mask but not the submask, or in both. That is about 14 million pairs for 15 items, far fewer than the 4ⁿ pairs of two unrelated masks. Each extra item multiplies the work by 3. Transitions may still add work per pair.
 - **Profile DP** (broken-profile, e.g. tiling a grid with dominoes): the mask records which cells of the current column boundary are already filled.
 
 ## When assignments interact

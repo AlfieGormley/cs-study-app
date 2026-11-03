@@ -27,7 +27,7 @@ On general graphs this is NP-hard. On a tree with n nodes it's O(n).
 - If v is chosen, none of its children may be.
 - If v isn't chosen, each child is free to be chosen or not.
 
-```formula
+```formula essential
 inc[v] = w_v + Σ exc[c]   for c ∈ kids(v)
 exc[v] = Σ max(inc[c], exc[c])
    for c ∈ kids(v)
@@ -46,6 +46,13 @@ r: the root of the tree
 answer: the size (or total weight) of the maximum independent set
 In words: choosing v forces every child out; leaving v out lets each child independently take whichever of its two options is better.
 ```
+
+> [!analogy] Real-world analogy: a company party without direct bosses
+> You are inviting staff to a party, and nobody enjoys a party their direct manager also attends. You want as many guests (or as much total fun) as possible. Each manager asks their team: "what's our best guest list if I go, and if I don't?"
+>
+> **How it maps:** the organisation chart is the tree and each person is a node. "If I go" is `inc[v]`: none of my direct reports can come, so take each report's best list without them. "If I don't" is `exc[v]`: each report independently chooses their better option. Answers flow up the chart until the top manager compares the two totals.
+>
+> **Where it stops:** a real organisation can have matrix management, with someone reporting to two managers. That is no longer a tree, the two sub-answers stop being independent, and the problem on a general graph is NP-hard.
 
 ```
         0

@@ -22,41 +22,9 @@ Try `dp[i]` records best profit from day i onwards. It doesn't work: whether you
 - Holding: either keep it (`f(i+1, True)`) or sell (`price[i] + f(i+2, False)`; the `+2` skips the cooldown day).
 - Not holding: either wait (`f(i+1, False)`) or buy (`-price[i] + f(i+1, True)`).
 
-```formula
-f(i, True) = max(f(i + 1, True),
-  p_i + f(i + 2, False))
-f(i, False) = max(f(i + 1, False),
-  −p_i + f(i + 1, True))
-where
-f(i, h): the best profit obtainable from day i onwards, where h says whether we hold a share at the start of day i
-i: the day number, starting at 0
-h: the holding flag, True or False
-True: we hold a share
-False: we hold no share
-p_i: the price of the share on day i (price[i] in the code), in money units
-max: the larger of the two options
-In words: on each day, either do nothing and move to the next day, or act (sell, then skip a cooldown day; or buy, paying today's price), and keep whichever gives more profit.
-```
+Selling adds the price to the profit; buying subtracts it, which is why the buy option starts with `-price[i]`. Keep whichever option gives more profit.
 
-Selling adds the price to the profit; buying subtracts it, which is why the buy option has −p_i.
-
-**Domain and base case.** Prices are nonnegative integers. All bought shares must be sold, so once the days run out (i is n or more, where n is the number of days):
-
-```formula
-f(i, False) = 0   for i ≥ n
-f(i, True) = −∞   for i ≥ n
-where
-f(i, h): the best profit from day i onwards with holding flag h
-i: the day number
-n: the number of days with a price
-True: still holding a share
-False: holding nothing
-−∞: negative infinity, a value worse than any real profit, so this state is never chosen
-≥: greater than or equal to
-In words: after the last day, finishing empty-handed adds nothing, and finishing while still holding a share is forbidden.
-```
-
-The `−∞` explicitly excludes unfinished transactions, including zero-price ties.
+**Domain and base case.** Prices are nonnegative integers, and every share bought must be sold. So once the days run out, finishing empty-handed is worth 0, and finishing while still holding a share is worth negative infinity (`−∞`): a value worse than any real profit, so an unfinished trade is never chosen, even when a share was bought for 0.
 
 ```python
 from functools import cache
@@ -95,7 +63,7 @@ def max_profit(prices):
 
 For prices `[1, 2, 3, 0, 2]` this returns 3. The tempting plan, buy at 1 and sell at 3 (+2), forces a cooldown on the day priced 0, leaving only one day: total 2. The better plan is buy at 1, sell at 2 (+1), cool down on the day priced 3, buy at 0, sell at 2 (+2): total 3. Spotting that by hand is fiddly, which is exactly why you let the recurrence try every option.
 
-**Complexity.** With n days, there are O(n + 1) states (two per day, plus the end) with O(1) arithmetic operations each, so O(n) time. The shown version keeps O(n) cached states, prices and recursion frames. An iterative hold/sold/rest version can use O(1) value slots; integer bit costs remain additional.
+**Complexity.** With n days, there are about 2n states (two per day, plus the end) with O(1) arithmetic operations each, so O(n) time. The shown version keeps O(n) cached states, prices and recursion frames. An iterative hold/sold/rest version can use O(1) value slots; integer bit costs remain additional.
 
 > [!tip] The state machine view
 > Many "sequence with modes" problems are DP over (position, mode). Draw the modes as boxes and the allowed moves between them as arrows; each arrow is a term in the recurrence.
@@ -110,7 +78,7 @@ For prices `[1, 2, 3, 0, 2]` this returns 3. The tempting plan, buy at 1 and sel
 
 ## A transaction limit changes the state
 
-Without a cooldown, a cap on completed buy-sell transactions requires another parameter: the number still available. Keep the holding flag too. Counting a transaction when buying consumes one allowance; selling then uses the already-reserved allowance. Each day and allowance has two holding modes, with constant candidate actions per state. Finish without an unsold share, as in the cooldown version.
+Without a cooldown, a cap on the number of buy-sell transactions needs one more parameter: how many transactions are still allowed. Keep the holding flag too. A convenient convention is to spend one allowance when you buy; the matching sale then needs nothing extra. The state becomes (day, transactions left, holding): still a constant number of choices per state, but k + 1 times as many states for a limit of k. As before, finishing while still holding a share is forbidden.
 
 ## Pitfalls
 

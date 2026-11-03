@@ -23,13 +23,11 @@ a << k  left shift      0011 << 2 = 1100
 a >> k  right shift     1100 >> 2 = 0011
 ```
 
-The two shift rows are arithmetic in disguise. For a nonnegative integer:
+The two shift rows are arithmetic in disguise. For a nonnegative integer, a left shift by k places multiplies by 2 to the power k, and a right shift divides by it and drops the remainder: `3 << 2` is 12 and `12 >> 2` is 3.
 
-```formula
+```formula reference
 a << k = a 2^k
 a >> k = ⌊a / (2^k)⌋
-3 << 2 = 3 × 4 = 12
-12 >> 2 = ⌊12 / 4⌋ = 3
 where
 a: a nonnegative integer
 k: the shift distance, a nonnegative whole number of bit positions
@@ -37,12 +35,12 @@ k: the shift distance, a nonnegative whole number of bit positions
 >>: right shift: move every bit k places towards the low end, dropping the bits that fall off
 2^k: k copies of 2 multiplied together
 ⌊ ⌋: floor, rounding down to the nearest whole number
-In words: shifting left by k multiplies by 2 to the k, and shifting right by k divides by 2 to the k and throws away the remainder, just as moving a decimal number one place multiplies or divides by 10; 0011 shifted left 2 is 1100.
+In words: shifting left by k multiplies by 2 to the k, and shifting right by k divides by 2 to the k and throws away the remainder, just as moving the digits of a decimal number one place multiplies or divides by 10.
 ```
 
 The `~` row is two's complement, explained next:
 
-```formula
+```formula essential
 ~x = −x − 1
 −x = ~x + 1
 ~5 = −6
@@ -75,7 +73,7 @@ This is how flag sets work in practice: Unix file permissions (`0o755` is `rwxr-
 ## Further reading
 - [Bit manipulation — cp-algorithms](https://cp-algorithms.com/algebra/bit-manipulation.html)
 - [Enumerating submasks — cp-algorithms](https://cp-algorithms.com/algebra/all-submasks.html)
-- [Bit Twiddling Hacks — Sean Eron Anderson, Stanford](https://graphics.stanford.edu/~seander/bithacks.html)
+- [Bit Twiddling Hacks — Sean Eron Anderson, Stanford (archived copy)](https://web.archive.org/web/20250605031917/https://graphics.stanford.edu/~seander/bithacks.html)
 - [Hamming weight — Wikipedia](https://en.wikipedia.org/wiki/Hamming_weight)
 - [Binary cheatsheet — Tech Interview Handbook](https://www.techinterviewhandbook.org/algorithms/binary/)
 - [Python integer bitwise semantics](https://docs.python.org/3.14/library/stdtypes.html#bitwise-operations-on-integer-types)

@@ -24,16 +24,14 @@ while s:
 
 Over all n-bit masks, there are 3ⁿ (mask, submask) pairs including zero submasks, since each element is in the submask, in the mask only, or in neither. This loop omits one zero submask per mask:
 
-```formula
+```formula reference
 V = 3^n − 2^n
-n = 3
-V = 27 − 8 = 19
 where
 V: the total number of loop visits, summed over all 2^n masks
 n: the number of bits (items)
 3^n: n copies of 3 multiplied together, the number of (mask, submask) pairs including empty submasks
 2^n: the number of masks, each of which has one empty submask that the loop skips
-In words: three choices per bit give 3^n pairs, and dropping the empty submask of each of the 2^n masks leaves 3^n − 2^n visits; for 3 bits, 19.
+In words: three choices per bit give 3 to the power n pairs, and skipping the empty submask of each mask removes one visit per mask; for 3 bits that is 27 − 8 = 19 visits.
 ```
 
 That is O(3ⁿ) in the unit-cost mask model.
@@ -58,6 +56,6 @@ That is O(3ⁿ) in the unit-cost mask model.
 ## Further reading
 - [Bit manipulation — cp-algorithms](https://cp-algorithms.com/algebra/bit-manipulation.html)
 - [Enumerating submasks — cp-algorithms](https://cp-algorithms.com/algebra/all-submasks.html)
-- [Bit Twiddling Hacks — Sean Eron Anderson, Stanford](https://graphics.stanford.edu/~seander/bithacks.html)
+- [Bit Twiddling Hacks — Sean Eron Anderson, Stanford (archived copy)](https://web.archive.org/web/20250605031917/https://graphics.stanford.edu/~seander/bithacks.html)
 - [Hamming weight — Wikipedia](https://en.wikipedia.org/wiki/Hamming_weight)
 - [Binary cheatsheet — Tech Interview Handbook](https://www.techinterviewhandbook.org/algorithms/binary/)

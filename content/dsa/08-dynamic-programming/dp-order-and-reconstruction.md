@@ -11,7 +11,9 @@ Once the state and transitions are correct, decide when each answer becomes avai
 
 ## Step 4: evaluation order
 
-Every state depends on some others. For a finite recurrence evaluated once per state, those dependencies must form a **directed acyclic graph**. Cyclic Bellman equations can require fixed-point methods such as value iteration; plain memoisation does not solve a dependency cycle. Bottom-up evaluation is just a topological order of that DAG.
+Every DP state depends on some others. For a recurrence evaluated once per state, those dependencies must form a **directed acyclic graph** (DAG): no state may depend, directly or indirectly, on itself. Bottom-up evaluation is just a topological order of that DAG. A strictly shrinking measure (a smaller index, a shorter interval, a smaller remaining budget) is the usual proof that no cycle exists.
+
+If the dependencies do form a cycle, plain memoisation recurses forever. Cyclic equations (such as Bellman equations in decision-making under uncertainty) need different, iterative fixed-point methods such as value iteration.
 
 - If `dp[i]` depends on larger `i`, loop `i` downwards.
 - If `dp[i][j]` depends on `[i-1][j]` and `[i][j-1]`, loop rows then columns, both upwards.
@@ -28,6 +30,13 @@ Say which state is the answer (`dp[0]`, `dp[n]`, `max(dp)`, ...). Then, if the p
 
 Following stored choices takes time proportional to the number of reconstruction steps plus output construction. Rechecking alternatives can cost more: include the number of candidates examined at each step.
 
+> [!analogy] Real-world analogy: a route log on a long drive
+> At the end of a drive, the trip computer can tell you the total distance, but not which turns you took. If you jotted down the turn at every junction, you can read the whole route back. If you didn't, you can still work it out by checking, at each junction, which road is consistent with the distances you remember.
+>
+> **How it maps:** the total distance is the DP value at the answer state. The jotted turns are the stored choices, followed back from the answer. Checking which road fits the remembered distances is the recompute method: at each state, find the option that reproduces the stored value.
+>
+> **Where it stops:** a driver only logs the junctions they actually passed. A DP stores a choice for every state, including the many that are not on the final route, because it doesn't know the route until the end.
+
 ## Choosing between prefix and suffix states
 
 Both work for most sequence problems. Pick whichever makes the recurrence read naturally:
@@ -37,7 +46,7 @@ Both work for most sequence problems. Pick whichever makes the recurrence read n
 
 ## Keeping a path while saving rows
 
-A rolling table discards older rows, so its final row alone cannot support a direct traceback. Keep per-cell choices when memory permits, or do additional work to recover them. Hirschberg’s alignment technique computes forward and backward costs to a middle row, chooses a compatible split column, and recurses on both halves. For strings of lengths m and n, this preserves O(mn) time for nonempty strings with linear auxiliary storage plus the output; one reverse rolling pass alone does not recover every choice.
+A rolling table keeps only the latest row or two, so the older rows a traceback would need are gone. Keep per-cell choices when memory permits, or do extra work to recover them. Hirschberg’s technique (1975, for longest common subsequence and alignment) computes costs forwards from the start and backwards from the end to a middle row, picks the column where the two meet on an optimal path, and recurses on the two halves. For strings of lengths m and n, it keeps O(mn) time while using only linear extra storage plus the output. One reverse rolling pass alone does not recover every choice.
 
 ## Key takeaways
 - Finite once-per-state evaluation requires acyclic dependencies.

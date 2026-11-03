@@ -7,7 +7,7 @@ sourceLesson: pat-monotonic
 summary: Keep decreasing candidate values so the front answers the current maximum.
 ---
 
-Here n is the array length and k is an integer window length from one to n. A deque supports removals at both ends.
+Here n is the array length and k is an integer window length from one to n. A deque supports removals at both ends. The Arrays, Lists, Stacks & Queues module's monotonic-deque unit introduces this structure; this unit places it among the window and stack patterns and traces its two kinds of removal.
 
 ## Monotonic deque: sliding window maximum
 
@@ -60,17 +60,7 @@ i  x   deque (values)   out
 7  7   [7]              7
 ```
 
-Result `[3, 3, 5, 5, 6, 7]`, one value per full window:
-
-```formula
-W = n − k + 1
-W = 8 − 3 + 1 = 6
-where
-W: the number of windows of size k, which is the length of the output
-n: the length of the array; here 8
-k: the window size; here 3
-In words: the first window ends at index k − 1 and the last at index n − 1, so there are n − k + 1 windows; 8 values in windows of 3 give 6 maxima.
-```
+Result `[3, 3, 5, 5, 6, 7]`, one value per full window: the first window ends at index 2 and the last at index 7, so 8 values in windows of 3 give 6 maxima.
 
 Each index enters and leaves the deque once: O(n) time, O(k) auxiliary space, plus O(n − k + 1) output space.
 

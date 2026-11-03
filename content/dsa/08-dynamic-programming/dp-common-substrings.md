@@ -13,7 +13,7 @@ A subsequence can skip characters, whereas a substring must form one uninterrupt
 
 The **longest common substring** (one unbroken run of characters) is a different DP:
 
-```formula
+```formula essential
 S[i][j] = S[i − 1][j − 1] + 1   if A_i = B_j
 S[i][j] = 0   otherwise
 answer = max of S[i][j] for all i, j

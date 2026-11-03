@@ -23,7 +23,7 @@ Then add a sixth, quick step: **complexity**: count the states and the work per 
 
 ## Step 1: define the state
 
-The state is the set of parameters that describes a subproblem. It must capture **everything the future depends on**. Extra information can increase cost even when the state remains correct.
+The **DP state** is the set of parameters that describes a subproblem. It must capture **everything the future depends on**. Extra information can increase cost even when the state remains correct.
 
 A good test: "If I know only these values, can I solve the rest of the problem optimally without knowing how I got here?" If yes, you have a valid state. If the answer also depends on something else (a previous choice, a remaining budget), that something must join the state.
 
@@ -38,11 +38,18 @@ Common state shapes:
 | Tree | node `v` (+ flag) |
 | Small set | bitmask |
 
+> [!analogy] Real-world analogy: saving a chess game
+> To pause a chess game and resume it later, you don't need the list of every move played. You need the board, whose turn it is, and a few facts the board can't show, such as whether each side may still castle (a special king-and-rook move whose right is lost for good once that king, or the rook involved, has moved). The standard one-line notation for recording a chess position stores exactly that kind of information, not the move list.
+>
+> **How it maps:** the saved position is the DP state. The test "can I play on correctly from here without knowing how we got here?" is the sufficiency test. Leaving out castling rights is an under-specified state: two games with the same board but different rights would wrongly share one answer. Storing the full move list is over-specified: correct, but it makes almost every position look different, so nothing is reused.
+>
+> **Where it stops:** chess also has a draw rule, threefold repetition: a player may claim a draw when the same position occurs for the third time. That depends on earlier positions, which the saved position does not record, so a chess position is not a perfectly sufficient state. A DP state must be fully sufficient for its recurrence, and the same state is deliberately shared by many different routes that reach it.
+
 Write the definition as a full sentence: "`ok[i]` is True if the suffix `s[i:]` can be split into dictionary words." Vague definitions ("`dp[i]` is the answer at i") are the root of most wrong recurrences.
 
 ## Step 2: the recurrence
 
-Ask: **what is the first (or last) decision**, and what are the options? Each option leads to a smaller subproblem. Combine the results with whatever the question asks for:
+Ask: **what is the first (or last) decision**, and what are the options? Each option is a **DP transition**: it leads from the current state to a smaller subproblem. Combine the results with whatever the question asks for:
 
 - "minimum/maximum" → `min` / `max` over options
 - "how many ways" → **sum** over options (they must be disjoint, or you'll double-count)
@@ -50,13 +57,15 @@ Ask: **what is the first (or last) decision**, and what are the options? Each op
 
 ## Step 3: base cases
 
-The smallest states, where no decision is left: an empty string, a zero weight limit, a single element. Also decide what an **impossible** state returns: `0` for counting, `False` for feasibility, `+∞` (positive infinity, a value worse than any real cost) for minimisation, and `−∞` (negative infinity, worse than any real profit) for maximisation. In Python these are `float('inf')` and `-float('inf')`. A `min` never picks `+∞` when a real option exists, and a `max` never picks `−∞`, so impossible options drop out automatically.
+The smallest states, where no decision is left: an empty string, a zero weight limit, a single element. Also decide what an **impossible** state returns: `0` for counting, `False` for feasibility, `+∞` (positive infinity, a value worse than any real cost) for minimisation, and `−∞` (negative infinity, worse than any real profit) for maximisation. In Python these are `float('inf')` and `-float('inf')`. A `min` never picks `+∞` when a real option exists, and a `max` never picks `−∞`, so impossible options drop out automatically. Using 0 for an impossible minimisation state is a classic bug: 0 beats every real cost, so the impossible option wins.
+
+For counting, the empty remainder counts as **one** way: "do nothing more". Every count is ultimately a sum of those ones, so setting that base case to 0 makes every answer 0.
 
 ## Apply the state test: decoding digits
 
 Suppose codes from 1 through 26 represent letters A through Z. Define one state per suffix: the number of ways to decode the digits from that position onwards. A suffix starting with zero is impossible. Otherwise a one-digit code is valid; a two-digit code is another disjoint first choice only when its value is between 10 and 26.
 
-```formula
+```formula reference
 d[n] = 1
 d[i] = 0   if s_i = "0"
 d[i] = d[i + 1]   if s_i ≠ "0"
@@ -70,10 +79,10 @@ i: a suffix starting position, from zero through n; the last line applies only b
 n: the number of input digits
 t_i: one when the two digits starting at i form a code from 10 through 26, otherwise zero; it is zero at the final digit
 ≠: not equal to
-In words: The empty suffix has one completion. Other nonzero starts count the one-digit continuation plus any valid two-digit continuation.
+In words: the empty suffix has one decoding (the empty one). A suffix starting with zero has none. Any other suffix counts the decodings after taking one digit, plus those after taking two digits when they form a code from 10 to 26.
 ```
 
-For `"106"`, the zero cannot start a code, so the only split is `"10", "6"`. Evaluate suffixes from the end towards the beginning so each continuation is ready. The separate one-digit case avoids reading beyond the table at the final digit.
+For `"106"`, the zero cannot start a code, so the only split is `"10", "6"`. For `"226"` there are three: `2 2 6`, `22 6` and `2 26`. Evaluate suffixes from the end towards the beginning so each continuation is ready. The two choices are disjoint (the first code is either one digit or two), so adding them never double-counts.
 
 ## Key takeaways
 - State definitions explain exactly which subproblem a table cell represents.

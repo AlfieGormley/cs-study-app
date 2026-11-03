@@ -28,11 +28,9 @@ For `h = [2, 1, 5, 6, 2, 3]` the answer is 10: height 5 across the bars of heigh
 
 **Insight.** The best rectangle uses some bar `i` as its *shortest* bar, and then extends as far as possible on both sides: until the previous smaller bar on the left and the next smaller bar on the right. So for each bar:
 
-```formula
+```formula essential
 w_i = R_i − L_i − 1
 A_i = h[i]w_i
-w_2 = 4 − 1 − 1 = 2
-A_2 = 5 × 2 = 10
 where
 w_i: the width of the widest rectangle in which bar i is the shortest bar, in bars
 R_i: the index of the next smaller bar to the right of i (or n, one past the end, if none)
@@ -41,10 +39,10 @@ A_i: the area of that rectangle, in square units
 h[i]: the height of bar i
 i: the index of the bar being measured, counting from 0
 n: the number of bars
-w_2: the width for the bar at index 2 (height 5)
-A_2: the area for the bar at index 2
-In words: the rectangle stretches over every bar strictly between the two smaller neighbours, so its width is the gap between them minus one; for the bar of height 5 at index 2, the neighbours are at 1 and 4, giving width 2 and area 10.
+In words: the rectangle stretches over every bar strictly between the two smaller neighbours, so its width is the gap between them minus one, and its area is that width times the bar's height.
 ```
+
+For the bar of height 5 at index 2, the smaller neighbours are at indices 1 and 4, so the rectangle covers the two bars between them: width 2, area 10.
 
 The answer is the largest A_i over all bars. Every rectangle under the histogram has some shortest bar, so checking each bar as "the shortest" covers every candidate.
 

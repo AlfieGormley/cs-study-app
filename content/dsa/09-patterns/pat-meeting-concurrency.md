@@ -7,7 +7,7 @@ sourceLesson: pat-intervals
 summary: A room-count heap retains one last end time per allocated room.
 ---
 
-Here n is the number of positive-duration, start-inclusive, end-exclusive meetings with finite consistently ordered endpoints. A room is reusable at exactly its previous end time.
+Here n is the number of positive-duration, start-inclusive, end-exclusive meetings with finite consistently ordered endpoints. A room is reusable at exactly its previous end time. The Recursion, Backtracking & Greedy module's "Minimum rooms by earliest availability" unit proves why the heap method below is optimal; this unit compares it with the sweep line.
 
 ## Meeting rooms I: any conflict?
 
@@ -41,9 +41,8 @@ def min_rooms(meetings):
     ends = []                # min-heap
     for s, e in meetings:
         if ends and ends[0] <= s:
-            # earliest room is free: reuse
-            # Reuse the earliest available
-            # room.
+            # The earliest-free room is
+            # free by now: reuse it.
             heapq.heapreplace(ends, e)
         else:
             heapq.heappush(ends, e)
@@ -69,9 +68,9 @@ def min_rooms_sweep(meetings):
     for s, e in meetings:
         events.append((s, 1))
         events.append((e, -1))
-    # ties: -1 sorts before +1, so
-    # a room frees before it's reused
-    # At equal times, ends precede starts.
+    # At equal times (e, -1) sorts
+    # before (s, 1): a room frees
+    # before it is reused.
     events.sort()
     cur = best = 0
     for _, delta in events:
@@ -81,6 +80,13 @@ def min_rooms_sweep(meetings):
 ```
 
 The tie-break is where the start-inclusive, end-exclusive semantics live. Sorting `(time, delta)` tuples puts `(10, -1)` before `(10, 1)`, so a meeting ending at 10 frees its room before one starting at 10 claims it. For closed intervals you'd want starts first.
+
+> [!analogy] Real-world analogy: a clicker counter at a venue door
+> A steward at the only door clicks up when someone comes in and down when someone leaves. The highest number the clicker ever shows is the peak attendance. If one person leaves at exactly the moment another arrives, the steward counts the exit first, so the venue never seems to hold one person too many.
+>
+> **How it maps:** each meeting start is a +1 click and each end is a −1 click; sorting the events puts the clicks in time order; `cur` is the clicker and `best` its highest reading, which is the number of rooms needed. Counting exits first at equal times is the `(time, -1)` before `(time, 1)` tie-break for start-inclusive, end-exclusive meetings.
+>
+> **Where it stops:** the steward counts people as they happen; the algorithm needs all the events up front so it can sort them. The peak tells you how many rooms are needed, not which meeting goes in which room; producing those room assignments needs the heap version extended to record a room for each meeting.
 
 The sweep line is a difference array (the prefix-sum units) over time, done with sorting instead of an array, so it works for huge or real-valued times. Geometric segment-intersection algorithms also sweep events, but they need additional ordering and intersection logic beyond this concurrency counter.
 
@@ -92,7 +98,7 @@ This takes O(n + T) work and O(T) slots, where T is the largest permitted intege
 
 ## Key takeaways
 - A room-count heap retains one last end time per allocated room.
-- Half-open event ties process ends before starts.
+- For start-inclusive, end-exclusive meetings, process end events before start events at equal times.
 - A bounded integer timeline allows a difference-array scan without sorting.
 
 ## Further reading

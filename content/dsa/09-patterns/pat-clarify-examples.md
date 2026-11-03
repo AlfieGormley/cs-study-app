@@ -9,9 +9,6 @@ summary: Clarify input domains, permitted mutations and the required return valu
 
 A routine can help you clarify the requested behavior, develop a correct approach, explain your reasoning and test boundary cases. Treat the following as practical advice, not a guarantee of interview success; interview formats and scoring vary.
 
-> [!note] Content gap
-> Population-wide claims about why most candidates fail are omitted because no reliable survey or causal evidence is provided.
-
 This module is a catalogue of patterns. These first units cover the routine you run *before* picking one.
 
 ## The five steps
@@ -30,7 +27,7 @@ One possible allocation for a 45-minute practice session is: 5 minutes clarifyin
 
 Restate the problem in your own words, then ask about anything that would change the algorithm.
 
-- **Input size.** "How large can `n` be?" Here, and throughout this module, n means the number of elements in the input (the length of the array or string) unless a problem says otherwise. Use the answer to compare growth against the resource budget (see the following input-growth unit).
+- **Input size.** "How large can `n` be?" Here, and throughout this module, n means the number of elements in the input (the length of the array or string) unless a problem says otherwise. Use the answer to compare growth against the resource budget (see the input-growth unit that follows).
 - **Value ranges.** Negative numbers? Zeros? Can values cause integer overflow in 32 bits?
 - **Sortedness and duplicates.** Is the array sorted? Can values repeat?
 - **Output shape.** Indices or values? One answer or all? What if there is no answer: return `-1`, `None`, raise?
@@ -38,7 +35,7 @@ Restate the problem in your own words, then ask about anything that would change
 - **Ties.** If several answers are valid, does it matter which?
 
 > [!tip] Questions are signals
-> "Is the array sorted?" is not small talk. A yes points straight at binary search or two pointers. "Can values be negative?" matters for monotone sum-window rules (the sliding-window units), though fixed-size windows and other window predicates can still handle negatives.
+> "Is the array sorted?" is not small talk. A yes points straight at binary search or two pointers. "Can values be negative?" matters for monotone sum-window rules (the sliding window units), though fixed-size windows and other window predicates can still handle negatives.
 
 ## Step 2: examples
 

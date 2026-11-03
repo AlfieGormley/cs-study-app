@@ -14,10 +14,9 @@ So far every state has been a prefix, a suffix or a pair of prefixes. Two more s
 
 ## Interval DP: the pattern
 
-```formula
+```formula reference
 dp[i][j] = best of g(dp[i][k], dp[k + 1][j],
   cost(i, k, j))   for i ≤ k < j
-T = O(n^2) × O(n) = O(n^3)
 where
 dp[i][j]: the answer for the unbroken range of elements i to j, inclusive
 i, j: the first and last positions of the range, 0 ≤ i ≤ j ≤ n − 1
@@ -26,25 +25,12 @@ best: min or max, whichever the problem asks for, taken over every split point k
 g: the problem's rule for combining the two parts' answers with the cost of joining them (often just adding them)
 cost(i, k, j): the cost of the final step that joins the two parts
 n: the number of elements in the whole sequence
-T: the total running time
-n^2: n × n, roughly the number of ranges (about n^2 / 2 of them)
-n^3: n × n × n
-O(...): Big-O, growing at most in proportion to the expression inside
-In words: try every place to split the range, combine the best answers for the two pieces, and keep the best split; about n^2 ranges times about n splits each gives cubic time.
+In words: try every place to split the range, combine the best answers for the two pieces, and keep the best split.
 ```
 
-- **States**: O(n²) intervals.
+- **States**: O(n²) intervals, for n sequence elements.
 - **Transitions**: O(n) split points each.
-- **Total**: usually **O(n³)** time and O(n²) slots, for n sequence elements. The cubic bound is not an exact transition count. For the classic matrix-chain loops:
-
-```formula
-I = n(n − 1)(n + 1) / 6
-I(500) = 20,833,250
-where
-I: the number of inner split candidates over all nonempty intervals
-n: the number of matrices, a nonnegative whole number
-In words: Each triple of two outer boundaries and an internal split is counted once; five hundred matrices try about twenty-one million splits.
-```
+- **Total**: usually **O(n³)** time and O(n²) slots. The exact count is smaller than n³: for matrix chain it is about n³/6 split candidates, roughly 21 million for 500 matrices. Cubic growth means doubling n multiplies the work by about 8.
 - **Order**: every interval depends on strictly shorter ones, so loop by **length**, from short to long.
 
 ## Recognise the interval boundary

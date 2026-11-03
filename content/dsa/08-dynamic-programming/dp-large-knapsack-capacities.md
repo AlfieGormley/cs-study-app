@@ -12,27 +12,11 @@ A weight-indexed table can be too large even for a modest item count. Choose a d
 ### What to do when W is huge
 
 - **DP over value instead of weight**: `minW[v]` records minimum weight needed to achieve value exactly v. It takes O(n · V) time, where V is the total of all values. Useful when values are small but weights are big.
-- **Meet in the middle**: for n up to about 40, split the items in half, enumerate all subsets of each half, sort one side and binary-search it:
-
-```formula
-T = O(n × 2^{⌈n/2⌉})
-T(40) ≈ 2^20 × 20 ≈ 10^6 × 20 = 2 × 10^7
-where
-T: the running time, in basic steps
-n: the number of items
-2^{⌈n/2⌉}: the subset count of the larger half when n is odd
-⌈x⌉: ceiling, the smallest integer not less than x
-x: the quantity being rounded upwards
-O(...): Big-O, growing at most in proportion to the expression inside
-≈: approximately equal to
-In words: each half has only 2^(n/2) subsets, and sorting plus binary search adds about a factor of n, so the work never depends on W.
-```
-
-With forty items, the displayed work proxy is about twenty million steps, compared with about 1.1 trillion subsets for full enumeration. These estimates omit implementation constants and integer bit costs.
+- **Meet in the middle**: for n up to about 40, split the items in half and list every subset of each half: only about a million per half for forty items. Sort one half by weight, record the best value seen so far at each position of that sorted list, and, for each subset of the other half, binary-search for the heaviest partner that still fits and read off that best value. That is a few tens of millions of steps (about twenty million comparisons for the searches, plus a sort of similar size) instead of about 1.1 trillion subsets for full enumeration, and the work does not depend on W at all (ignoring the cost of arithmetic on very large numbers).
 
 - **Approximation algorithms**: scale and round the values, then run the value DP. Pick an allowed relative error ε (epsilon) between 0 and 1. For nonnegative values, discard individually overweight items, choose an appropriate scaling factor and handle the zero-optimum case separately. The appropriately scaled value DP has the following guarantee:
 
-```formula
+```formula reference
 A ≥ (1 − ε)OPT
 0 < ε < 1
 where

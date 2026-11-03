@@ -22,11 +22,10 @@ The second is really the first in disguise. Comparing two strings *is* walking a
 - **Recurrence**: you arrived from above or from the left.
 - **Base**: every cell in the top row and left column has exactly one path.
 
-```formula
+```formula essential
 P[r][c] = P[r − 1][c] + P[r][c − 1]
   for r ≥ 1 and c ≥ 1
 P[0][c] = P[r][0] = 1
-P[2][2] = P[1][2] + P[2][1] = 3 + 3 = 6
 where
 P[r][c]: the number of right/down paths from the top-left cell to the cell in row r, column c
 r: the row number, 0 at the top, up to m − 1
@@ -43,12 +42,13 @@ In words: the last move into a cell came either from the cell above or from the 
  1   3   6  10  15  21  28
 ```
 
-A 3 × 7 grid has 28 paths. That's Pascal's triangle on its side, and there is a closed form (a direct formula with no table):
+A 3 × 7 grid has 28 paths. Adding is safe because the two groups never overlap: every path into a cell has exactly one final move, either down from above or right from the left.
 
-```formula
+The table is Pascal's triangle on its side, and on an empty grid there is a closed form (a direct formula with no table): every path is a fixed number of moves, and you only choose which of them go down.
+
+```formula reference
 paths = C(m + n − 2, m − 1)
 C(a, b) = a! / (b! × (a − b)!)
-paths = C(8, 2) = 8! / (2! × 6!) = 28
 where
 paths: the number of right/down paths from the top-left to the bottom-right of a grid with m rows and n columns
 m: the number of rows (3 here)
@@ -58,6 +58,8 @@ a, b: whole numbers with b no larger than a
 !: factorial, the product of every whole number from 1 up to the number (4! = 24, and 0! = 1)
 In words: every path is m + n − 2 moves, of which exactly m − 1 go down, so count the ways to choose which moves are the downward ones.
 ```
+
+The closed form only works while every cell is open. Block one cell or give cells different costs and you need the table again, which is the next unit.
 
 ## Key takeaways
 - A path into a cell came from above or from the left.

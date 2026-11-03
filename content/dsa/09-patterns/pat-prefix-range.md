@@ -15,19 +15,7 @@ Examples use exact integer arithmetic. The O(1) arithmetic/hash model assumes va
 
 ## The prefix array
 
-Build the prefix array one running total at a time:
-
-```formula
-P[0] = 0
-P[i + 1] = P[i] + a[i]
-P[3] = P[2] + a[2] = 4 + 4 = 8
-where
-P[i]: the prefix sum, the total of the first i elements a[0] to a[i − 1]
-a[i]: the element at index i, counting from 0
-i: an index from 0 to n − 1
-n: the length of the array a
-In words: each prefix sum is the previous one plus the next element, starting from 0 for the empty prefix; for a = [3, 1, 4, 1, 5], the first three elements sum to 8.
-```
+Build the prefix array one running total at a time: start with 0 for the empty prefix, and make each entry the previous entry plus the next element. For `a = [3, 1, 4, 1, 5]`, the entry after three elements is 3 + 1 + 4 = 8.
 
 The prefix at an index totals that many earlier elements. The table has one more entry than the input because it includes the empty prefix.
 
@@ -52,18 +40,18 @@ def build_prefix(a):
 
 Any range sum is then one subtraction:
 
-```formula
+```formula essential
 S(l, r) = P[r + 1] − P[l]
-S(1, 3) = P[4] − P[1] = 9 − 3 = 6
-S(0, 2) = P[3] − P[0] = 8 − 0 = 8
 where
 S(l, r): the sum of a[l..r], the elements from index l to index r inclusive
-P[i]: the prefix sum, the total of the elements before index i
+P[i]: the prefix sum, the total of the elements before index i, with P[0] = 0
 l: the first index of the range
 r: the last index of the range, with l ≤ r
 ≤: "is less than or equal to"
-In words: everything before r + 1, minus everything before l, leaves exactly the range; a[1..3] = 1 + 4 + 1 = 6.
+In words: everything before r + 1, minus everything before l, leaves exactly the range.
 ```
+
+With the table above, the sum of `a[1..3]` is `p[4] - p[1]`, which is 9 − 3 = 6, matching 1 + 4 + 1. A range starting at index 0 subtracts `p[0]`, which is 0.
 
 The leading zero, `P[0] = 0` in the implementation, is what makes ranges starting at index 0 work without a special case. This relies on subtraction undoing addition exactly, so it holds for integers but only approximately for floating-point numbers, and it does not work for operations like max that can't be undone.
 
@@ -75,24 +63,7 @@ Python provides these values as an iterator: `itertools.accumulate(a, initial=0)
 ## Integer width and numeric limits
 
 - **Forgetting the leading zero:** misses ranges that start at index 0. In frequency-counting variants, seed `seen = {0: 1}` for the same reason.
-- **Integer overflow** in fixed-width languages: a prefix sum can be as large as the count times the largest value, which blows past a 32-bit integer:
-
-```formula
-P_max = n v_max
-P_max = 10^5 × 10^9 = 10^14
-I_32 = 2^31 − 1 ≈ 2.1 × 10^9
-I_64 = 2^63 − 1 ≈ 9.2 × 10^18
-where
-P_max: the largest possible prefix sum
-n: the number of values; here 10^5
-v_max: the largest possible value; here 10^9
-I_32: the largest signed 32-bit integer, 2,147,483,647
-I_64: the largest signed 64-bit integer, about 9.2 × 10^18
-≈: approximately equal to
-In words: 100,000 values of up to a billion can total 100 trillion, far beyond a 32-bit integer but well inside a 64-bit one, so use 64-bit integers. (Python integers grow as needed, subject to available memory.)
-```
-
-
+- **Integer overflow** in fixed-width languages: a prefix sum can be as large as the count times the largest value. 100,000 values of up to a billion can total 100 trillion, far beyond the largest signed 32-bit integer (2,147,483,647) but well inside a signed 64-bit one (about 9.2 billion billion), so use 64-bit integers. Python integers grow as needed, subject to available memory.
 
 ## Key takeaways
 - The padded prefix table starts with zero and totals elements before each position.

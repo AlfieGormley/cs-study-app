@@ -38,6 +38,13 @@ When the timeout fires, the client has no idea which of these happened:
 
 All four look identical to the client. Cases 1 and 3 are the dangerous pair: in case 1 nothing happened, while in case 3 the side effect (charging a card, sending an email) **already happened**. This is why retries must be designed with idempotency in mind: an idempotency key lets the server recognise a duplicate and return its recorded result. This depends on the server's atomic deduplication and retention contract: a key forgotten after its retention window no longer protects a late retry.
 
+> [!analogy] Real-world analogy: a phone order that cuts off
+> You phone a takeaway, read out your order, and the line drops just as they start to reply. You do not know whether they wrote it down. Ringing back and ordering again might get you two meals. Quoting the order reference you were given at the start lets them say "we already have that one".
+>
+> **How it maps:** The dropped call is the timeout: it tells you nothing about whether the kitchen (the server) acted. Ordering again is a blind retry. The order reference is the idempotency key, and the kitchen checking its list is server-side deduplication.
+>
+> **Where it stops:** A person can ask "did you get my order?"; a client often has no separate channel to ask, and the server only recognises the key while it still keeps its record of it. The server must also record the key and the result together, which a busy kitchen might not.
+
 > [!warning] The core uncertainty
 > A remote node can't tell "dead" from "slow" from "network broken". All it ever has is "I haven't heard back yet". Every failure detector is a guess.
 
@@ -56,7 +63,7 @@ Retrying after a timeout is natural, but naive retries cause their own outages:
 
 - **Use the same idempotency key on every attempt.** A fresh key per attempt makes each retry look like a new request, which defeats the point.
 - **Back off exponentially, with jitter.** If thousands of clients retry on the same schedule, they hit the recovering server in synchronised waves.
-- **Retry at one layer only.** If three layers each make up to 3 attempts, one user request can become 3 × 3 × 3 = 27 calls at the bottom layer, just when it is least able to cope.
+- **Retry at one layer only.** If the web tier, the API tier and a data service that queries the database each make up to 3 attempts at whatever sits below them, one user request can become 3 × 3 × 3 = 27 queries at the database, just when it is least able to cope.
 
 ```
 web (3 tries)
@@ -64,17 +71,15 @@ web (3 tries)
    -> db (3 tries each) = 27
 ```
 
-The numbers multiply because every attempt at one layer starts a fresh set of attempts at the layer below. In general, when every layer in a stack retries independently:
+The numbers multiply because every attempt at one layer starts a fresh set of attempts at the layer below. A fourth retrying layer would turn the same request into 81 calls.
 
-```formula
+```formula reference
 C = a^L
-C = 3^3
-C = 27
 where
 C: the worst-case number of calls that reach the bottom layer for one user request (a count, no unit)
-a: the maximum number of attempts each layer makes, counting the first try; here 3
-L: the number of stacked layers that each retry; here 3 (web, API and database)
-In words: the worst-case load on the bottom layer grows as a power of the number of retrying layers. Three layers of 3 attempts turn 1 request into 27 calls; a fourth layer would make it 81.
+a: the maximum number of attempts each layer makes, counting the first try
+L: the number of stacked layers that each retry independently
+In words: when every layer retries on its own, worst-case load on the bottom layer multiplies with each extra retrying layer, so three layers of three attempts turn one request into 27 calls.
 ```
 
 This is the worst case: it happens when every attempt fails, which is exactly what an overloaded database does. If only one layer retries (3 attempts), the bottom layer sees at most 3 calls per request.

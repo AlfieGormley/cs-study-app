@@ -48,6 +48,13 @@ n1 has 2/3 -> LEADER term 5
 
 Randomised timeouts make split votes rare: usually one node times out first and wins before others start.
 
+> [!analogy] Real-world analogy: two people meeting in a corridor
+> Two people walking towards each other in a narrow corridor both step left, then both step right, and keep blocking each other. If each instead pauses for a slightly different, random moment before moving, one usually goes first and the other simply follows.
+>
+> **How it maps:** Stepping at the same moment is several followers timing out together and splitting the vote, so no candidate reaches a majority. The random pause is Raft's randomised election timeout: one node usually starts its election first and collects a majority before the others even become candidates.
+>
+> **Where it stops:** People can see each other; Raft nodes only learn about a rival through messages. Randomness makes repeated split votes unlikely but not impossible, so Raft simply starts a new term and tries again. Safety never depends on the randomness: each node still gives at most one vote per term.
+
 "Up to date" means: compare the last entry's term; higher wins. If equal, the longer log wins. This rule is what guarantees a new leader has every committed entry.
 
 ## Key takeaways

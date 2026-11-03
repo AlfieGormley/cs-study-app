@@ -96,7 +96,6 @@ In practice you rarely write this by hand. Python's `OrderedDict` (with `move_to
 - Unlink and relink on hits; eviction removes a node from both structures.
 
 ## Further reading
-- [Cache replacement policies — Wikipedia](https://en.wikipedia.org/wiki/Cache_replacement_policies)
-- [functools.lru_cache — Python docs](https://docs.python.org/3/library/functools.html)
-- [LinkedHashMap — Java SE 21 API docs](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/LinkedHashMap.html)
-- [CPython 3.14 cache implementation](https://raw.githubusercontent.com/python/cpython/v3.14.0/Lib/functools.py)
+- [CPython’s LRU cache implementation](https://raw.githubusercontent.com/python/cpython/v3.14.0/Lib/functools.py)
+- [Python ordered dictionaries](https://docs.python.org/3/library/collections.html)
+- [Redis cache eviction policies](https://redis.io/docs/latest/develop/reference/eviction/)

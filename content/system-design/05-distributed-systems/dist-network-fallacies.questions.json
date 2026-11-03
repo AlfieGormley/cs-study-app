@@ -3,27 +3,27 @@
     "id": "dist-why-hard-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "A page makes 40 **sequential** calls to a backend. Each call does 1 ms of work. The backend moves from the same data centre (0.5 ms round trip) to another region (70 ms round trip). Roughly how long does the page now spend on these calls?",
+    "prompt": "A page makes 40 **sequential** calls to a backend, each doing about 1 ms of work. The backend moves from the same data centre (0.5 ms round trip) to another region (70 ms round trip). The page goes from well under 100 ms to nearly 3 seconds, though the code and the backend's work are unchanged. What explains the slowdown, and which change helps most?",
     "options": [
       {
-        "text": "About 2.8 seconds",
-        "explanation": "Correct. 40 × (70 + 1) = 2,840 ms. Each sequential call pays the full round trip, so latency multiplies by call count."
+        "text": "Each of the 40 calls now waits a full 70 ms round trip; batch the calls, run them in parallel or move the backend back next to the page.",
+        "explanation": "Correct. Sequential calls cannot start until the previous reply arrives, so the round trip is paid once per call: 40 calls of about 71 ms each, roughly 2.8 seconds. Batching makes it one round trip, parallel calls overlap the waits, and co-location shrinks each wait."
       },
       {
-        "text": "About 60 ms",
-        "explanation": "Wrong. This is the old figure: 40 × (1 + 0.5) = 60 ms. It ignores the new round-trip time."
+        "text": "The backend's work became slower in the new region; give it more CPU.",
+        "explanation": "Wrong. The work is still about 1 ms per call. Faster servers cannot remove the 70 ms each call spends crossing the network."
       },
       {
-        "text": "About 110 ms",
-        "explanation": "Wrong. This adds one 70 ms round trip to the old total, as if all calls shared one round trip. Sequential calls each pay the full latency."
+        "text": "The link has run out of bandwidth; compress the responses.",
+        "explanation": "Wrong. Bandwidth limits how much data can be sent per second. These are small calls, and the delay comes from waiting for each round trip, not from the size of the payloads."
       },
       {
-        "text": "About 28 seconds",
-        "explanation": "Wrong by a factor of 10; it treats each round trip as 700 ms."
+        "text": "The page now pays one extra 70 ms round trip; nothing structural needs changing.",
+        "explanation": "Wrong. One extra round trip would add about 70 ms, not nearly 3 seconds. Every sequential call pays the round trip, so the cost is multiplied by the number of calls."
       }
     ],
     "answer": 0,
-    "workedExample": "Each sequential call must finish before the next starts, so the page pays the round trip plus the work once per call:\n\n```formula\nT = n × (RTT + w)\nT_old = 40 × (0.5 ms + 1 ms)\nT_old = 60 ms\nT_new = 40 × (70 ms + 1 ms)\nT_new = 2,840 ms ≈ 2.8 s\nwhere\nT: total time the page spends on the calls, in milliseconds (ms)\nT_old: the total with the backend in the same data centre\nT_new: the total with the backend in another region\nn: the number of sequential calls; here 40\nRTT: round-trip time, the time for a request to reach the backend and the reply to return, in ms\nw: the work the backend does per call; here 1 ms\nms: millisecond, one thousandth of a second\ns: second\n≈: approximately equal to\nIn words: every sequential call pays the full round trip, so a 140-fold increase in round-trip time makes the page about 47 times slower.\n```\n\nThat is the fallacy \"latency is zero\" in action. Fixes: batch the 40 calls into one, run them in parallel (roughly 71 ms total under the same simplified timing assumptions), or keep chatty services co-located.",
+    "workedExample": "Ask what each call has to wait for.\n\n1. The calls are **sequential**: call 2 cannot start until call 1's reply returns.\n2. Each call therefore waits one full round trip plus its 1 ms of work. Before the move that was about 1.5 ms per call (about 60 ms for the page). After it, about 71 ms per call.\n3. Forty of those in a row is about 2.8 seconds. The extra time is almost all network waiting, which is why more CPU or compression would not help.\n\nThat is the fallacy \"latency is zero\" in action. Fixes, best first:\n\n- **Batch** the 40 requests into one call: one round trip.\n- **Parallelise** independent calls: the waits overlap, so the page pays roughly one round trip.\n- **Co-locate** chatty services so each round trip is short again.",
     "link": {
       "title": "Fallacies of distributed computing",
       "url": "https://en.wikipedia.org/wiki/Fallacies_of_distributed_computing"

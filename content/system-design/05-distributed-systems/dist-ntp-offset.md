@@ -21,11 +21,15 @@ client            server
  t3 |<--reply-----|
 ```
 
-The client records when it sent the request and when the reply arrived (on its own clock); the server records when it received the request and when it sent the reply (on its clock). From those four timestamps NTP works out two things: how long the messages spent on the network, and how far apart the two clocks are.
+The client records when it sent the request and when the reply arrived (on its own clock); the server records when it received the request and when it sent the reply (on its clock). From those four timestamps NTP works out two things:
 
-```formula
+- **Delay:** the whole round trip measured by the client, minus the time the server spent holding the request. That leaves the time the messages spent on the network.
+- **Offset:** how far the server's clock is ahead of the client's. The server's receive time minus the client's send time is the offset *plus* the outbound travel time. The server's send time minus the client's receive time is the offset *minus* the return travel time. Averaging the two cancels the travel time, but only if both directions take equally long.
+
+```formula reference
 δ = (t_3 − t_0) − (t_2 − t_1)
 θ = ((t_1 − t_0) + (t_2 − t_3)) / 2
+e = (d_out − d_back) / 2
 where
 δ: delta, the round-trip network delay: total time on the wire, both directions, in milliseconds (ms)
 θ: theta, the estimated offset: how far the server's clock is ahead of the client's, in ms (negative means the server is behind)
@@ -33,44 +37,32 @@ t_0: the client's clock reading when it sent the request
 t_1: the server's clock reading when the request arrived
 t_2: the server's clock reading when it sent the reply
 t_3: the client's clock reading when the reply arrived
+e: the error in the offset estimate caused by unequal one-way delays, in ms
+d_out: the real one-way delay from client to server, in ms
+d_back: the real one-way delay from server to client, in ms
 ms: millisecond, one thousandth of a second
-In words: the delay is the whole round trip minus the time the server spent holding the request; the offset is the average of the two one-way clock differences, which cancels out the network delay if both directions take equally long.
+In words: the delay is the whole round trip minus the server's holding time; the offset is the average of the two one-way clock differences, and any imbalance between the two directions shifts that estimate by half the difference.
 ```
 
-Why the offset formula works: the difference t_1 − t_0 is the offset plus the outbound travel time, and t_2 − t_3 is the offset minus the return travel time. Adding them and halving cancels the travel time, but only when both directions take the same time.
+For instance, a client that sends at 100 ms and hears back at 120 ms on its own clock, from a server that stamped 160 ms and 161 ms on its clock, computes 19 ms of network delay and a server clock about 50.5 ms ahead.
 
-Worked example: the client sends at 100 ms, the server receives at 160 ms and replies at 161 ms, and the reply arrives at 120 ms (each time on its own side's clock):
+### The blind spot: asymmetric paths
 
-```formula
-δ = (120 − 100) − (161 − 160) = 19 ms
-θ = ((160 − 100) + (161 − 120)) / 2
-θ = (60 + 41) / 2 = 50.5 ms
-where
-δ: delta, the round-trip network delay, in milliseconds (ms)
-θ: theta, the offset of the server's clock relative to the client's, in ms; positive means the server is ahead
-ms: millisecond
-In words: the messages spent 19 ms on the network in total, and the server's clock is about 50.5 ms ahead of the client's.
-```
+The offset calculation assumes the network delay is **symmetric**. If the outbound path takes 15 ms and the return only 4 ms, the round trip looks exactly like two 9.5 ms legs, and the offset estimate is wrong by half the imbalance: about 5.5 ms.
 
-The offset formula assumes the network delay is **symmetric**. If the outbound path is slow and the return fast, the estimate is wrong by half the asymmetry:
+> [!analogy] Real-world analogy: timing a letter both ways
+> You post a letter to a friend abroad noting the time you sent it. They note when it arrived and when they posted a reply, and you note when the reply arrives. If you assume the post takes equally long each way, you can work out how far their watch is from yours. If outbound post really took three days and the return one, your answer is a day out, and nothing on the four postmarks tells you so.
+>
+> **How it maps:** The four noted times are NTP's four timestamps, the time your friend held the letter is the time the server held the request, and assuming equal posting times is NTP's symmetric-delay assumption. The day's error is half the difference between the two journeys.
+>
+> **Where it stops:** NTP repeats the exchange many times, with several servers, and filters out samples with unusually long delays, which reduces random error. A consistent one-way imbalance still survives all that filtering.
 
-```formula
-e = (d_out − d_back) / 2
-e = (15 ms − 4 ms) / 2 = 5.5 ms
-where
-e: the error in the offset estimate, in milliseconds (ms)
-d_out: the real one-way delay from client to server, in ms; here 15 ms
-d_back: the real one-way delay from server to client, in ms; here 4 ms
-ms: millisecond
-In words: NTP can't see how the round trip splits between the two directions, so any imbalance turns into an offset error of half the difference.
-```
-
-NTP has no way to notice this error from the timestamps alone. Typical accuracy: around 1 ms on a good LAN, tens of ms over the internet, and much worse under congestion. Managed time services differ: Amazon Time Sync supports NTP and, on supported EC2 hardware, a more precise PTP hardware clock. Google Public NTP uses leap smearing but explicitly provides no service-level agreement. Do not infer a universal sub-millisecond error bound from either provider's name.
+NTP has no way to notice this error from the timestamps alone. Typical accuracy: tens of milliseconds over the public internet, better than a millisecond on a local network under ideal conditions, and 100 ms or more with asymmetric routes or congestion. Managed time services differ (as of 2026): Amazon Time Sync supports NTP and, on supported EC2 hardware, a more precise PTP hardware clock. Google Public NTP uses leap smearing but explicitly provides no service-level agreement. Do not infer a universal sub-millisecond error bound from either provider's name.
 
 NTP corrects a clock by **slewing** (running it slightly fast or slow) for small offsets and **stepping** (jumping) for large ones. Steps are what make clocks go backwards.
 
 ## Key takeaways
-- NTP uses four timestamps to subtract server processing time from round-trip delay and estimate clock offset.
+- NTP uses four timestamps to subtract the server's holding time from the round trip and estimate clock offset.
 - The offset estimate assumes equal one-way delays; its error is half the path asymmetry.
 - Slewing adjusts a clock’s rate; stepping changes its reading abruptly, so wall time remains unsuitable for durations.
 

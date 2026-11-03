@@ -85,24 +85,9 @@ Lazy propagation needs two properties:
 - You can update a node's summary without looking at its children.
 - Pending tags **compose**: two adds become one add. Mixing "assign" and "add" works too, but the tag must record the order (an assignment wipes out earlier adds).
 
-For a range add, both properties are one line each:
+For a range add, the sum rises by the increment once per element; the minimum rises by the increment once. Two pending additions combine by adding their increments. A later assignment replaces earlier additions, while an addition after an assignment still changes the assigned value.
 
-```formula
-S_new = S_old + xw
-M_new = M_old + x
-z_2 = (z_0 + x_1) + x_2 = z_0 + (x_1 + x_2)
-where
-S_old, S_new: a node's stored sum before and after the add
-M_old, M_new: a node's stored minimum before and after the add
-w: the width of the node: the number of elements it covers
-x: the amount added to every element
-z_0: the node's pending tag before two later adds
-z_2: the node's pending tag after both adds
-x_1, x_2: two adds applied one after the other
-In words: a sum grows by x for every element and a minimum grows by exactly x, and two pending adds merge into a single add of their total.
-```
-
-So a node covering 4 elements with sum 20 and minimum 3 becomes sum 28 and minimum 5 after adding 2.
+For example, adding three, assigning seven and then adding two has the same effect as assigning nine, regardless of the original values.
 
 Some updates fail the first test. "Replace each range element with its remainder after division by a positive integer" changes a sum in a way that depends on every element, so plain lazy propagation cannot do it.
 
@@ -112,6 +97,4 @@ Some updates fail the first test. "Replace each range element with its remainder
 - Tag composition must preserve update order when assignments and additions mix.
 
 ## Further reading
-- [Segment Tree — cp-algorithms](https://cp-algorithms.com/data_structures/segment_tree.html)
-- [Segment tree, the interval-stabbing version — Wikipedia](https://en.wikipedia.org/wiki/Segment_tree)
-- [Range minimum query — Wikipedia](https://en.wikipedia.org/wiki/Range_minimum_query)
+- [Segment trees — cp-algorithms](https://cp-algorithms.com/data_structures/segment_tree.html)

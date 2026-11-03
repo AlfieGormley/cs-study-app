@@ -14,7 +14,7 @@ sourceLesson: adv-union-find
 
 Two elements are in the same group exactly when `find(a) == find(b)`. That one comparison answers "are these connected?" for road networks, friend circles, pixels in an image or accounts that share an email address.
 
-It is tiny to implement, and with two simple tricks each operation costs so little that for any input you could ever store it is effectively constant.
+With balancing and path compression, long sequences of operations have a very small amortised cost. This does not make every individual operation constant-time.
 
 ## The idea: a forest of parent pointers
 
@@ -34,6 +34,13 @@ groups: {0, 1, 2} and {3, 4}
 - `find(x)` follows parent pointers up to the root.
 - `union(a, b)` finds both roots and makes one the parent of the other.
 
+> [!analogy] Real-world analogy: Group representatives
+> Two clubs merge by choosing one representative for the combined club.
+>
+> **How it maps:** Following a member's chain of representatives reaches the current root. Members belong to the same group when those chains reach the same representative.
+>
+> **Where it stops:** Parent pointers are bookkeeping, not the original friendships or network links. Changing the representative does not reveal paths or distances between members.
+
 The naive version has a problem. Union in an unlucky order (`union(1, 0)`, `union(2, 1)`, `union(3, 2)` and so on, always hanging the old tree under the new element) builds a chain, and `find` on the bottom element walks every link in it: one fewer link than there are elements. If n is the number of elements, a sequence of operations can cost O(n) each in the worst case (O(n) means "grows in proportion to n").
 
 ## Key takeaways
@@ -42,7 +49,4 @@ The naive version has a problem. Union in an unlucky order (`union(1, 0)`, `unio
 - Compare roots rather than immediate parents.
 
 ## Further reading
-- [Disjoint-set data structure — Wikipedia](https://en.wikipedia.org/wiki/Disjoint-set_data_structure)
-- [Disjoint Set Union — cp-algorithms](https://cp-algorithms.com/data_structures/disjoint_set_union.html)
-- [Kruskal's algorithm — Wikipedia](https://en.wikipedia.org/wiki/Kruskal%27s_algorithm)
-- [Ackermann function — Wikipedia](https://en.wikipedia.org/wiki/Ackermann_function)
+- [Disjoint-set unions — cp-algorithms](https://cp-algorithms.com/data_structures/disjoint_set_union.html)

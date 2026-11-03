@@ -11,22 +11,9 @@ Here n is the non-empty input array’s length. Big-O bounds count constant-time
 
 ## Query, update and build
 
-The examples require non-empty arrays and valid inclusive ranges or point indices:
+The examples require a non-empty array. Both endpoints of a query and the position of an update must lie inside it; a query's end must not precede its start. The methods assume callers enforce that contract.
 
-```formula
-0 ≤ l ≤ r < n
-0 ≤ i < n
-where
-l: the first index of the query range
-r: the last index of the query range (inclusive)
-i: the index of a single element to update
-n: the number of elements in the array
-≤: is at most
-<: is less than
-In words: ranges and positions must lie inside the array, and a range must not end before it starts.
-```
-
-For an 8-element array, `query(2, 5)` is valid and `query(5, 2)` or `update(8, x)` is not. Complexity assumes constant-size summaries and constant-time combines on word-sized values. Integer sums are associative; floating-point sums need numerical-error considerations.
+For eight elements, `query(2, 5)` is valid, while `query(5, 2)` and `update(8, x)` are invalid. Integer sums are associative; floating-point sums need numerical-error considerations.
 
 ```python
 class SegTree:
@@ -103,25 +90,7 @@ The update walks one root-to-leaf path, then recomputes each node on the way bac
 - **Update**: one root-to-leaf path, O(1) work per node: O(log n).
 - **Query**: at each level, at most two nodes are *partially* overlapped (the ones containing the ends of `[l, r]`). Everything between them is fully covered and stops immediately. So at most four nodes are visited per level.
 
-Counting levels gives the bounds:
-
-```formula
-N_build = 2n − 1
-N_update ≤ ⌈log_2(n)⌉ + 1
-N_query ≤ 4(⌈log_2(n)⌉ + 1)
-n = 10^6:  N_update ≤ 21,  N_query ≤ 84
-where
-n: the number of elements in the array
-N_build: the number of nodes the build computes
-N_update: the number of nodes a point update touches (one per level, root to leaf; a leaf one level higher than the deepest saves one)
-N_query: the number of nodes a range query visits
-log_2(n): the base-2 logarithm of n
-⌈ ⌉: ceiling: round up to the nearest whole number
-≤: is at most
-In words: a build touches every node once, an update touches one node per level, and a query touches at most four nodes per level.
-```
-
-For a million elements that is at most 21 nodes per update and at most 84 per query, which is why both are O(log n). The bounds assume combining two summaries takes constant time.
+Both operations therefore take O(log n) work, whereas building touches every node once and takes O(n). The complexity assumes constant-time combines; storing larger summaries changes that cost.
 
 ## Key takeaways
 
@@ -129,6 +98,4 @@ For a million elements that is at most 21 nodes per update and at most 84 per qu
 - Point updates recompute summaries on one root-to-leaf path.
 
 ## Further reading
-- [Segment Tree — cp-algorithms](https://cp-algorithms.com/data_structures/segment_tree.html)
-- [Segment tree, the interval-stabbing version — Wikipedia](https://en.wikipedia.org/wiki/Segment_tree)
-- [Range minimum query — Wikipedia](https://en.wikipedia.org/wiki/Range_minimum_query)
+- [Segment trees — cp-algorithms](https://cp-algorithms.com/data_structures/segment_tree.html)

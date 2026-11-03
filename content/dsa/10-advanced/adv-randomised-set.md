@@ -65,19 +65,7 @@ The order of the last two map operations matters. If `x` is itself the last elem
 
 The array does not preserve insertion order after a removal. That is fine here because a set has no order, but it is the price of O(1) deletion.
 
-With duplicates (a multiset), map each value to a *set of indices*. Removal picks any index of `x`, moves the last element there, and updates the last element's index set. `get_random` still picks one array slot uniformly, so a value that fills more slots comes up more often:
-
-```formula
-P(v) = c_v / n
-P(1) = 2 / 3 ≈ 0.67
-where
-v: one of the values stored in the multiset
-P(v): the probability that get_random returns v, from 0 (never) to 1 (always)
-c_v: the number of copies of v in the array
-n: the total number of elements in the array, counting every copy
-≈: approximately equal to
-In words: each value's chance of being picked is its share of the array's slots.
-```
+With duplicates (a multiset), map each value to a *set of indices*. Removal picks any index of `x`, moves the last element there, and updates the last element's index set. `get_random` still picks one array slot uniformly, so a value that fills more slots comes up more often.
 
 For `items = [1, 1, 2]`, the value 1 has 2 copies out of 3 slots, so it is returned about two times in three and 2 about one time in three. Returning each value with probability proportional to its count is usually what is wanted from a multiset; if you need each *distinct* value equally often, you need a separate array of distinct values to sample from.
 
@@ -87,6 +75,5 @@ For `items = [1, 1, 2]`, the value 1 has 2 copies out of 3 slots, so it is retur
 - Sampling array slots weights duplicate values by their number of copies.
 
 ## Further reading
-- [Cache replacement policies — Wikipedia](https://en.wikipedia.org/wiki/Cache_replacement_policies)
-- [functools.lru_cache — Python docs](https://docs.python.org/3/library/functools.html)
-- [LinkedHashMap — Java SE 21 API docs](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/LinkedHashMap.html)
+- [Python random-number generation](https://docs.python.org/3/library/random.html)
+- [Python list and mapping operations](https://docs.python.org/3/library/stdtypes.html)

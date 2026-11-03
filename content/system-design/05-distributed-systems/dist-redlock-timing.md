@@ -15,28 +15,24 @@ Redlock is an algorithm proposed by Salvatore Sanfilippo (antirez), Redis's crea
 
 1. Read the current time (call it T1).
 2. Try `SET resource token NX PX ttl` on all 5 instances, with a short per-node timeout. Here ttl is the lock's time to live: how long each instance keeps the key before deleting it.
-3. Read the time again (T2). The lock is held only if a majority of instances (at least 3 of 5) succeeded **and** acquiring took less than the ttl.
-4. The client may use the lock only for the remaining validity time, worked out below.
+3. Read the time again (T2). The lock is held only if a majority of instances (at least 3 of 5) succeeded **and** the remaining validity after subtracting acquisition time and the drift allowance is positive.
+4. The client may use the lock only for the remaining validity time: the ttl minus the time acquisition took, minus a small allowance for clock drift.
 5. On failure, release on all instances.
 
-```formula
-T_acq = T_2 − T_1
+```formula reference
 n_ok ≥ ⌊N / 2⌋ + 1
-T_acq < ttl
 V = ttl − T_acq − D
-V = 10 s − 0.2 s − 0.1 s = 9.7 s
+V > 0
 where
-T_1: the client's clock reading before it starts acquiring
-T_2: the client's clock reading after the last instance has answered
-T_acq: how long acquisition took, in seconds (s)
 n_ok: how many instances accepted the lock
 N: the number of independent Redis instances; typically 5
 ⌊ ⌋: floor: round down to a whole number, so a majority of 5 is 3
-ttl: the key's time to live on each instance; here 10 s
-D: an allowance for clock drift between the instances; here 0.1 s
+T_acq: how long acquisition took on the client's clock (T2 minus T1), in seconds (s)
+ttl: the key's time to live on each instance, in seconds
+D: an allowance for clock drift between the instances, in seconds
 V: the validity time, how long the client may treat the lock as held
 s: second
-In words: the lock counts only if a majority agreed and the acquisition didn't eat the whole ttl, and what's left of the ttl, minus a drift allowance, is how long the client may use it.
+In words: the lock counts only if a majority agreed and the acquisition didn't eat the whole ttl, and what's left of the ttl, minus a drift allowance, is how long the client may use it. A 10 s ttl, 0.2 s spent acquiring and a 0.1 s allowance leave 9.7 s.
 ```
 
 The safety of this calculation rests on clocks: if an instance's clock runs fast or jumps, its copy of the key expires earlier than V assumes. That is the heart of the critique below.

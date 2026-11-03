@@ -7,7 +7,7 @@
     "options": [
       {
         "text": "Increase the job's thread pool so more API calls run in parallel",
-        "explanation": "Wrong. Even if the job could hold about 1,000 calls in flight (50,000/s × 20 ms), the customer service now takes 50,000 requests per second, and the job's speed is tied to its availability."
+        "explanation": "Wrong. More concurrent calls can overload the customer service further. The job remains tied to that service's capacity and availability."
       },
       {
         "text": "Materialise customers as a table from a changelog or CDC topic and do a local stream–table join",
@@ -15,7 +15,7 @@
       },
       {
         "text": "Cache API responses in the job for 24 hours",
-        "explanation": "Wrong. A cache reduces calls, but tier changes are missed for up to a day, and a cold start or many unique customers still floods the API. Streaming the table keeps it both local with propagation lag that still needs monitoring."
+        "explanation": "Wrong. A fixed cache lifetime can miss tier changes for a day, and a cold cache can still flood the API. Streaming changes maintains local state with propagation lag that still needs monitoring."
       },
       {
         "text": "Use a 30-minute windowed stream–stream join between orders and API responses",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Calls needed: 50,000 per second against a 20 ms dependency. Little's Law gives the number in flight:\n\n```formula\nL = λ × W\nL = 50000/s × 0.02 s = 1000\nwhere\nL: the average number of API calls in flight at once\nλ: lambda, calls started per second, 50,000\nW: the time each call takes, 20 milliseconds, which is 0.02 seconds (s)\ns: seconds; \"/s\" means per second\nIn words: 50,000 calls a second that each last 20 ms means about 1,000 are always in flight.\n```\n\n2. The job is now coupled to the customer service's latency and availability.\n3. Stream–table join:\n   - The customer service (or CDC from its database) publishes changes to a compacted `customers` topic.\n   - The processor materialises it into local state, keyed by `customerId`.\n   - Orders, keyed by `customerId`, look up the tier locally, with latency determined by store and workload.\n4. Co-partitioning: both topics must be keyed the same way (and, in Kafka Streams, have the same partition count) so each task holds the customers its orders need.",
+    "workedExample": "1. Every order makes a remote request, tying processing to the customer service's capacity and availability.\n2. Stream customer changes into a local table keyed by customer ID, and initialise that table before relying on it for lookups.\n3. Enrich orders from the local table, with an explicit policy for missing customers and propagation lag.\n4. A conventional partitioned Kafka Streams join requires compatible key partitioning and partition counts so a task holds the customer state its orders need. Other join forms have different requirements.\n5. Historical replay needs retained versions and temporal semantics if it must use the tier valid at the order's event time.",
     "link": {
       "title": "Kafka Streams documentation",
       "url": "https://kafka.apache.org/documentation/streams/"

@@ -24,6 +24,13 @@ For HTTP push versus polling pull, how does a message reach the consumer? A brok
 
 **Pull** delivery (SQS, Kafka, Pub/Sub pull, Kinesis) lets the consumer ask only when it has capacity. This gives natural **backpressure**: a slow consumer simply asks less often, and the backlog builds in the broker, subject to retention, capacity and durability limits. Pull also works for consumers behind firewalls, since they make outbound connections only.
 
+> [!analogy] Real-world analogy: table service versus a buffet
+> At a restaurant with table service, the waiter decides when the next course arrives. If you are still eating, plates pile up unless the waiter notices and slows down. At a buffet you fetch the next plate only when you are ready, and the food simply waits in the serving trays.
+>
+> **How it maps:** Table service is push: the broker decides the rate and must infer from errors or latency that you are overloaded. The buffet is pull: the consumer asks only when it has capacity, so the backlog waits in the broker. That is natural backpressure.
+>
+> **Where it stops:** Buffet food goes cold, but a broker keeps messages only within its retention and capacity limits, and a pull consumer pays for every empty trip it makes. A push broker also retries and slows down using explicit signals such as fast error responses, rather than by watching you eat.
+
 RabbitMQ is a hybrid: the broker pushes over a persistent connection, but **consumer prefetch** acts as a credit limit, so the consumer controls how much is in flight.
 
 > [!tip] Rule of thumb

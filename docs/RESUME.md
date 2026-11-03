@@ -1,12 +1,18 @@
 # Current continuation: 2026-11-03
 
-The user resumed the rewrite with a new agent. The durable current progress record is
-`.handoffs/concept-first/cf2-progress.json`; author/verifier evidence continues under `evidence/cf3-*`.
-At resumption, main was `78ca331` (50/60 modules, 1,432/1,845 lessons reviewed and published).
-DSA08 and DSA09 are verified and undergoing release QA (52/60 modules, 1,520/1,845 lessons).
-Continue all remaining retained modules using distinct authors and independent verifiers. Preserve
-the draft checkout and publish only verified modules via `release/`. The primary checkout is dirty
-with unrelated work. Earlier pause instructions below are historical, superseded by this resume.
+The user resumed the rewrite. Durable current progress is in `.handoffs/concept-first/cf2-progress.json`;
+`queue.json` is reconciled against the release audit. Author/verifier evidence is under `evidence/cf3-*`.
+
+Confirmed live checkpoint: `35b4d0c` (app `f4d895e39563`), with 52/60 modules and 1,520/1,845 lessons
+independently reviewed and published. Distributed Systems, Messaging and Advanced Algorithms are
+independently verified and have passed release checks: 55/60 modules, 1,643/1,845 lessons reviewed.
+Shared glossary corrections have passed their own distinct verification. API Design, Architecture
+& Scaling Patterns and Reliability author passes are underway; both case-study modules remain.
+
+Use `worktree/` for scoped author/verifier work; publish only frozen, independently verified modules
+through `release/`. Do not modify the dirty primary checkout. Scope stays 10 subjects, 60 modules,
+1,845 lessons and 4,029 questions. The four retired subjects stay removed. Earlier pause instructions
+below are historical and superseded by this resume.
 
 # Concept-first rewrite: RESUMED (2026-10-29)
 

@@ -158,9 +158,9 @@
       "nonblocking",
       "nonblocking client"
     ],
-    "definition": "A way of doing input/output where a thread starts an operation and moves on to other work instead of waiting for it, being notified when the result is ready. It lets one thread handle many outstanding requests.",
+    "definition": "Input/output configured to return without waiting when an operation cannot make progress immediately. An event loop can wait for readiness or completion notifications and resume the work, allowing a few threads to manage many outstanding connections.",
     "example": "A non-blocking HTTP client can have 1,000 requests in flight on a handful of threads.",
-    "source": "https://en.wikipedia.org/wiki/Asynchronous_I/O"
+    "source": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/channels/SelectableChannel.html"
   },
   {
     "id": "message-format",
@@ -421,8 +421,8 @@
       "point-to-point queue",
       "point-to-point channel"
     ],
-    "definition": "Messaging where each message is delivered to exactly one of the consumers reading a queue, rather than copied to all of them. It is how work is shared out among workers.",
-    "example": "Three workers on one SQS queue: each job goes to just one of them.",
+    "definition": "Messaging that assigns each delivery to one competing consumer rather than broadcasting a copy to every consumer. A message can still be delivered again, possibly to a different worker, so point-to-point does not mean exactly-once processing.",
+    "example": "Three workers share one SQS queue; a delivery goes to one worker, while a later redelivery can go to another.",
     "source": "https://www.enterpriseintegrationpatterns.com/patterns/messaging/PointToPointChannel.html"
   },
   {
@@ -465,7 +465,7 @@
       "redeliveries",
       "redelivering"
     ],
-    "definition": "A broker giving a message to a consumer again because it never received an acknowledgement for an earlier delivery. Redelivery is what stops work being lost, and also what causes duplicates.",
+    "definition": "A broker delivering a message again, commonly because processing was not acknowledged or its visibility timeout expired. Some at-least-once systems, including SQS standard queues, can also return a duplicate after a successful delete, so effects must tolerate repetition.",
     "example": "A worker that crashes after sending an email but before acking causes redelivery, so a second worker sends the email again.",
     "source": "https://www.rabbitmq.com/docs/confirms"
   },
@@ -802,7 +802,7 @@
       "queue mirroring"
     ],
     "definition": "RabbitMQ's old way of replicating a classic queue to other nodes. It was deprecated for years and removed in RabbitMQ 4.0; quorum queues replace it.",
-    "source": "https://www.rabbitmq.com/docs/3.13/ha"
+    "source": "https://www.rabbitmq.com/docs/quorum-queues"
   },
   {
     "id": "exclusive-queue",
@@ -1213,8 +1213,8 @@
       "partition offset",
       "partition offsets"
     ],
-    "definition": "The sequential number of a record within one partition of a log: 0, 1, 2 and so on. Consumers remember progress as an offset rather than deleting what they have read.",
-    "example": "A consumer group at offset 5 will next read the sixth record of that partition.",
+    "definition": "A record's position within one Kafka partition. Positions increase as records are appended, but compaction, aborted transactions and control records mean application-visible offsets need not be consecutive. A committed offset identifies where recovery should resume, rather than counting completed records.",
+    "example": "A committed offset of 5 means recovery starts at offset 5 or the next available record, not necessarily the sixth application record.",
     "source": "https://kafka.apache.org/documentation/#intro_concepts_and_terms"
   },
   {
@@ -1226,7 +1226,7 @@
       "keyed topics",
       "unkeyed records"
     ],
-    "definition": "An optional value attached to a Kafka record, such as an account ID, that the producer hashes to choose its partition. All records with the same key go to the same partition and so stay in order.",
+    "definition": "An optional value attached to a Kafka record, such as an account ID, that a key-respecting producer uses to choose its partition. Equal serialized keys share a partition while the partition count and mapping stay fixed; preserving business order also requires ordered production and consumer effects.",
     "example": "Keying account events by account ID keeps each account's events in order.",
     "source": "https://kafka.apache.org/documentation/#intro_concepts_and_terms"
   },
@@ -1247,7 +1247,7 @@
       "sticky partitioning",
       "sticky behaviour"
     ],
-    "definition": "Kafka producer behaviour for records without a key: it fills a batch for one partition, then switches to another, which gives bigger batches than spreading each record round-robin.",
+    "definition": "Kafka producer behaviour that keeps unkeyed records on one partition for a while to improve batching. The current built-in Java strategy can change its sticky partition after at least batch.size bytes have been produced there; custom partitioners can differ.",
     "source": "https://cwiki.apache.org/confluence/display/KAFKA/KIP-480%3A+Sticky+Partitioner"
   },
   {
@@ -1322,7 +1322,7 @@
     "aliases": [
       "group.instance.id"
     ],
-    "definition": "A Kafka consumer setting (group.instance.id) that gives a consumer a fixed identity, so if it restarts within the session timeout it gets its old partitions back without triggering a rebalance.",
+    "definition": "A Kafka consumer setting, group.instance.id, that gives a member a stable identity. A short restart can avoid an unnecessary rebalance when it returns within the session timeout and the rest of the membership and subscriptions stay suitable; it is not an unconditional assignment guarantee.",
     "source": "https://cwiki.apache.org/confluence/display/KAFKA/KIP-345%3A+Introduce+static+membership+protocol+to+reduce+consumer+rebalances"
   },
   {
@@ -1337,7 +1337,7 @@
   {
     "id": "max-poll-interval",
     "term": "max.poll.interval.ms",
-    "definition": "The longest a Kafka consumer may go between calls to poll() before it is considered stuck and removed from its group, triggering a rebalance. The default is 300,000 ms (5 minutes).",
+    "definition": "The maximum delay between poll() calls under Kafka consumer-group management, defaulting to five minutes. Exceeding it marks a member failed; for a static member, reassignment waits for the session timeout after heartbeats stop.",
     "source": "https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms"
   },
   {
@@ -1423,7 +1423,7 @@
     "aliases": [
       "active segments"
     ],
-    "definition": "The log segment Kafka is currently appending to in a partition. Retention and compaction never touch it; they work only on closed, older segments.",
+    "definition": "The log segment Kafka is currently appending to in a partition. Compaction does not clean this segment; rolling opens a new active segment and makes the old one eligible for cleanup under the configured policy.",
     "source": "https://docs.confluent.io/kafka/design/log_compaction.html"
   },
   {
@@ -1467,7 +1467,7 @@
       "in-sync replica",
       "replica.lag.time.max.ms"
     ],
-    "definition": "In Kafka, the leader of a partition plus the followers that have caught up with it recently (within replica.lag.time.max.ms, default 30 seconds). A record is committed once every ISR member has it.",
+    "definition": "In Kafka, the partition leader and followers that have caught up recently (within replica.lag.time.max.ms, default 30 seconds). Replication commitment requires every current ISR member to have the record; modern Kafka also requires the ISR size to meet min.insync.replicas before advancing the high watermark.",
     "example": "If both followers fall behind, the ISR shrinks to just the leader.",
     "source": "https://docs.confluent.io/kafka/design/replication.html"
   },
@@ -1478,8 +1478,8 @@
       "high watermarks",
       "high-water-mark"
     ],
-    "definition": "In Kafka, the offset up to which a partition's records are committed, meaning copied to all in-sync replicas. Consumers can only read up to it. More generally, a high-water mark is the highest point reached so far.",
-    "source": "https://docs.confluent.io/kafka/design/replication.html"
+    "definition": "In Kafka, the replication-committed boundary of a partition. Advancing it requires replication to every current ISR member and, under the strict minimum-ISR rule, enough in-sync replicas. Consumers cannot read beyond it; transactional read_committed consumers may stop earlier at an unresolved transaction. More generally, a high-water mark is the highest point reached so far.",
+    "source": "https://kafka.apache.org/42/design/design/"
   },
   {
     "id": "not-enough-replicas",
@@ -1505,7 +1505,7 @@
       "unclean elections",
       "unclean.leader.election.enable"
     ],
-    "definition": "Letting a replica that was not in sync become a Kafka partition leader when no in-sync replica is available. It restores availability but loses any records the new leader lacked, so it is disabled by default.",
+    "definition": "Electing a Kafka partition replica that is not known to contain all committed data, risking loss of records it lacks. This is disabled by default; newer eligible-leader-replica tracking can identify safe candidates outside the ISR without requiring an unclean election.",
     "source": "https://kafka.apache.org/documentation/#topicconfigs_unclean.leader.election.enable"
   },
   {
@@ -1555,7 +1555,7 @@
       "Zstandard"
     ],
     "definition": "A lossless compression algorithm from Meta that offers high compression ratios at good speed; Kafka producers can use it for batches.",
-    "source": "https://facebook.github.io/zstd/"
+    "source": "https://github.com/facebook/zstd"
   },
   {
     "id": "confluent-parallel-consumer",
@@ -1588,7 +1588,7 @@
     "aliases": [
       "at-most-once"
     ],
-    "definition": "A delivery guarantee where each message is processed once or not at all: it is acknowledged before the work, so a crash loses it but nothing is ever repeated.",
+    "definition": "A guarantee that, within the stated delivery or processing boundary, an item occurs zero or one times: loss is possible but repetition is excluded. Acknowledging before work creates this trade-off only if duplicate publishes, broker redeliveries and acknowledgement failures are also controlled.",
     "source": "https://docs.confluent.io/kafka/design/delivery-semantics.html"
   },
   {
@@ -1687,7 +1687,7 @@
     "aliases": [
       "BEGIN"
     ],
-    "definition": "The SQL command that makes all changes in the current transaction permanent at once. BEGIN starts the transaction.",
+    "definition": "Committing is the decision to make a transaction’s changes permanent. In SQL, COMMIT completes the current transaction and BEGIN starts one. Distributed protocols such as two-phase commit also use COMMIT for the decision sent to participants; deciding to commit is distinct from every participant having finished applying it.",
     "source": "https://www.postgresql.org/docs/current/sql-commit.html"
   },
   {
@@ -1776,7 +1776,7 @@
       "transaction coordinator",
       "__transaction_state"
     ],
-    "definition": "A Kafka feature that lets a producer write to several partitions, including offset commits, atomically: all the writes become visible together on commit or are discarded on abort. A broker acting as transaction coordinator tracks each transactional.id.",
+    "definition": "A Kafka feature that commits or aborts a producer's writes across partitions and any included consumer offsets as one transaction. Consumers need read_committed to hide aborted output; independent fetches do not provide a simultaneous cross-partition snapshot. A coordinator tracks the transactional.id.",
     "source": "https://www.confluent.io/blog/transactions-apache-kafka/"
   },
   {
@@ -1894,8 +1894,9 @@
     "aliases": [
       "partition keys"
     ],
-    "definition": "The value a system hashes to choose which partition or shard a message goes to, such as a Kafka record key or a Kinesis partition key. Messages with the same key share a partition and stay in order.",
-    "source": "https://docs.aws.amazon.com/streams/latest/dev/key-concepts.html"
+    "definition": "A field, set of fields or expression whose value a system uses to choose the partition holding a record, using hashing, ranges or another placement rule. In a database it controls how rows are distributed; in messaging it can place related records in the same processing lane. Stable key placement can support per-key order, but ordering also depends on the broker, producer and consumer behaviour.",
+    "example": "DynamoDB hashes a partition-key value to place items; a Kafka producer can use an account ID to place that account's events together while its partition mapping stays fixed.",
+    "source": "https://www.postgresql.org/docs/current/ddl-partitioning.html"
   },
   {
     "id": "kinesis-getrecords",
@@ -1938,7 +1939,7 @@
       "salt the hot key",
       "key salting"
     ],
-    "definition": "Spreading a hot key over several partitions by adding a small suffix, such as post-1#0 to post-1#15. It removes the bottleneck but gives up ordering across the sub-keys, so results must be merged downstream.",
+    "definition": "Splitting a hot key into sub-keys by adding a suffix, such as post-1#0 to post-1#15, so work can spread across more partitions. Sub-keys can still collide on a partition, and cross-sub-key ordering is lost; downstream aggregation must combine partial results without double-counting.",
     "source": "https://www.confluent.io/learn/kafka-partition-strategy/"
   },
   {
@@ -2082,7 +2083,7 @@
       "consumer-group lag",
       "Kafka lag"
     ],
-    "definition": "How far a consumer is behind the newest data. In Kafka it is the log end offset minus the committed offset, per partition; dividing by the arrival rate turns it into time.",
+    "definition": "How far a consumer is behind a stream's current position. Kafka committed-offset lag is the log end offset minus the committed offset, per partition; gaps and control records mean this is not always a count of application records. Dividing a comparable backlog by a steady arrival rate gives an approximate time lag, not a general burst-time guarantee.",
     "example": "180,000 records behind at 2,000 records per second is about 90 seconds of lag.",
     "source": "https://docs.confluent.io/platform/current/monitor/monitor-consumer-lag.html"
   },
@@ -2169,7 +2170,7 @@
       "event-source"
     ],
     "definition": "Storing every change to an entity as an immutable event and treating that sequence as the source of truth; the current state is rebuilt by replaying the events.",
-    "example": "An account's balance is derived from its Deposited and Withdrew events rather than stored.",
+    "example": "An account's balance is derived from its Deposited and Withdrew events; a saved current balance is a projection or snapshot, while the event history remains authoritative.",
     "source": "https://martinfowler.com/eaaDev/EventSourcing.html"
   },
   {
@@ -2289,7 +2290,7 @@
       "read-model projections",
       "CQRS projection"
     ],
-    "definition": "A read model built by processing a stream of events, such as a table of current balances. It lags the events slightly and can be rebuilt by replaying them.",
+    "definition": "State built by processing events, such as a table of current balances, often used as a read model. An asynchronous projection can lag its source by a workload-dependent amount; it can be rebuilt only while the necessary history and replay logic remain available.",
     "source": "https://martinfowler.com/eaaDev/EventSourcing.html"
   },
   {
@@ -2325,7 +2326,7 @@
       "log tailing",
       "log-tailing"
     ],
-    "definition": "Reading a database's transaction log as it is written, to see every committed change in commit order. CDC tools such as Debezium work this way.",
+    "definition": "Reading a database's change log through a suitable capture mechanism instead of polling application tables. Logical decoding can emit committed transaction changes in commit order; configured tables, filters and downstream partitioning determine what consumers actually receive.",
     "source": "https://microservices.io/patterns/data/transaction-log-tailing.html"
   },
   {
@@ -2335,8 +2336,8 @@
       "replication log",
       "database log"
     ],
-    "definition": "The log a database writes every change to before applying it, used for crash recovery and replication. Postgres calls it the write-ahead log (WAL) and MySQL has the binlog.",
-    "source": "https://en.wikipedia.org/wiki/Transaction_log"
+    "definition": "A database log used to support recovery or replication. PostgreSQL WAL must reach durable storage before the corresponding changed data pages are flushed, not necessarily before in-memory changes occur. MySQL's binary log records changes for replication and recovery and is distinct from its storage engine's redo log.",
+    "source": "https://www.postgresql.org/docs/current/wal-intro.html"
   },
   {
     "id": "database-sequence",
@@ -2415,9 +2416,10 @@
       "backward compatible",
       "backward-compatible",
       "forward compatible",
-      "compatibility checks"
+      "compatibility checks",
+      "transitive compatibility"
     ],
-    "definition": "Whether data written with one schema version can be read with another. Backward compatible means new readers can read old data; forward compatible means old readers can read new data.",
+    "definition": "Whether data written with one schema version can be read with another. Backward compatibility lets new readers read old data; forward compatibility lets old readers read new data. Transitive compatibility checks the chosen direction against all previous schema versions rather than only the latest one.",
     "source": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html"
   },
   {
@@ -2464,7 +2466,7 @@
       "unbounded stream",
       "unbounded streams"
     ],
-    "definition": "Data with no planned end, such as a stream of clicks, as opposed to a fixed batch. Computations over it must be continuous and use windows to produce results.",
+    "definition": "Data with no planned end, such as a continuing stream of clicks, rather than a fixed batch. Operators can emit ongoing results directly; windows are useful when a computation needs finite groups, such as per-minute counts.",
     "source": "https://research.google/pubs/the-dataflow-model-a-practical-approach-to-balancing-correctness-latency-and-cost-in-massive-scale-unbounded-out-of-order-data-processing/"
   },
   {
@@ -2473,7 +2475,7 @@
     "aliases": [
       "stateful operators"
     ],
-    "definition": "A stream-processing step that remembers information across records, such as a running count, an open window, a join buffer or a set of IDs already seen. Its state must be partitioned by key, stored locally and checkpointed so it survives crashes; a stateless step such as a filter needs none of this.",
+    "definition": "A stream-processing step that remembers information across records, such as a running count, window, join buffer or set of seen IDs. State may be keyed or operator-wide; fault-tolerant recovery must restore it consistently with input progress. A stateless step handles each record independently.",
     "source": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/stateful-stream-processing/"
   },
   {
@@ -2546,7 +2548,7 @@
     "aliases": [
       "session windows"
     ],
-    "definition": "A window per key that stays open while events keep arriving and closes after a gap of inactivity, so sessions vary in length. Two sessions merge if a late event bridges the gap between them.",
+    "definition": "A window per key grouped by gaps between event timestamps rather than fixed clock boundaries, so its duration varies with activity. In event-time processing, watermarks drive firing and cleanup; a late event can merge candidate sessions only while the necessary state is still retained.",
     "source": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/#session-windows"
   },
   {
@@ -2570,7 +2572,7 @@
       "forBoundedOutOfOrderness",
       "watermark bound"
     ],
-    "definition": "A watermark strategy that assumes events arrive at most a fixed delay late: the watermark is the largest event time seen minus that delay. A bigger delay gives more complete results but later ones.",
+    "definition": "A watermark strategy that allows records to arrive a configured amount behind the largest event timestamp seen. Progress trails that timestamp by the allowance (plus a boundary adjustment in Flink), so increasing the allowance delays output and can admit more out-of-order data; it is not a wall-clock arrival guarantee.",
     "source": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/event-time/generating_watermarks/"
   },
   {
@@ -2599,7 +2601,7 @@
   {
     "id": "allowed-lateness",
     "term": "Allowed lateness",
-    "definition": "A window setting in Flink that keeps a window's state for extra time after it fires, so late events within that time update the result.",
+    "definition": "A Flink event-time window setting that retains window state until event-time progress reaches the window end plus the allowance. Accepted late records can update or merge retained windows and emit revised results; the allowance is measured against watermarks, not elapsed wall-clock time.",
     "source": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/#allowed-lateness"
   },
   {
@@ -2619,7 +2621,7 @@
       "window grace periods",
       "ofSizeAndGrace"
     ],
-    "definition": "In Kafka Streams, how long a window keeps accepting late records after it ends before it closes.",
+    "definition": "In Kafka Streams, the event-time allowance after a window ends during which late records may still be accepted. The window closes as stream-time progresses past the end plus grace, rather than merely because that much wall-clock time passed.",
     "source": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html#windowing"
   },
   {
@@ -2703,7 +2705,7 @@
       "stream checkpoints",
       "last checkpoint"
     ],
-    "definition": "A consistent snapshot of a stream job's state together with its source positions, saved to durable storage, so the job can restart from it after a failure without losing or double-counting.",
+    "definition": "A consistent snapshot of a stream job's state and source positions, saved to durable storage for recovery. Restoring the matching state and replayable inputs prevents inconsistent internal progress; exactly-once external effects also require a compatible transactional or idempotent sink.",
     "source": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/stateful-stream-processing/#checkpointing"
   },
   {
@@ -2714,7 +2716,7 @@
       "aligned checkpoints",
       "unaligned checkpoints"
     ],
-    "definition": "A marker Flink injects into the data streams; when an operator has received it on its inputs it snapshots its state, so all operators' snapshots correspond to the same point in the input.",
+    "definition": "A marker that separates records belonging before and after a Flink checkpoint. Aligned checkpoints coordinate input barriers before snapshotting operator state; unaligned checkpoints also capture in-flight data, reducing the need to wait for alignment while retaining a consistent recovery state.",
     "source": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/stateful-stream-processing/#barriers"
   },
   {
@@ -2875,7 +2877,7 @@
     ],
     "definition": "A small, non-overlapping slice of a stream (for example 5 minutes) whose partial result is computed once and then combined into every overlapping window that covers it, so a hopping window does not redo the same work. (In Apache Beam, 'pane' has a different meaning: one firing of a window's result.)",
     "example": "Twelve 5-minute panes can be merged to give a 60-minute window.",
-    "source": "https://doi.org/10.1145/1058150.1058158"
+    "source": "https://datalab.cs.pdx.edu/niagaraST/nopanenogain.pdf"
   },
   {
     "id": "incremental-aggregation",

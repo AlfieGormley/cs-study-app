@@ -19,7 +19,7 @@ producer ─▶ b1 ──fetch── b2
              └──fetch── b3
 ```
 
-The **in-sync replica set (ISR)** is the leader plus the followers that have caught up within `replica.lag.time.max.ms` (default 30 s). A record is **committed** when every replica in the ISR has it. The **high watermark** is the offset up to which records are committed; consumers can only read up to it.
+The **in-sync replica set (ISR)** is the leader plus the followers that have caught up within `replica.lag.time.max.ms` (default 30 s). The **high watermark** marks the replication-committed boundary. Advancing it requires the record on every current ISR member; modern Kafka's strict minimum-ISR rule also requires the ISR size to meet `min.insync.replicas`. Consumers cannot read beyond this boundary, and transactional `read_committed` consumers can stop earlier at an unresolved transaction.
 
 Durability comes from combining three settings:
 
@@ -29,21 +29,11 @@ Durability comes from combining three settings:
 | `min.insync.replicas` | 2 |
 | producer `acks` | `all` |
 
-With `acks=all`, the leader acknowledges only when all **current** ISR members have the record. `min.insync.replicas` sets a floor on how many replicas that must be. The leader checks it before accepting each `acks=all` write:
+With `acks=all`, the leader acknowledges only when all **current** ISR members have the record. `min.insync.replicas` sets a floor on how many replicas that must be; it does not make the leader wait for replicas already outside the ISR.
 
-```formula
-|ISR| ≥ m
-where
-|ISR|: the number of replicas currently in the in-sync replica set, counting the leader itself
-ISR: the in-sync replica set
-m: the topic's min.insync.replicas setting (broker default 1; 2 is the usual safe choice)
-≥: is greater than or equal to
-In words: an acks=all write is accepted only while at least m replicas are in sync; otherwise the leader refuses it.
-```
+With three replicas and `min.insync.replicas=2`, one follower can drop out and writes can continue. If both drop out, only the leader remains and writes are refused with a not-enough-replicas error. Successful acknowledgement therefore requires at least two in-sync copies. With all three initially healthy and controller quorum available, one replica failure need not lose acknowledged data; detection and leader election can still cause pauses or transient write errors.
 
-So `min.insync.replicas=2` makes the leader **refuse writes** (with `NotEnoughReplicas`) if the ISR shrinks below 2: with 3 replicas, one follower can drop out (|ISR| = 2) and writes continue, but if both drop out (|ISR| = 1) writes are refused. Together they guarantee an acknowledged write is on at least two brokers. With all three replicas initially healthy and controller quorum available, it tolerates one replica failure without losing acknowledged data and can resume writes after detection/election. Transient write errors or pauses are still possible.
-
-Since **Kafka 3.0** the producer defaults are already safe: `acks=all` and `enable.idempotence=true`. But the broker default for `min.insync.replicas` is still **1**. If both followers fall behind and drop out of the ISR, the ISR is just the leader, and `acks=all` is satisfied by the leader alone. A write acknowledged in that state is guaranteed on only one broker; follower copies may or may not exist, and Kafka replication acknowledgement is not a per-write fsync guarantee. Set `min.insync.replicas=2` explicitly on topics that matter.
+Since **Kafka 3.0** the producer defaults favour durability: `acks=all` and `enable.idempotence=true`. But the broker default for `min.insync.replicas` is still **1**. If both followers fall behind and drop out of the ISR, the ISR is just the leader, and `acks=all` is satisfied by the leader alone. A write acknowledged in that state is guaranteed on only one broker; follower copies may or may not exist, and Kafka replication acknowledgement is not a per-write fsync guarantee. Set `min.insync.replicas=2` explicitly on topics that matter.
 
 With `acks=1` (the default before 3.0), the leader acknowledges as soon as it has written locally. If it dies before followers fetch, the acknowledged write is lost when a follower becomes leader. With `acks=0` the producer does not wait at all.
 
@@ -63,3 +53,4 @@ Cluster metadata, including which broker leads each partition and the ISR of eve
 
 - [Apache Kafka documentation: design](https://kafka.apache.org/documentation/)
 - [Kafka replication design (Confluent docs)](https://docs.confluent.io/kafka/design/replication.html)
+- [Apache Kafka 4.2: eligible leader replicas and strict minimum ISR](https://kafka.apache.org/42/operations/eligible-leader-replicas/)

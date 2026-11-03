@@ -22,7 +22,9 @@ replica A writes:  {A:2}       (didn't
 
 Compare `{A:1, B:1}` with `{A:2}`: each is ahead in one entry, so they're **concurrent**. A store like Riak keeps both as **siblings** and returns both to the next reader, who merges them and writes back with a vector that dominates both, `{A:2, B:1}` plus an increment of the coordinating replica’s own entry.
 
-If one vector dominates (at least as large in every entry), the dominated version is simply obsolete and can be discarded.
+If one vector strictly dominates another (at least as large in every entry and larger in at least one), the dominated version is obsolete and can be discarded.
+
+With Riak siblings enabled (`allow_mult`), clients must return the **causal context** from the read with the merged write. Omitting it can create additional siblings because the store cannot infer which versions the client reconciled. Actual Riak context can use dotted version vectors; the small vectors here illustrate causal ordering rather than an exact wire encoding.
 
 ## Last-write-wins (LWW)
 

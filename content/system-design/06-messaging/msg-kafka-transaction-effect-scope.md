@@ -70,7 +70,7 @@ COMMIT;
 
 On startup (and after every rebalance) the consumer reads `kafka_offsets` and calls `seek()` to that position instead of trusting `__consumer_offsets`. Results and position then move together. Also enforce ownership or the expected offset atomically in that transaction: after a rebalance, an old consumer can still be running, and storing offsets alone does not fence its writes.
 
-A universal transaction-overhead percentage is absent because no representative benchmark configuration is established here. Transaction commit coordination adds work, and read-committed visibility can add latency. Longer commit intervals mean higher throughput but more latency.
+Transaction commit coordination adds work, and read-committed visibility can add latency. Longer commit intervals can amortise coordination but delay visibility and increase recovery work. Measure the trade-off for the actual workload rather than assuming a universal overhead percentage.
 
 ## Choosing in practice
 

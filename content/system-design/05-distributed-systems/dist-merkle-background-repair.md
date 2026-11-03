@@ -30,21 +30,18 @@ Two replicas compare roots. If they're equal, treat the range as identical, assu
 > [!example] How much does it save?
 > 1 billion keys, leaves of ~1,000 keys, so ~1 million leaves and a tree depth of 20. If one key differs, replicas exchange about 2 hashes per level × 20 levels = 40 hashes, then sync one leaf range of 1,000 keys, instead of comparing a billion.
 
-The saving comes from the tree's depth. A binary tree (each parent has two children) halves the range at every level, so its depth is the base-2 logarithm of the number of leaves:
+The saving comes from the tree's depth. A binary tree (each parent has two children) halves the range at every level, so its depth grows only with the logarithm of the number of leaves:
 
-```formula
-B = K / k = 10^9 / 10^3 = 10^6
-d = log_2(B) = log_2(10^6) ≈ 20
-H ≈ 2 × d = 2 × 20 = 40
+```formula reference
+d ≈ log_2(B)
+H ≈ 2d
 where
-K: the total number of keys; here 1 billion (10^9)
-k: the number of keys under each leaf; here 1,000 (10^3)
-B: the number of leaves (buckets of keys); here 1 million (10^6)
 d: the depth of the tree, the number of levels from root to leaf
+B: the number of leaves (buckets of keys)
 log_2: the base-2 logarithm: how many times you can halve a number before reaching 1; log_2(1,024) = 10
 H: the number of hashes exchanged to find one differing leaf
 ≈: approximately equal to
-In words: each level down halves the range to search, so finding one bad leaf among a million takes about 20 steps of 2 hash comparisons each.
+In words: each level down halves the range to search, so finding one bad leaf among a million takes about 20 levels of 2 hash comparisons each, about 40 hashes.
 ```
 
 This best case assumes only one leaf differs. If many keys differ, spread across many leaves, the replicas must descend into many subtrees and can end up comparing most of the tree.

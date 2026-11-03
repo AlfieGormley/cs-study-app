@@ -25,6 +25,13 @@ main queue ──fail×5──▶ DLQ
 - **SQS**: set a *redrive policy* with `maxReceiveCount` (say 5). SQS tracks `ApproximateReceiveCount`; when it exceeds the limit, the message moves to the DLQ. You can later *redrive* messages back to the source queue once the bug is fixed.
 - **RabbitMQ**: configure a *dead-letter exchange*. Messages are dead-lettered when rejected without requeue, when their TTL expires, or when the queue exceeds its length limit. Quorum queues also enforce a `delivery-limit`, which **defaults to 20 since RabbitMQ 4.0**: a message redelivered more often than that is dead-lettered if a dead-letter exchange is configured, and **dropped** if not. Exactly which kinds of return count towards the limit has changed between 4.x releases, so check the docs for your version.
 
+> [!analogy] Real-world analogy: the post office's dead letter office
+> When a letter cannot be delivered after a few tries, the post office does not keep sending the van out with it forever. It moves the letter to a separate office where someone opens it, works out what went wrong and decides whether it can be sent on.
+>
+> **How it maps:** The repeated delivery attempts are redeliveries counted against `maxReceiveCount` or `delivery-limit`. The dead letter office is the DLQ: a holding area that stops one broken message wasting capacity, and a place where a person investigates before redriving it.
+>
+> **Where it stops:** A failed letter has had no effect, but a message can reach the DLQ after its side effect already happened and only the acknowledgement was lost. A DLQ also deletes messages when its retention period ends, and nothing reaches it unless you configure one.
+
 > [!tip] A DLQ nobody watches is a black hole
 > Always alarm when DLQ depth is above zero, keep DLQ retention longer than the source queue's (otherwise messages can expire before anyone looks), and record *why* a message failed (an error attribute or a log line with the message ID).
 

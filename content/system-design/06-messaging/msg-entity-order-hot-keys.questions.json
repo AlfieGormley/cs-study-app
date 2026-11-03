@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. FIFO rule: one receive may contain multiple same-group messages; further receives for the group wait for deletion or visibility expiry. Process same-group effects in order.\n2. Across groups: independent.\n3. Effective parallelism is limited by whichever is scarcer, consumers or groups with work:\n\n```formula\nP = min(C, G)\nP = min(50, 10000) = 50\nwhere\nP: how many consumers can work at the same time\nmin: the smaller of the two values\nC: the number of single-job consumers, here 50\nG: the number of message groups with available work, here 10,000\nIn words: each consumer needs a group of its own to work on, so parallelism is capped by the consumers or by the groups, whichever is smaller: here 50.\n```\n\n4. Contrast: if `MessageGroupId` were a constant like `\"all\"`, parallelism would be **1**, a very common mistake.\n5. Throughput ceiling still applies: 300 API calls/s per action without batching (3,000 messages/s with batches of 10), or higher in high-throughput mode.",
+    "workedExample": "1. Within a message group, preserve effect order. One receive can include several same-group records, and further receives wait for deletion or visibility expiry.\n2. Different groups can proceed independently.\n3. There are more ready groups than workers in this scenario, so every worker can have independent work. The worker fleet is the stated limit.\n4. A single constant group ID would remove that independence. Real deployments must also check FIFO throughput limits and receive behaviour.",
     "link": {
       "title": "Amazon SQS FIFO queues",
       "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues.html"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. **What ordering is needed?** None: addition is commutative.\n2. So the single-key constraint is self-imposed. Salt it:\n\nThis Python fragment requires `import random` and an existing `post_id`. The chosen suffix is random, so it has no fixed output.\n\n```python\n# Choose one of 16 sub-keys for this\n# like.\nsalt = random.randrange(16)\n# Route using the finer, salted key.\nkey = f\"{post_id}#{salt}\"\n```\n\n3. Stage 1 counts per salted key (spread over up to 16 partitions).\n4. Stage 2 re-keys by `postId` and combines 16 partial counts without double-counting updates: replace each versioned partial snapshot or apply deduplicated deltas. That stage handles one small update per sub-key per window, not every like.\n5. Each evenly used salt contributes about 40% / 16 = 2.5%, but salts can collide on a partition and other traffic adds load; this is not a hottest-partition guarantee.\n6. Salt only keys known or detected to be hot, so normal posts are unaffected.",
+    "workedExample": "1. **What ordering is needed?** None: addition is commutative.\n2. So the single-key constraint is self-imposed. Salt it:\n\nThis Python fragment requires `import random` and an existing `post_id`. The chosen suffix is random, so it has no fixed output.\n\n```python\n# Choose one of 16 sub-keys for this\n# like.\nsalt = random.randrange(16)\n# Route using the finer, salted key.\nkey = f\"{post_id}#{salt}\"\n```\n\n3. Stage 1 counts per salted key (spread over up to 16 partitions).\n4. Stage 2 re-keys by `postId` and combines 16 partial counts without double-counting updates: replace each versioned partial snapshot or apply deduplicated deltas. That stage handles one small update per sub-key per window, not every like.\n5. Salts can collide on the same partition, and unrelated traffic adds load. Check actual partition distribution rather than assuming every salt gets a separate lane.\n6. Salt only keys known or detected to be hot, so normal posts are unaffected.",
     "link": {
       "title": "Apache Kafka documentation",
       "url": "https://kafka.apache.org/documentation/"
@@ -93,27 +93,27 @@
     "id": "msg-ordering-backpressure-q12",
     "level": "basic",
     "type": "single",
-    "prompt": "A provisioned Kinesis stream, with evenly distributed partition keys and no KPL record aggregation, must ingest **4,000 records per second** averaging **500 bytes** each. Each shard accepts up to 1 MB/s or 1,000 records per second of writes. What is the minimum number of shards?",
+    "prompt": "A provisioned Kinesis stream uses balanced partition keys and no record aggregation. Write requests for many tiny records are throttled even though each shard's byte rate is below its limit. Monitoring shows shards have reached their permitted records-per-second rate. What explains this?",
     "options": [
       {
-        "text": "2, because 4,000 × 500 bytes = 2 MB/s",
-        "explanation": "Wrong. That satisfies the byte limit but ignores the record limit. Two shards accept only 2,000 records per second."
+        "text": "Byte capacity is the only write limit, so this must be a monitoring error",
+        "explanation": "Wrong. Both byte throughput and record count constrain sustained writes."
       },
       {
-        "text": "1, because the data volume is small",
-        "explanation": "Wrong. One shard accepts 1,000 records per second, a quarter of what is needed, and 1 MB/s, half the bytes."
+        "text": "Small records cannot be throttled",
+        "explanation": "Wrong. Small records can reach the count limit before exhausting byte capacity."
       },
       {
-        "text": "8, to allow for the 2 MB/s read limit",
-        "explanation": "Wrong. Read capacity per shard is 2 MB/s, which is higher than the write limit, so reads do not force extra shards here."
+        "text": "The shared read limit must be blocking the producer",
+        "explanation": "Wrong. The stated evidence identifies the write record-count limit; read throughput is a separate constraint."
       },
       {
-        "text": "4, because the record-count limit binds before the byte limit",
-        "explanation": "Correct. By bytes you need 2 MB/s ÷ 1 MB/s = 2 shards; by records 4,000 ÷ 1,000 = 4. The larger figure wins."
+        "text": "The record-count limit is binding before the byte limit",
+        "explanation": "Correct. Capacity planning must satisfy both limits per shard. For the stated balanced unaggregated workload, more shard capacity can help; do not size from bytes alone."
       }
     ],
     "answer": 3,
-    "workedExample": "Size against **both** write limits and take the larger:\n\n```formula\nW = 4000/s × 500 B = 2 MB/s\nS_W = 2 MB/s / (1 MB/s) = 2\nS_R = 4000/s / (1000/s) = 4\nS = max(S_W, S_R) = 4\nwhere\nW: bytes written per second: 4,000 records of 500 bytes is 2,000,000 B/s, about 2 MB/s\nB: bytes\nS_W: shards needed for the byte limit of 1 MB/s per shard\nS_R: shards needed for the record limit of 1,000 records per second per shard\nS: the minimum number of shards\nmax: the larger of the values\nMB: megabytes, millions of bytes; \"MB/s\" is megabytes per second\ns: seconds; \"/s\" means per second\nIn words: bytes need 2 shards but records need 4, and the stream must satisfy both, so it needs 4.\n```\n\nSmall records hit the record limit first; large records hit the byte limit. In practice add headroom and check for hot partition keys, since the limits apply per shard, not to the stream on average.",
+    "workedExample": "1. Check both write dimensions: bytes per second and records per second.\n2. Tiny records use little byte capacity per request, so many can exhaust the record allowance while byte capacity remains.\n3. Plan against whichever limit demands more shards, add headroom and inspect per-shard distribution.\n4. More total capacity cannot cure a single hot key automatically. Aggregation changes the record-count calculation and needs its own design.",
     "link": {
       "title": "Amazon Kinesis Data Streams quotas and limits (AWS docs)",
       "url": "https://docs.aws.amazon.com/streams/latest/dev/service-sizes-and-limits.html"

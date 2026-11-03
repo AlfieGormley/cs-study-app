@@ -41,13 +41,12 @@ topic: orders (3 partitions)
 The producer chooses a partition for every record:
 
 - **With a key**: the producer hashes the key and uses the remainder after dividing by the partition count (the formula below). Equal serialized keys share a partition while partition count and partitioning configuration stay fixed; other clients or custom partitioners can differ.
-- **Without a key**: the producer's built-in sticky partitioner fills a batch for one partition, then moves to another, which gives good batching.
+- **Without a key**: the built-in Java producer stays with one partition until at least `batch.size` bytes have been produced there before it can switch. Keeping records together improves batching.
 
-For keyed records, the choice is modular arithmetic: turn the key into a large number with a hash function, then take the remainder after dividing by the number of partitions:
+For keyed records, hashing gives a repeatable placement while the partition count and partitioner stay fixed. The optional reference shows how the default Java client's remainder-based mapping works:
 
-```formula
+```formula reference
 p = h(k) mod N
-p = 19 mod 8 = 3
 where
 p: the partition the record goes to, numbered from 0 to N − 1
 h: the hash function: it turns the key's bytes into a large positive whole number; the default Java client uses murmur2
@@ -57,12 +56,19 @@ N: the number of partitions in the topic, here 8
 In words: the same key always hashes to the same number, so while the partition count stays the same, every record with that key lands on the same partition.
 ```
 
-Here 19 stands for whatever hash the key produces. In code, the default Java client writes this as `toPositive(murmur2(serializedKey)) % numPartitions`, where `%` is the modulo operator.
+In code, the default Java client writes this as `toPositive(murmur2(serializedKey)) % numPartitions`, where `%` is the modulo operator.
 
 Ordering is guaranteed **only within a partition**. A stable key mapping gives an append order for that key; producer retries and concurrent processing must still preserve the intended business order. There is no ordering between partitions.
 
 > [!warning] Changing partition count breaks key placement
-> Adding partitions changes N in the formula above, so new records for an existing key may land on a different partition from its older records. A key hashing to 19 goes to partition 3 with 8 partitions (19 mod 8), but to partition 7 with 12 (19 mod 12). Ordering per key is broken across the change. Plan partition counts up front (over-provision moderately) for keyed topics.
+> Adding partitions changes the placement rule, so new records for an existing key may land on a different partition from its older records. The two partitions can be consumed at different speeds, allowing a newer event to overtake an older one. Plan partition counts up front with measured headroom; resizing needs a migration barrier or another explicit ordering protocol.
+
+> [!analogy] Real-world analogy: readers with separate bookmarks
+> Several people read copies of the same book at different speeds, each keeping their own bookmark.
+>
+> **How it maps:** A partition log is the ordered book, and a consumer group's offset is its bookmark. Moving one bookmark does not move another, and reading a page does not erase it.
+>
+> **Where it stops:** Kafka can remove old records under retention or compaction. A topic also has several independent partition logs, so there is no single page order across the whole topic.
 
 ## Ordering guarantees, precisely
 

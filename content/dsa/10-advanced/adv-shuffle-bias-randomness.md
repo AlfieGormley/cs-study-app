@@ -21,48 +21,18 @@ for i in range(n):
     a[i], a[j] = a[j], a[i]
 ```
 
-Count its runs against the possible orderings:
-
-```formula
-N_runs = n^n
-N_perm = n!
-N_runs = 3^3 = 27
-N_perm = 3! = 6
-27 / 6 = 4.5
-where
-N_runs: the number of equally likely sequences of random draws
-N_perm: the number of possible orderings (permutations)
-n: the number of items, 3 in the example
-n^n: n copies of n multiplied together, because each of n steps picks from all n positions
-n!: n factorial, 1 × 2 × … × n
-In words: 27 equally likely runs cannot be shared evenly among 6 orderings, so some orderings must come up more often.
-```
-
-Counting them: three permutations appear 5 times in 27 and three appear 4 times, so some come out with probability 5/27 ≈ 18.5 % instead of 1/6 ≈ 16.7 %.
+For three distinct items this loop has twenty-seven equally likely sequences of draws but only six possible orderings. Those runs cannot be divided equally among six outcomes, so the output is biased. Enumerating gives three orderings five runs each and three orderings four runs each. Random individual swaps do not imply a uniform final ordering.
 
 > [!warning] Unpredictability matters
 > A fair permutation algorithm does not make a predictable generator secure. Use an operating-system-backed generator such as `secrets.SystemRandom` when choices must be unpredictable.
->
-> Content gap: the specific historical poker incident is omitted because a reliable primary account establishing the exact loop and seed was not verified in this audit.
+
 
 Two more pitfalls:
 
 - Sorting with a random comparator, such as JavaScript's `arr.sort(() => Math.random() - 0.5)`, gives biased, implementation-dependent results, because the sort assumes comparisons are consistent. Sorting by a random key drawn once per element is unbiased (ignoring ties), but O(n log n) for n elements.
-- Too little randomness: a generator can only produce as many shuffles as it has possible seeds, as below.
+- Too little randomness: a generator can only produce as many shuffles as it has possible seeds.
 
-```formula
-52! ≈ 8 × 10^67
-log_2(52!) ≈ 225.6
-2^32 ≈ 4.3 × 10^9
-where
-52!: 52 factorial, the number of orders of a 52-card deck
-log_2(52!): the base-2 logarithm of 52!: the number of bits needed to give every order its own state
-2^32: the number of different seeds a 32-bit seed allows
-≈: approximately equal to
-In words: a deck has about 8 × 10^67 orders, needing about 226 bits of state, but a 32-bit seed can start only about 4.3 billion different shuffles.
-```
-
-  So a generator seeded with 32 bits can reach at most about 4 billion of the deck's orders, a vanishingly small fraction.
+A deterministic generator started from a fixed-size seed can produce no more complete shuffle outcomes than it has possible seeds. Repeated draws do not manufacture new entropy. A correct Fisher–Yates loop cannot overcome a seed space that is too small, and a guessable seed makes prediction easier still.
 
 ## Pitfalls
 
@@ -76,8 +46,5 @@ In words: a deck has about 8 × 10^67 orders, needing about 226 bits of state, b
 - Unbiased algorithms still require enough unpredictable randomness for security-sensitive uses.
 
 ## Further reading
-- [Skip list — Wikipedia](https://en.wikipedia.org/wiki/Skip_list)
-- [Treap — Wikipedia](https://en.wikipedia.org/wiki/Treap)
-- [Treap (Cartesian tree) — cp-algorithms](https://cp-algorithms.com/data_structures/treap.html)
-- [Reservoir sampling — Wikipedia](https://en.wikipedia.org/wiki/Reservoir_sampling)
-- [Fisher–Yates shuffle — Wikipedia](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle)
+- [Python random-number generation](https://docs.python.org/3/library/random.html)
+- [CPython’s shuffle implementation](https://raw.githubusercontent.com/python/cpython/v3.14.0/Lib/random.py)

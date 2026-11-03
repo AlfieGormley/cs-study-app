@@ -55,6 +55,13 @@ A            lock svc        storage
 
 Checking "do I still hold the lease?" right before writing doesn't help: the pause can happen *between* the check and the write. Network delays do the same: A's write can sit in a TCP buffer and arrive after B's.
 
+> [!analogy] Real-world analogy: oversleeping in a holiday let
+> Your holiday booking ends at 10:00, and the owner's diary says so. You check your watch at 09:00, decide there is plenty of time, and doze off. You wake at 11:00 and carry on as if the place is yours, but the owner has already handed it to the next guests, and your old metal key still opens the door.
+>
+> **How it maps:** The booking is the lease, the owner's diary is the lock service's clock, dozing off is a process pause between checking the lease and acting, and the next guests are the new holder. A key that still turns is storage that accepts writes without checking who the current holder is.
+>
+> **Where it stops:** A person usually notices they overslept; a paused process resumes at its next instruction with no sense that time passed. The fix is the door, not the guest: a lock that checks the current booking corresponds to fencing tokens in the next unit.
+
 > [!warning] You can't fix this on the client
 > Any client-side check is a check-then-act race. The only safe place to reject a stale holder is the resource being protected.
 
@@ -68,19 +75,18 @@ Client checks can't make a lease *safe*, but they make trouble rarer, and gettin
 
 Put together, the holder works out its own deadline like this:
 
-```formula
+```formula reference
 t_stop = t_send + T_lease − m
-t_stop = 0.0 s + 10 s − 0.5 s = 9.5 s
 where
 t_stop: the time, on the holder's monotonic clock, after which it must stop acting as the lease holder
-t_send: the holder's monotonic clock reading just before it sent the acquire request; here 0.0 s
-T_lease: the lease duration the service granted; here 10 seconds (s)
-m: a safety margin for clock rate drift and processing delays; here 0.5 s
+t_send: the holder's monotonic clock reading just before it sent the acquire request
+T_lease: the lease duration the service granted, in seconds (s)
+m: a safety margin for clock rate drift and processing delays, in seconds
 s: second
 In words: count the lease from before you asked, not from when the answer arrived, and stop a little early.
 ```
 
-Worked example: the request takes 300 ms to arrive, so the service grants at 0.3 s and its lease runs to 10.3 s. The reply takes another 300 ms. Counting from the reply would let the holder act until 10.6 s, after the service has already given the lease away. Counting from the send, with the margin, the holder stops at 9.5 s, safely first. This assumes the two clocks run at nearly the same rate; it does nothing about a pause that strikes between checking the deadline and acting.
+Worked example: the request takes 300 ms to arrive, so the service grants at 0.3 s and its lease runs to 10.3 s. The reply takes another 300 ms. Counting from the reply would let the holder act until 10.6 s, after the service has already given the lease away. Counting from the send, with a 0.5 s margin, the holder stops at 9.5 s, safely first. This assumes the two clocks run at nearly the same rate; it does nothing about a pause that strikes between checking the deadline and acting.
 
 ## Key takeaways
 - A lease expires unless renewed, trading failover speed against false expiry during pauses and delays.

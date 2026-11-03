@@ -3,7 +3,7 @@ id: msg-fanout-cost-replay-buses
 title: Fan-out costs, replay and event buses
 level: intermediate
 minutes: 3
-summary: Calculate subscriber traffic and distinguish copied queues from retained logs and routed event buses.
+summary: Predict how subscribers multiply traffic and distinguish copied queues from retained logs and routed event buses.
 sourceLesson: msg-pubsub-fanout
 ---
 
@@ -13,30 +13,13 @@ Adding subscribers changes cost and recovery options. Queue copies isolate proce
 
 Fan-out multiplies messages and therefore multiplies costs and failure modes.
 
-- **Cost.** One publish to a topic with 8 SQS subscriptions is 1 SNS publish plus 8 deliveries, then 8 receives and 8 deletes. At 5,000 orders per second that is 80,000 consumer receive/delete SQS API calls per second (worked out below; fewer with batching).
+- **Cost.** One publish to a topic with 8 SQS subscriptions is 1 SNS publish plus 8 deliveries, then 8 receives and 8 deletes. At 5,000 orders per second that is 80,000 consumer receive/delete SQS API calls per second (fewer with batching).
 - **Partial failure.** Delivery to each subscription is independent. Billing may have processed an order that email has not even received yet. Never assume all subscribers are in the same state.
 - **Duplicates.** SNS standard topics and SQS standard queues are both at-least-once. Every subscriber must deduplicate independently.
 - **Ordering.** Standard SNS gives no ordering guarantee across messages.
 - **Slow subscriber.** In a queue-per-subscriber design, one slow consumer's backlog is isolated. In a design where the broker must keep each message until every subscriber has acknowledged it, a slow subscriber can increase storage for everyone.
 
-The cost grows with both the publish rate and the number of subscriptions, because every subscription's consumers must receive, then delete, their own copy of each message:
-
-```formula
-R = 2 × λ × k / b
-R = 2 × 5000/s × 8 / 1
-R = 80000 calls/s
-where
-R: SQS API calls per second on the consumer side (receives plus deletes)
-2: one ReceiveMessage call and one DeleteMessage call per message
-λ: lambda, messages published to the topic per second, here 5,000 orders per second
-k: the number of SQS queue subscriptions, here 8
-b: messages handled per API call (the batch size), 1 without batching and up to 10 with it
-calls: API requests, each billed by SQS
-s: seconds; "/s" means per second
-In words: fan-out multiplies consumer traffic by the number of subscriptions; batching divides it by the batch size.
-```
-
-With full batches of 10 the same traffic needs 8,000 calls per second. Real batches are often only partly full at low traffic, so measure the average batch size before relying on that figure.
+The cost grows with both the publish rate and the number of subscriptions, because every subscription's consumers must receive, then delete, their own copy of each message. Double the subscriptions and consumer-side traffic doubles; batching up to 10 messages per receive and delete call divides it by the batch size. With full batches of 10, the example above needs about 8,000 calls per second instead of 80,000. Real batches are often only partly full at low traffic, so measure the average batch size before relying on that figure.
 
 ## Pub/sub on a log
 

@@ -16,9 +16,9 @@ The fix, described in the Chubby paper and popularised by Martin Kleppmann: ever
 - The client sends the token with every request to the protected resource.
 - The resource remembers the highest token it has seen and **rejects** any request with a lower one.
 
-The resource's rule fits on one line:
+The resource's rule:
 
-```formula
+```formula reference
 T ≥ T_max
 where
 T: the fencing token attached to the incoming request (a whole number)
@@ -38,6 +38,13 @@ A wakes, writes (33)
 ```
 
 Once the resource has accepted a higher token, it rejects lower-token writes. Acquisition alone does not notify the resource: register the new epoch before reading or acting on state when the protocol requires that boundary.
+
+> [!analogy] Real-world analogy: a door that remembers the newest key card
+> Imagine a hotel room lock that remembers the highest key-card number it has ever accepted. Each new guest's card gets a higher number. The first time the new guest opens the door, the lock records that number and from then on refuses every older card, even one that has not "expired" by itself.
+>
+> **How it maps:** The card number is the fencing token, the reception desk issuing ever-higher numbers is the lock service, and the door is the protected resource keeping the highest token it has accepted. The previous guest wandering back after oversleeping is the paused former holder.
+>
+> **Where it stops:** The door only learns about the new number when the new card is used, just as acquiring a lock does not notify the resource by itself. And a hotel has one door per room; replicated storage must make the token check in one consistent place, or a stale write can slip through a copy that has not yet seen the newer token.
 
 ### Where tokens come from
 

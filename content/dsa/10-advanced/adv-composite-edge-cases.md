@@ -25,7 +25,7 @@ Other classics built the same way:
 
 ## Pitfalls
 
-- Forgetting one side. Every bug in these designs is the two structures drifting apart: a key left in the map after its node was evicted, or an index pointing at a moved element.
+- Forgetting one side. A common bug is the two structures drifting apart: a key left in the map after its node was evicted, or an index pointing at a moved element.
 - Average, not worst case. The O(1) relies on hash map operations being O(1) on average. Adversarial keys can degrade them.
 - **Capacity edge cases.** Capacity 0, updating an existing key when full (no eviction should happen), and removing the last element are where interview solutions break.
 - **Concurrency.** A cache-hit `get` on this LRU implementation writes recency pointers. Concurrent access needs a correct synchronisation strategy, commonly a lock around operations; a miss does not move a node. This is one reason high-throughput caches approximate LRU instead.
@@ -36,6 +36,6 @@ Other classics built the same way:
 - Capacity limits and concurrent recency writes must preserve every structure together.
 
 ## Further reading
-- [Cache replacement policies — Wikipedia](https://en.wikipedia.org/wiki/Cache_replacement_policies)
-- [functools.lru_cache — Python docs](https://docs.python.org/3/library/functools.html)
-- [LinkedHashMap — Java SE 21 API docs](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/LinkedHashMap.html)
+- [CPython’s LRU cache implementation](https://raw.githubusercontent.com/python/cpython/v3.14.0/Lib/functools.py)
+- [Python ordered dictionaries](https://docs.python.org/3/library/collections.html)
+- [Redis cache eviction policies](https://redis.io/docs/latest/develop/reference/eviction/)

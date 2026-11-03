@@ -3,27 +3,27 @@
     "id": "dist-quorums-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Two replicas each hold 1 billion keys in a Merkle tree with ~1 million leaves (1,000 keys each). Exactly one key differs. Roughly how much do they exchange to find it?",
+    "prompt": "Two Cassandra-style replicas run Merkle-tree anti-entropy over 1 billion keys, with about 1 million leaves of 1,000 keys each. When a single key differs, a repair exchanges only a few dozen hashes and one leaf's worth of keys. Last night one replica missed a burst of writes **scattered across most of the key range**. What should you expect from tonight's repair?",
     "options": [
       {
-        "text": "About 40 hashes, then one 1,000-key range",
-        "explanation": "Correct. The tree is about 20 levels deep (1,000,000 is about 2 raised to the power 20); at each level you compare 2 child hashes and descend into the one that differs, then sync that leaf's keys."
+        "text": "Still a few dozen hashes, because tree depth grows only logarithmically.",
+        "explanation": "Wrong. The logarithmic cost applies to descending into **one** differing branch. With differences in most leaves, nearly every subtree differs and must be explored."
       },
       {
-        "text": "1 billion hashes, one per key",
-        "explanation": "Wrong. That's naive comparison, which the Merkle tree exists to avoid."
+        "text": "The root hashes match, because the missed writes cancel out across the tree.",
+        "explanation": "Wrong. Any changed key changes its leaf hash and every hash above it, so the roots differ (barring a hash collision)."
       },
       {
-        "text": "About 1 million leaf hashes",
-        "explanation": "Wrong. Comparing every leaf is better than every key, but the tree lets you skip identical subtrees from the root down."
+        "text": "Merkle trees cannot detect changes spread across many leaves, so a full key-by-key comparison is needed instead.",
+        "explanation": "Wrong. The tree still finds every differing leaf; it just loses its advantage because there is little to skip."
       },
       {
-        "text": "Just the root hash",
-        "explanation": "Wrong. The root tells you *that* something differs, not *where*. You must descend to locate it."
+        "text": "The comparison descends into most of the tree and streams many leaf ranges, so repair costs far more than in the single-key case.",
+        "explanation": "Correct. Merkle trees save work by skipping identical subtrees. When differences are scattered everywhere, almost nothing can be skipped: most hashes are compared and most leaf ranges are synced."
       }
     ],
-    "answer": 0,
-    "workedExample": "Work out the tree's size and depth, then count comparisons:\n\n```formula\nB = K / k = 10^9 / 10^3 = 10^6\nd = log_2(B) = log_2(10^6) ≈ 20\nH ≈ 2 × d = 2 × 20 = 40\nwhere\nK: total keys; here 10^9 (1 billion)\nk: keys per leaf; here 10^3 (1,000)\nB: number of leaves; here 10^6 (1 million)\nd: depth of the binary tree, levels from root to leaf\nlog_2: base-2 logarithm: how many times you can halve a number before reaching 1\nH: hashes exchanged\n≈: approximately equal to\nIn words: each level halves the search, so about 20 levels of 2 hash comparisons find the one differing leaf.\n```\n\n1. Compare roots: they differ.\n2. At each of the 20 levels, compare the 2 children; exactly one differs; descend. That's about **40 hashes**.\n3. At the leaf, exchange its 1,000 keys (or their hashes) to find the one that differs.\n\nTotal ≈ 40 hashes + 1,000 keys versus 10⁹. This is why Dynamo and Cassandra use Merkle trees for anti-entropy.",
+    "answer": 3,
+    "workedExample": "Ask what the tree lets the replicas skip.\n\n1. **One differing key:** the roots differ, and at each level only one of the two children differs. The replicas follow that single path, about 20 levels for a million leaves, comparing about 2 hashes per level: roughly **40 hashes**, then one 1,000-key leaf.\n2. **Differences in most leaves:** at the first level both children differ, and the same at the next level, and so on. Almost every branch must be followed, so the replicas compare most of the tree's hashes and then sync most of the leaf ranges.\n3. The tree never misses a difference; it only stops being cheap once there is little left to skip.\n\nSo Merkle anti-entropy is ideal for catching occasional divergence. After a long outage or a large missed burst, expect repair to stream a lot of data, and schedule it accordingly.",
     "link": {
       "title": "Merkle tree (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Merkle_tree"
@@ -37,7 +37,7 @@
     "options": [
       {
         "text": "None: hinted handoff will deliver the delete.",
-        "explanation": "Wrong. Hints are only stored for a limited window (3 hours by default), so a 14-day outage outlives them."
+        "explanation": "Wrong. Cassandra stops recording new hints after the configured outage window (3 hours by default). A delete later in a 14-day outage may therefore have no hint to deliver."
       },
       {
         "text": "The returning replica will be rejected by the cluster.",
@@ -49,7 +49,7 @@
       },
       {
         "text": "The deleted row may reappear (resurrection).",
-        "explanation": "Correct. The other replicas purged the tombstone after 10 days. The returning replica still has the old row, and with no tombstone to contradict it, read repair and anti-entropy spread it back."
+        "explanation": "Correct. After the grace period, compaction may have purged the other replicas’ tombstones. If so, the returning replica still has the old row with no tombstone to contradict it, allowing reads or repair to spread it back."
       }
     ],
     "answer": 3,

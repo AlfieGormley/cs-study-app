@@ -23,7 +23,7 @@ Distinguish these time concepts; timestamps must actually be recorded or assigne
 | Time | Meaning |
 |---|---|
 | Event time | When it happened (on the device) |
-| Ingestion time | When the broker received it |
+| Ingestion time | When it entered the measured broker or processing system |
 | Processing time | When the operator sees it |
 
 They differ, sometimes wildly. A phone on the Underground records a tap at 09:00:05 and uploads it at 09:12:40. A consumer restarting after an outage processes an hour of backlog in five minutes.
@@ -66,26 +66,13 @@ Fixed size, advancing by a smaller step, so windows overlap. A 5-minute window e
  ─1m─▶
 ```
 
-Use for smoothed moving metrics: "requests in the last 5 minutes, updated every minute". The number of windows each event lands in is the stream window size divided by the step, when one divides evenly into the other:
-
-```formula
-m = S / H
-m = 5 min / (1 min) = 5
-where
-m: the number of overlapping windows each event belongs to
-S: the stream window size, here 5 minutes
-H: the hop (step) between window starts, here 1 minute
-min: minutes
-In words: when a new 5-minute window starts every minute, 5 windows are open at any moment, so every event is counted in 5 of them.
-```
-
-A naive implementation therefore does about m times the work of a tumbling window; actual state and CPU costs depend on incremental aggregation and shared panes.
+Use for smoothed moving metrics: "requests in the last 5 minutes, updated every minute". A shorter step at the same window size puts each event in more overlapping windows. A naive implementation updates each window separately, increasing work; incremental aggregation and shared panes can reuse partial results, so actual state and CPU costs depend on the implementation.
 
 Kafka Streams also has a distinct **Kafka Streams sliding window** that is defined by a maximum time difference between records (used for "two events within 10 minutes of each other"), and windows are only created when records arrive.
 
 ### Session
 
-Windows defined by **activity gaps** rather than the clock. A session closes after a gap of inactivity (say 30 minutes) and can be any length. Sessions for the same key **merge** when a late event bridges two of them.
+Windows defined by **activity gaps** rather than the clock. In event time, a gap between event timestamps (say 30 minutes) separates sessions; watermark progress determines when they fire and are cleaned up. A session can be any length. Sessions for the same key **merge** when a late event bridges them while the necessary state is still retained.
 
 ```
 user u1: ••• •    ••  •••

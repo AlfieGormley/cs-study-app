@@ -27,21 +27,18 @@ Amazon SQS has no persistent connection between broker and consumer, so it canno
 
 (Times are seconds after the first receive.)
 
-The key tuning rule: **set the visibility timeout comfortably longer than your worst-case processing time.** When SQS triggers AWS Lambda, AWS gives a recommended minimum, because Lambda may need to retry a throttled batch before the messages reappear:
+The key tuning rule: **set the visibility timeout comfortably longer than your worst-case processing time.** Too short, and slow jobs reappear and are done twice. Too long, and a message whose worker really did crash sits hidden for the whole timeout before anyone retries it.
 
-```formula
-V ≥ 6 × T_fn + T_batch
-V ≥ 6 × 2 min + 0 min = 12 min
-where
-V: the queue's visibility timeout
-≥: is at least
-T_fn: the Lambda function's timeout, for example 2 minutes
-T_batch: the batching window (MaximumBatchingWindowInSeconds) if you set one; 0 in this example
-min: minutes
-In words: give the queue at least six times the function's timeout, plus any batching window; a 2-minute function needs a visibility timeout of at least 12 minutes.
-```
+When SQS triggers AWS Lambda, AWS recommends a visibility timeout of at least **six times the function's timeout**, plus any batching window (`MaximumBatchingWindowInSeconds`). A function with a 2-minute timeout therefore wants at least 12 minutes. The margin exists because Lambda may need to retry a batch if the function is throttled, and all of that must happen before the messages reappear. Lambda refuses outright to connect a function whose timeout exceeds the queue's visibility timeout.
 
-If jobs genuinely vary (a 10-second job sometimes takes 10 minutes), the worker can call `ChangeMessageVisibility` periodically as a heartbeat to extend its lease.
+If jobs genuinely vary (a 10-second job sometimes takes 10 minutes), the worker can call `ChangeMessageVisibility` periodically as a heartbeat to extend its lease. That keeps a short timeout, so crashed work is retried quickly, without timing out healthy slow jobs. Extensions cannot take one receive beyond the 12-hour maximum: extending does not reset that limit.
+
+> [!analogy] Real-world analogy: a meeting room booked in 30-minute slots
+> You book a meeting room for 30 minutes. If you overrun without extending the booking, the next person is allowed to walk in, and now two meetings are happening in one room. If you finish early, you release the room so someone else can use it straight away.
+>
+> **How it maps:** Receiving a message is taking the booking; the visibility timeout is the slot length. Overrunning is a job that takes longer than the timeout, so a second worker receives it. Extending the booking is `ChangeMessageVisibility`, and releasing the room is `DeleteMessage`.
+>
+> **Where it stops:** A booking system normally never double-books an active slot, but an SQS standard queue can occasionally deliver a duplicate even inside the visibility window, so the lease is not an exclusive lock. And SQS never checks whether you are still "in the room": only a delete, an extension or the timeout changes anything.
 
 ## Key takeaways
 

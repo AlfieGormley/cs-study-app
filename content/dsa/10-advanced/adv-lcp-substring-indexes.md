@@ -22,12 +22,10 @@ lcp: 0    1     3      0       0   2
 Kasai's algorithm builds it in O(n), where n is the string length. The LCP array turns many problems into array scans:
 
 - **Longest repeated substring**: the maximum LCP value. For banana that is 3 (`ana`).
-- **Number of distinct substrings**: every substring is a prefix of some suffix, and each suffix's first lcp characters were already counted by its sorted neighbour:
+- **Number of distinct substrings**: every substring is a prefix of some suffix, and the shared prefixes measured by each adjacent LCP have already appeared. Keep the longer, new prefixes and subtract the duplicates:
 
-```formula
+```formula reference
 D = n(n + 1) / 2 − Σ lcp[k]
-D = 6 × 7 / 2 − (0 + 1 + 3 + 0 + 0 + 2)
-D = 21 − 6 = 15
 where
 D: the number of distinct (different) non-empty substrings
 n: the length of the string, 6 for banana
@@ -57,8 +55,4 @@ A **suffix tree** is a compressed trie of all suffixes. It can answer the same q
 - Subtract those repeated prefixes from the total substring count to count distinct substrings.
 
 ## Further reading
-- [Prefix function and Knuth–Morris–Pratt — cp-algorithms](https://cp-algorithms.com/string/prefix-function.html)
-- [Rabin–Karp algorithm — Wikipedia](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm)
-- [Z-function — cp-algorithms](https://cp-algorithms.com/string/z-function.html)
-- [Suffix Array — cp-algorithms](https://cp-algorithms.com/string/suffix-array.html)
-- [Suffix array — Wikipedia](https://en.wikipedia.org/wiki/Suffix_array)
+- [Suffix arrays and LCP — cp-algorithms](https://cp-algorithms.com/string/suffix-array.html)

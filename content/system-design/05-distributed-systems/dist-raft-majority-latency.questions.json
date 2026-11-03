@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "```formula\nM = ⌊N / 2⌋ + 1\nM = ⌊5 / 2⌋ + 1 = 2 + 1 = 3\nA = 5 − 2 = 3 ≥ M\nwhere\nN: nodes in the cluster; here 5\nM: the majority needed to elect a leader or commit\nA: nodes still alive after 2 crash\n⌊ ⌋: floor: round down to a whole number\n≥: at least\nIn words: 3 survivors are still a majority of 5, so the cluster carries on.\n```\n\n1. Majority of 5 is **3**, and 3 nodes are alive. ✓\n2. If the leader crashed: followers' election timeouts fire, one becomes candidate in the next term, gets votes from itself + 2 others = 3, and wins.\n3. Writes commit once on 3 nodes, i.e. all survivors. Lose one more and it stalls (2 alive is fewer than 3).",
+    "workedExample": "A majority of 5 is half of 5 rounded down, plus one: 3.\n\n1. Majority of 5 is **3**, and 3 nodes are alive. ✓\n2. If the leader crashed: followers' election timeouts fire, one becomes candidate in the next term, gets votes from itself + 2 others = 3, and wins.\n3. Writes commit once on 3 nodes, i.e. all survivors. Lose one more and it stalls (2 alive is fewer than 3).",
     "link": {
       "title": "Raft paper",
       "url": "https://raft.github.io/raft.pdf"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "| N | Majority | Tolerates |\n|---|---|---|\n| 3 | 2 | 1 |\n| 4 | 3 | 1 |\n| 5 | 3 | 2 |\n| 6 | 4 | 2 |\n\n```formula\nM = ⌊N / 2⌋ + 1\nF = N − M = ⌊(N − 1) / 2⌋\nF = ⌊(3 − 1) / 2⌋ = 1\nF = ⌊(4 − 1) / 2⌋ = ⌊1.5⌋ = 1\nwhere\nN: nodes in the cluster\nM: the majority needed for every election and commit\nF: failures tolerated\n⌊ ⌋: floor: round down to a whole number\nIn words: rounding down means an even-sized cluster tolerates no more failures than the odd size just below it.\n```\n\nGoing 3 → 4 adds a node without improving tolerance, while raising the replication requirement from 2 to 3.",
+    "workedExample": "| N | Majority | Tolerates |\n|---|---|---|\n| 3 | 2 | 1 |\n| 4 | 3 | 1 |\n| 5 | 3 | 2 |\n| 6 | 4 | 2 |\n\nA majority is half the cluster rounded down, plus one. Rounding down means an even-sized cluster tolerates no more failures than the odd size just below it: 4 nodes need 3 and so survive only 1 failure, exactly like 3 nodes.\n\nGoing 3 → 4 adds a node without improving tolerance, while raising the replication requirement from 2 to 3.",
     "link": {
       "title": "Raft (algorithm) (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Raft_%28algorithm%29"
@@ -63,27 +63,27 @@
     "id": "dist-consensus-raft-q12",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A 5-node Raft cluster has its leader in London, one follower in London (1 ms round trip), two in Frankfurt (15 ms) and one in Virginia (75 ms). Ignoring disk time, roughly what is the commit latency for a write?",
+    "prompt": "A 5-node Raft cluster has its leader in London, one follower in London (1 ms round trip), two in Frankfurt (15 ms each) and one in Virginia (75 ms). Commits normally take about 15 ms. One morning, with the leader still healthy in London, commits suddenly take about **75 ms**. Ignoring disk time, which failure best explains this?",
     "options": [
       {
-        "text": "About 1 ms",
-        "explanation": "Wrong. The leader plus the London follower is only 2 of 5. A commit needs 3, so it must also wait for a Frankfurt follower."
+        "text": "The London follower is down.",
+        "explanation": "Wrong. The leader still gets 2 follower acknowledgements from the two Frankfurt followers at about 15 ms, so commits stay at about 15 ms."
       },
       {
-        "text": "About 75 ms",
-        "explanation": "Wrong. The leader doesn't wait for every follower, only a majority. Virginia's ack isn't needed while the closer nodes are healthy."
+        "text": "One Frankfurt follower is down.",
+        "explanation": "Wrong. The leader can still use London (1 ms) and the other Frankfurt follower (15 ms) as its two acknowledgements, so commits stay at about 15 ms."
       },
       {
-        "text": "About 106 ms, the sum of all round trips",
-        "explanation": "Wrong. The leader sends to all followers in parallel, so latencies don't add up."
+        "text": "The Virginia follower is down.",
+        "explanation": "Wrong. Virginia was never needed for a commit while the closer followers were healthy, so losing it changes nothing."
       },
       {
-        "text": "About 15 ms",
-        "explanation": "Correct. The leader counts itself, so it needs 2 follower acks. The two fastest come from London (1 ms) and Frankfurt (15 ms), so the commit waits about 15 ms."
+        "text": "Both Frankfurt followers are down.",
+        "explanation": "Correct. The leader counts itself, so it needs 2 follower acknowledgements. With Frankfurt gone, the fastest two are London (1 ms) and Virginia (75 ms), so every commit now waits about 75 ms."
       }
     ],
     "answer": 3,
-    "workedExample": "```formula\nM = ⌊N / 2⌋ + 1 = ⌊5 / 2⌋ + 1 = 3\nk = M − 1 = 2\nT_commit ≈ RTT_k = 15 ms\nwhere\nN: nodes in the cluster; here 5\nM: the majority, counting the leader\nk: follower acknowledgements needed\nRTT_k: round-trip time to the k-th fastest follower, in milliseconds (ms); sorted follower round trips are 1, 15, 15 and 75 ms\nT_commit: commit latency, ignoring disk time\n⌊ ⌋: floor: round down to a whole number\nms: millisecond\n≈: approximately equal to\nIn words: the leader needs 2 follower acks, so it waits for the second-fastest follower, 15 ms away.\n```\n\nFailure cases:\n\n- London follower down: acks at 15, 15 → still ~15 ms.\n- Both Frankfurt followers down: acks at 1, 75 → ~75 ms.\n\nPlacement rule: put enough nodes close to the leader to form a majority, and spread the rest for survival.",
+    "workedExample": "Ask which acknowledgements the leader is waiting for.\n\n1. A majority of 5 is 3. The leader counts itself, so it needs **2 follower acknowledgements**, and it takes the fastest two that arrive.\n2. Healthy: the fastest two are London (1 ms) and one Frankfurt (15 ms), so commits take about 15 ms.\n3. Check each failure:\n  - London down: Frankfurt and Frankfurt, still about 15 ms.\n  - One Frankfurt down: London and the other Frankfurt, still about 15 ms.\n  - Virginia down: no change.\n  - Both Frankfurt down: London and Virginia, about **75 ms**.\n\nCommit latency follows the slowest member of the fastest available majority. Placement rule: put enough nodes close to the leader to form a majority, and spread the rest for survival.",
     "link": {
       "title": "In Search of an Understandable Consensus Algorithm (Raft paper)",
       "url": "https://raft.github.io/raft.pdf"

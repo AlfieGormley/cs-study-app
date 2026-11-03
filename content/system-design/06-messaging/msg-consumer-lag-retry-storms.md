@@ -13,9 +13,8 @@ Lag tells you whether the whole pipeline is falling behind. Its shape and distri
 
 **Consumer lag** is how far a consumer group is behind the head of the log. In Kafka it is measured per partition, as a distance in offsets:
 
-```formula
+```formula essential
 lag = LEO − C
-lag = 1500 − 1200 = 300
 where
 lag: the consumer lag of one partition, in offsets (roughly, records not yet consumed)
 LEO: the log end offset: the offset the next record appended to the partition will get
@@ -28,9 +27,8 @@ Offset-distance lag is easy to get but can include compacted gaps or transaction
 - Divide lag by the recent incoming rate (the formula below). This works when the arrival rate is reasonably steady; it is not a reliable instantaneous application of Little's Law during bursts.
 - Subtract the timestamp of the record at the committed offset from the current time.
 
-```formula
+```formula reference
 t_lag ≈ lag / λ
-t_lag ≈ 180000 / (2000/s) = 90 s
 where
 t_lag: the approximate age of the backlog: how far behind real time the group is, in seconds (s)
 lag: the consumer lag, here 180,000 records
@@ -64,14 +62,12 @@ Tools such as Burrow (from LinkedIn) evaluate lag trends per partition rather th
 
 When a dependency fails, every consumer retrying immediately multiplies load on it exactly when it is weakest. Use **exponential backoff with jitter**: double the delay after each failed attempt, cap it, then randomise it so clients spread out instead of retrying in lockstep. The "full jitter" form that AWS describes is:
 
-```formula
+```formula reference
 d_n = min(cap, b × 2^(n − 1))
-d_3 = min(60 s, 1 s × 2^2) = 4 s
 w_n = random(0, d_n)
 where
 d_n: the backoff limit before retry number n, in seconds (s)
 n: the retry number: 1 for the first retry, 2 for the second, and so on
-d_3: the backoff limit before the third retry
 min: the smaller of the two values
 cap: the largest delay you allow, here 60 s
 b: the base delay, here 1 s

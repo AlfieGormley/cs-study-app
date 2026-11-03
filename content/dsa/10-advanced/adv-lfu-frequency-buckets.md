@@ -11,24 +11,9 @@ sourceLesson: adv-designing-structures
 
 An LFU (least frequently used) cache evicts the key with the fewest accesses, breaking ties by evicting the least recently used of those. Again, `get` and `put` should be O(1).
 
-The obvious design is a min-heap of keys ordered by count, so the least-used key sits at the top. The catch is that every `get` raises a count, and the heap must then sift that key to its new place:
+An indexed min-heap could put the least-used key at the top, but a hit changes its count and may require O(log n) work to restore heap order, where n is the number of cached keys. A key-to-heap-position map would also be needed to locate the entry quickly.
 
-```formula
-s_heap = O(log_2(n))
-h_heap = ⌊log_2(n)⌋
-h_heap = ⌊log_2(10^6)⌋ = 19
-where
-s_heap: an upper bound on work to restore heap order after one key’s count changes
-h_heap: the maximum root-to-leaf path length in edges, bounding swaps for this binary heap
-⌊ ⌋: floor, rounding down to a whole number
-n: the number of keys in the cache; here one million (10^6)
-log_2(n): the base-2 logarithm of n: how many times n can be halved before reaching 1, which is about the height of the heap
-O(f): big-O notation: the step count grows no faster than f as n grows, ignoring constant factors
-≈: approximately equal to
-In words: with a heap, every access costs a number of swaps that grows with the logarithm of the cache size, at most 19 swaps for a million keys, plus comparisons, instead of a fixed handful.
-```
-
-At most nineteen swaps is not much, but it is not O(1), and some hits require no swaps at all. The O(1) trick is to notice that **a frequency only ever goes up by one**. So instead of sorting, keep a bucket for each frequency:
+The constant-time trick is that **a frequency only ever goes up by one**. Keep a bucket for each frequency:
 
 - `val`: key to value.
 - `freq`: key to its access count.
@@ -43,22 +28,7 @@ by_f[5]: A -> C
 evict: oldest in by_f[min_f] = D
 ```
 
-When a key is touched, its count goes up by exactly one, so it moves to the next bucket up. Two update rules keep `min_f` correct without ever searching:
-
-```formula
-c_k ← f + 1
-min_f ← f + 1   if |B_f| = 0 and min_f = f
-min_f ← 1       if f = 0
-where
-k: the key being touched (read or written)
-f: k's access count just before this touch; 0 for a key that is being inserted for the first time
-c_k: k's access count after the touch (1 for a newly inserted key)
-B_f: the bucket of keys whose count is exactly f, oldest first
-|B_f|: the number of keys left in bucket B_f after k has moved out
-min_f: the smallest access count any key in the cache currently has
-←: "is set to": the left side takes the value on the right
-In words: a touched key moves up one bucket; if that empties the lowest bucket, the new lowest is the bucket the key just moved into, and a brand-new key (count 1) always makes 1 the lowest.
-```
+When a touched key leaves the lowest bucket empty, the next bucket becomes the minimum: the touched key has just entered it. A new key starts at count one and resets `min_f` to one. Neither operation needs to search for the next occupied bucket.
 
 Worked example, using the bucket picture above: touch D, whose count f is 1. D moves to bucket 2, but bucket 1 still holds E, so `min_f` stays 1. Now touch E: bucket 1 empties and `min_f` was 1, so `min_f` becomes 2, and bucket 2 is guaranteed non-empty because E has just landed in it. No smaller bucket can be non-empty, because `min_f` was the smallest. The rules rely on counts only rising by one at a time; a design that could decrement or reset counts would need a real search.
 
@@ -128,7 +98,6 @@ Production caches seldom use exact LFU. Counts never decay in this design, so a 
 - An emptied minimum bucket advances by one because the touched key just entered that next bucket.
 
 ## Further reading
-- [Cache replacement policies — Wikipedia](https://en.wikipedia.org/wiki/Cache_replacement_policies)
-- [functools.lru_cache — Python docs](https://docs.python.org/3/library/functools.html)
-- [LinkedHashMap — Java SE 21 API docs](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/LinkedHashMap.html)
-- [Constant-time LFU design paper](https://arxiv.org/pdf/2110.11602)
+- [Constant-time LFU design — Shah, Mitra and Matani](https://arxiv.org/pdf/2110.11602)
+- [Python ordered dictionaries](https://docs.python.org/3/library/collections.html)
+- [Redis cache eviction policies](https://redis.io/docs/latest/develop/reference/eviction/)

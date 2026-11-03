@@ -18,30 +18,27 @@ The preceding lesson introduced N replicas per key, W write acknowledgements and
 
 Fault tolerance: a write still succeeds as long as W replicas are up, and a read as long as R are up, so the number that may be down is whatever is left over.
 
-```formula
+```formula reference
 F_w = N − W
 F_r = N − R
-F_w = 3 − 2 = 1
-F_r = 3 − 2 = 1
 where
 F_w: how many replicas can be down while writes still succeed
 F_r: how many replicas can be down while reads still succeed
-N: the number of replicas that store the key; here 3
-W: the replicas that must acknowledge a write; here 2
-R: the replicas that must respond to a read; here 2
-In words: each operation can lose every replica it doesn't need. Raising W or R buys overlap at the cost of tolerating fewer failures.
+N: the number of replicas that store the key
+W: the replicas that must acknowledge a write
+R: the replicas that must respond to a read
+In words: each operation can lose every replica it doesn't need. Raising the write or read count buys overlap at the cost of tolerating fewer failures.
 ```
 
 With 3 replicas and 2 responses for each operation, you tolerate one failure for both. With 3 write acknowledgements and 1 read response instead, reads tolerate two failures but writes tolerate none.
 
 Cassandra's `QUORUM` is a majority of the replicas:
 
-```formula
+```formula essential
 Q = ⌊N / 2⌋ + 1
-Q = ⌊3 / 2⌋ + 1 = 1 + 1 = 2
 where
 Q: the quorum size, the number of replicas that must respond
-N: the total replication factor (replicas per key) across all data centres; here 3
+N: the total replication factor (replicas per key) across all data centres
 ⌊ ⌋: floor: round down to the nearest whole number, so ⌊1.5⌋ = 1
 In words: a quorum is just over half the replicas, so two quorums always share at least one replica.
 ```

@@ -13,7 +13,7 @@ The merge laws become concrete in counters. Each replica owns a part of the hist
 
 Each replica keeps a vector of counts, one per replica, and only increments its own entry.
 
-```formula
+```formula reference
 P_new[i] = P[i] + 1
 v = Σ_k P[k]
 M[k] = max(X[k], Y[k])
@@ -42,11 +42,10 @@ Why max and not sum? Because merging the same state twice must not double count 
 
 ### PN-Counter (increment and decrement)
 
-A G-Counter can't decrement: lowering an entry would be undone by max. So use **two** G-Counters: `P` for increments and `N` for decrements.
+A G-Counter can't decrement: lowering an entry would be undone by max. So use **two** G-Counters: one (`P`) for increments and one (`N`) for decrements. The value is the total of the increments minus the total of the decrements.
 
-```formula
+```formula reference
 v = Σ P − Σ N
-v = (5 + 3) − (1 + 2) = 8 − 3 = 5
 where
 v: the counter's value
 P: the G-Counter of increments, one entry per replica
@@ -55,7 +54,7 @@ N: the G-Counter of decrements, one entry per replica
 In words: the value is all the increments ever made minus all the decrements ever made; each vector still only grows, so max-merge stays correct.
 ```
 
-`merge` merges P and N separately, each by element-wise max. The numbers in the block come from this example:
+`merge` merges the increment and decrement vectors separately, each by element-wise max. For example:
 
 ```
 A: P=[A:5,B:0] N=[A:1,B:0]

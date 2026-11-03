@@ -40,6 +40,14 @@ If every participant voted yes, the coordinator writes **COMMIT** to its own log
 
 There are two points of no return: the participant's yes vote and the coordinator's decision log record.
 
+> [!analogy] Real-world analogy: reserving two rooms together
+> An organiser needs rooms at two venues for one event. Imagine each venue promises to keep its room reserved until the organiser explicitly confirms or cancels. The organiser records a final confirmation only after both venues have agreed; one refusal cancels the whole plan.
+>
+> **How it maps:** The organiser is the coordinator, venues are participants, the promise to hold a room is a prepared yes vote, and the organiser's recorded confirmation is the COMMIT decision. Neither venue may quietly release its room after promising to wait.
+>
+> **Where it stops:** Real reservations normally expire. These imagined promises deliberately do not: if the organiser disappears, both venues may be stuck holding rooms until they learn the decision. A real 2PC participant must also preserve its promise durably across a crash.
+
+
 ### Recovery: presumed abort
 
 What if the coordinator crashes and, on restart, finds **no** decision record for a transaction? Then it never reached the commit point, so no participant can have been told to commit. It is safe to abort, and the coordinator does so. This convention, **presumed abort**, means the coordinator only needs to force-write COMMIT records; aborts can be logged lazily or not at all.

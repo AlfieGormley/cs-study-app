@@ -88,8 +88,5 @@ Delete is symmetrical: find `update`, then unlink the node on each level it occu
 - Remember each level’s predecessor before splicing a new tower.
 
 ## Further reading
-- [Skip list — Wikipedia](https://en.wikipedia.org/wiki/Skip_list)
-- [Treap — Wikipedia](https://en.wikipedia.org/wiki/Treap)
-- [Treap (Cartesian tree) — cp-algorithms](https://cp-algorithms.com/data_structures/treap.html)
-- [Reservoir sampling — Wikipedia](https://en.wikipedia.org/wiki/Reservoir_sampling)
-- [Fisher–Yates shuffle — Wikipedia](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle)
+- [Skip Lists — William Pugh](https://drum.lib.umd.edu/bitstreams/17176ef8-8330-4a6c-8b75-4cd18c570bec/download)
+- [Skip-list structure — Open Data Structures](https://opendatastructures.org/ods-python/4_1_Basic_Structure.html)

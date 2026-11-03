@@ -29,17 +29,14 @@ Peter Deutsch and colleagues at Sun Microsystems listed the false assumptions th
 
 When calls are made one after another (sequentially), each one waits for a full round trip before the next can start, so the network time is simply the number of calls multiplied by the round-trip time:
 
-```formula
+```formula reference
 T = n × RTT
-T = 50 × 0.5 ms = 25 ms
-T = 50 × 80 ms = 4,000 ms = 4 s
 where
-T: the total time the page spends waiting on the network, in milliseconds (ms) or seconds (s)
-n: the number of sequential calls the page makes; here 50
+T: the total time the page spends waiting on the network, in milliseconds (ms)
+n: the number of sequential calls the page makes
 RTT: round-trip time, how long one request takes to reach the service and its reply to come back, in milliseconds (ms)
 ms: millisecond, one thousandth of a second
-s: second
-In words: sequential calls pay the round trip once per call, so moving a chatty service from 0.5 ms away to 80 ms away makes the page 160 times slower.
+In words: calls made one after another each pay a full round trip, so the network wait grows in step with both the number of calls and the distance to the service.
 ```
 
 This ignores the time the service spends doing the work, which adds on top. It only holds for sequential calls: calls made in parallel overlap, so 50 parallel calls cost roughly one round trip, not fifty.
@@ -47,7 +44,7 @@ This ignores the time the service spends doing the work, which adds on top. It o
 ## Key takeaways
 - Reliability, latency, bandwidth, security, topology, administration, cost and homogeneity are all assumptions to check.
 - Sequential calls pay one round trip each; moving a chatty service across regions can dominate its runtime.
-- Parallel calls overlap network waits; service processing time remains an additional cost.
+- Parallel calls overlap network waits; the service's own work time remains an additional cost.
 
 ## Further reading
 - [Fallacies of distributed computing (Wikipedia)](https://en.wikipedia.org/wiki/Fallacies_of_distributed_computing)

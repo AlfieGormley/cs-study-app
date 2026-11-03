@@ -52,6 +52,13 @@ COMMIT;
 
 Either both rows commit or neither does. A separate **outbox relay** process then reads the outbox and publishes to the broker:
 
+> [!analogy] Real-world analogy: an order form with a dispatch instruction
+> A shop saves an order form that includes an instruction to notify the warehouse. A clerk later works through the saved instructions.
+>
+> **How it maps:** Saving the order and notification intent together corresponds to the local transaction. The clerk is the relay, which can resume from durable instructions after an interruption.
+>
+> **Where it stops:** A paper form is not an atomic database transaction. The relay can still notify twice if it loses track after sending, so consumers need stable event IDs and safe duplicate handling.
+
 ```
  app ─txn─▶ [orders | outbox]
                        │

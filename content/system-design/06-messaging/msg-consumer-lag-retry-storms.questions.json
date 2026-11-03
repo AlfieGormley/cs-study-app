@@ -33,27 +33,27 @@
     "id": "msg-ordering-backpressure-q3",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Assume a steady 2,000 records per second, balanced partitions, no compaction/offset gaps, and commits tracking completed work. A consumer group's total lag is 180,000 records and has been flat for 20 minutes. Roughly how far behind real time is the group, and is it keeping up?",
+    "prompt": "A Kafka consumer group's non-zero lag stays flat under a steady incoming rate. Assume no compaction gaps, balanced traffic and commits that track completed work. What does this say about its progress?",
     "options": [
       {
-        "text": "About 90 seconds behind and falling further behind",
-        "explanation": "Wrong. The 90 seconds is right, but flat lag means the gap is not growing. Falling further behind would show as rising lag."
+        "text": "It is falling further behind because lag is non-zero",
+        "explanation": "Wrong. A non-zero gap means it is behind; a growing gap would mean it is falling further behind."
       },
       {
-        "text": "About 90 seconds behind; it is keeping up, since lag is flat",
-        "explanation": "Correct. Time lag ≈ 180,000 ÷ 2,000 = 90 seconds. Flat lag means the consumption rate equals the production rate: it is keeping pace, but carrying a steady 90-second delay."
+        "text": "It is keeping pace but needs spare processing capacity to catch up",
+        "explanation": "Correct. Flat lag means it completes about as much work as arrives. Clearing the existing gap requires temporarily exceeding the incoming rate."
       },
       {
-        "text": "About 3 minutes behind; it is keeping up",
-        "explanation": "Wrong. This seems to divide by 1,000 instead of 2,000. The incoming rate is 2,000 per second, so 180,000 records is 90 seconds of traffic."
+        "text": "It will catch up by itself while production and consumption stay equal",
+        "explanation": "Wrong. Equal rates preserve the backlog rather than drain it."
       },
       {
-        "text": "It cannot be judged without knowing the number of partitions",
-        "explanation": "Wrong. Total lag and total rate are enough for an average estimate. Partition count matters for diagnosing skew, not for converting lag to time."
+        "text": "Partition count alone determines whether lag is healthy",
+        "explanation": "Wrong. Delay, workload rate, distribution and the trend matter. The same offset gap can represent very different delays."
       }
     ],
     "answer": 1,
-    "workedExample": "1. **Estimate average backlog age under these assumptions**, then how long catching up would take if the group could consume at 2,500 a second:\n\n```formula\nt_lag ≈ lag / λ\nt_lag ≈ 180000 / (2000/s) = 90 s\nT_catch = lag / (μ − λ)\nT_catch = 180000 / (2500/s − 2000/s)\nT_catch = 180000 / (500/s) = 360 s\nwhere\nt_lag: how far behind real time the group is, in seconds (s)\nlag: the total consumer lag, 180,000 records\nλ: lambda, the rate records arrive, 2,000 per second\nT_catch: the time to clear the lag, in seconds\nμ: mu, a faster consumption rate you might provision, 2,500 per second\n≈: approximately equal to\ns: seconds; \"/s\" means per second\nIn words: the group is 90 seconds of traffic behind; consuming 500 a second faster than records arrive would clear that in 6 minutes.\n```\n\n2. **Read the trend**: flat lag means the consumption rate equals the production rate, about 2,000 per second.\n3. **Interpretation**: steady state with a 90-second delay. The group is not falling behind, but it is not catching up either.\n4. **If 90 s is too slow** for the product, you need consumption above 2,000 per second for a while, as in the catch-up line above.",
+    "workedExample": "1. Separate the size of the gap from its change over time.\n2. A flat gap means production and completed consumption are balanced under the stated assumptions.\n3. If the resulting delay is unacceptable, create effective spare capacity or reduce input so the gap shrinks.\n4. Verify downstream capacity before adding workers, and inspect individual partitions so an aggregate metric does not conceal skew.",
     "link": {
       "title": "Kafka consumer (Confluent)",
       "url": "https://docs.confluent.io/platform/current/clients/consumer.html"
@@ -63,15 +63,15 @@
     "id": "msg-ordering-backpressure-q9",
     "level": "advanced",
     "type": "multi",
-    "prompt": "Consumer logs show partitions being revoked every few minutes, and lag is growing on **all** partitions. Each `poll()` returns up to 500 records, and each record takes about 700 ms because of a slow API, so a batch takes about 6 minutes. `max.poll.interval.ms` is at its default. Which changes address the root cause? Select all that apply.",
+    "prompt": "Consumer logs show partitions being revoked every few minutes, and lag is growing on **all** partitions. Each `poll()` returns up to 500 records, and each record takes about 700 ms because of a slow API, so a batch takes about 6 minutes. `max.poll.interval.ms` allows 5 minutes between polls. Which changes address the root cause? Select all that apply.",
     "options": [
       {
         "text": "Reduce `max.poll.records`, for example to 100",
-        "explanation": "Correct. 100 × 0.7 s = 70 s per batch, comfortably inside the 5-minute default, so the consumer polls in time and stays in the group."
+        "explanation": "Correct. A smaller batch finishes sooner and can return control to poll() before the five-minute limit. Validate the worst-case processing time, not only the mean."
       },
       {
         "text": "Increase `max.poll.records` to 2,000 to make better use of each poll",
-        "explanation": "Wrong. A batch would take about 23 minutes, making the problem four times worse."
+        "explanation": "Wrong. More records per batch keep the poll loop away even longer and worsen the stated deadline breach."
       },
       {
         "text": "Lower `session.timeout.ms` so failures are detected faster",
@@ -91,7 +91,7 @@
       3,
       4
     ],
-    "workedExample": "1. Default `max.poll.interval.ms` = **5 minutes** (300 s).\n2. Compare the batch time with the limit:\n\n```formula\nT_batch = n × t\nT_batch = 500 × 0.7 s = 350 s\n350 s > 300 s\nwhere\nT_batch: the time to process one poll's batch, in seconds (s)\nn: records returned per poll (max.poll.records), here 500\nt: processing time per record, here 0.7 s (700 ms)\n>: is greater than\ns: seconds\nIn words: 500 records at 0.7 seconds each take 350 seconds, longer than the 300-second (5-minute) poll interval.\n```\n\n3. The client leaves the group → rebalance → partitions move → the new owner reprocesses from the last commit and hits the same limit. Lag grows everywhere.\n4. The batch time must stay below `max.poll.interval.ms`, so the fixes act on one side or the other:\n   - smaller batches (`max.poll.records = 100` → 70 s)\n   - a larger interval\n   - decouple processing from polling (pool + pause/resume)\n5. `session.timeout.ms` is the heartbeat liveness check, a separate mechanism.",
+    "workedExample": "1. The prompt already gives a roughly six-minute batch, longer than the default five-minute poll interval.\n2. When processing keeps the poll loop away too long, ownership can be lost and rebalances repeat; the next owner may repeat unfinished work.\n3. Smaller batches return control to polling sooner. A larger allowed interval can accommodate legitimately long batches, but delays detection of a stuck consumer.\n4. A bounded worker pool can keep polling timely if pause/resume, ordered effects, contiguous completion tracking and ownership changes are handled correctly.\n5. The heartbeat session timeout is a separate mechanism; reducing it does not shorten processing.",
     "link": {
       "title": "Kafka consumer (Confluent docs)",
       "url": "https://docs.confluent.io/platform/current/clients/consumer.html"

@@ -2560,7 +2560,7 @@
       "stateless services",
       "stateless app tier"
     ],
-    "definition": "A service whose correctness does not depend on client state kept only in one instance between requests. Authoritative state lives in appropriate backing services or request data, so another instance can handle the next request; safe replacement still needs capacity, retry handling and graceful shutdown.",
+    "definition": "A service whose correctness does not depend on client state kept only in one instance between requests. Authoritative state lives in backing services or request data, so another instance can handle the next request; safe replacement still needs capacity, retry handling and graceful shutdown. For a stream operator, stateless means processing each record without retaining history from earlier records.",
     "example": "An app tier that stores sessions in Redis rather than in memory is stateless.",
     "source": "https://12factor.net/processes"
   },
@@ -2573,9 +2573,9 @@
       "stateful tier",
       "stateful component"
     ],
-    "definition": "A component that holds data that matters between requests (a database, a cache, a WebSocket server), so which instance handles a request matters and scaling it needs partitioning and replication.",
+    "definition": "A component that retains information across requests or events, such as a database, a connection-owning WebSocket server or a stream operator maintaining a running total. Scaling or replacing it must account for that state: preserve, redistribute or recover it, or deliberately accept its loss. Partitioning and replication are common techniques, not requirements for every stateful component.",
     "example": "A WebSocket server is stateful: killing it drops its users' connections.",
-    "source": "https://en.wikipedia.org/wiki/State_(computer_science)"
+    "source": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/stateful-stream-processing/"
   },
   {
     "id": "sticky-session",
@@ -3241,9 +3241,9 @@
       "evicted",
       "eviction policy"
     ],
-    "definition": "Removing an item from a cache (or a page from memory) to make room for new ones when it is full, according to a policy such as LRU (least recently used).",
-    "example": "A cache run at 100% of its memory evicts constantly and its hit rate falls.",
-    "source": "https://en.wikipedia.org/wiki/Cache_replacement_policies"
+    "definition": "Removing retained items from a managed collection according to a policy. A cache may evict entries to make room, using a policy such as LRU (least recently used). A stream window may evict records because of their age, count or values, even when memory is not full.",
+    "example": "A full cache can evict an older entry when a new one arrives; a stream window can discard records outside its retention rule.",
+    "source": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/#evictors"
   },
   {
     "id": "cache-warming",
@@ -3554,9 +3554,9 @@
       "leader-follower",
       "old leader"
     ],
-    "definition": "The single replica that accepts writes for some data and sends them to followers. If it fails, a follower is promoted.",
-    "example": "A Raft cluster elects a new leader when the old one stops sending heartbeats.",
-    "source": "https://en.wikipedia.org/wiki/Replication_(computing)"
+    "definition": "A replica that accepts writes for some data and propagates them to other replicas. Single-leader replication has one writable leader for that data; multi-leader replication has several and must handle conflicting writes. A failed leader may be replaced through the system's failover protocol; promotion is not automatically safe in every design.",
+    "example": "In asynchronous multi-leader replication, two sites may accept conflicting changes to the same row and later need to reconcile them.",
+    "source": "https://www.postgresql.org/docs/current/different-replication-solutions.html"
   },
   {
     "id": "follower-replication",
@@ -3739,11 +3739,12 @@
     "term": "OR-Set (observed-remove set)",
     "aliases": [
       "OR-Set",
+      "OR-Sets",
       "observed-remove set"
     ],
-    "definition": "A set CRDT that tags every add with a unique id; a remove deletes only the tags it has seen, so a concurrent new add survives (add wins) and removed items do not reappear.",
-    "example": "An OR-Set cart stops a deleted item coming back when two cart versions merge.",
-    "source": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"
+    "definition": "A set CRDT that tags each add with a unique id and removes only the add tags observed by that removal. Removed tags do not return on merge, but a concurrent or later add with a new tag can make the same item present again (add wins).",
+    "example": "Removing a cart item clears the additions that device has seen; an unseen concurrent addition on another device can keep the item in the merged cart.",
+    "source": "https://www.lip6.fr/Marc.Shapiro/papers/2011/Comprehensive-CRDTs-RR7506-2011-01.pdf"
   },
   {
     "id": "lww",
@@ -3959,9 +3960,9 @@
       "in-sync replicas",
       "ISR"
     ],
-    "definition": "In Kafka, a follower that is keeping up with the partition leader. Only in-sync replicas count towards acks=all.",
-    "example": "A follower that falls 30 s behind drops out of the in-sync replica set.",
-    "source": "https://kafka.apache.org/documentation/#replication"
+    "definition": "A member of a Kafka partition's in-sync replica set, which includes its leader and followers considered sufficiently caught up under the broker's liveness and lag rules. Successful acks=all acknowledgement requires the record on every current ISR member and an ISR size of at least min.insync.replicas; it does not necessarily wait for every assigned replica. Kafka 4.2 also prevents the high watermark from advancing below that minimum ISR size, even with other acknowledgement settings.",
+    "example": "With one leader and two caught-up followers, the ISR has three members. A lagging follower can leave it; the leader still counts.",
+    "source": "https://kafka.apache.org/42/design/design/"
   },
   {
     "id": "idempotent-producer",
@@ -4005,9 +4006,9 @@
     "aliases": [
       "committed offset"
     ],
-    "definition": "The position in a Kafka partition up to which a consumer has processed messages. After a crash it resumes from its last committed offset.",
-    "example": "A consumer restarted at offset 1,042 reprocesses nothing before it.",
-    "source": "https://kafka.apache.org/documentation/#design_consumerposition"
+    "definition": "A consumer's position in a Kafka partition. Its current position identifies the next record to deliver to the application; its committed offset records the next recovery position. Committing an offset does not prove application effects finished: committing too early can skip unfinished work after a crash, while committing after effects can still allow duplicates if a crash happens before the commit.",
+    "example": "A committed offset of 1,042 means recovery starts at that position, assuming it is still available. It does not certify that every earlier record's external effect completed.",
+    "source": "https://kafka.apache.org/42/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html"
   },
   {
     "id": "topic-partition",

@@ -33,27 +33,27 @@
     "id": "msg-message-queues-q10",
     "level": "basic",
     "type": "single",
-    "prompt": "An SQS queue triggers an AWS Lambda function whose timeout is **2 minutes**, with no batching window. Following AWS's guidance, what is the minimum visibility timeout you should give the queue?",
+    "prompt": "An SQS queue triggers an AWS Lambda function whose timeout is 2 minutes. The queue's visibility timeout is also 2 minutes, which Lambda accepted. During a traffic spike the function is throttled, and afterwards the team finds some orders processed twice and others in the dead-letter queue although the code never failed on them. What is the best diagnosis?",
     "options": [
       {
-        "text": "The default 30 seconds",
-        "explanation": "Wrong. Lambda would not even accept this: the function timeout must not exceed the queue's visibility timeout. Any batch taking longer than 30 seconds would also reappear while still being processed."
+        "text": "SQS standard queues randomly duplicate messages under load; switching to FIFO would fix both symptoms",
+        "explanation": "Wrong. Standard queues can occasionally duplicate, but that does not explain healthy messages reaching the dead-letter queue. The pattern points to messages reappearing while Lambda was still retrying the throttled batches."
       },
       {
-        "text": "2 minutes, the same as the function timeout",
-        "explanation": "Wrong. This is the bare minimum Lambda allows, but it leaves no time for Lambda to retry a batch if the function is throttled, so messages can reappear and be processed twice."
+        "text": "The function timeout is too long; cut it to 30 seconds so batches finish before visibility expires",
+        "explanation": "Wrong. A shorter function timeout would make slow but healthy batches fail. The problem is that the queue gives no spare time for Lambda's throttling retries, not that the function is allowed too long."
       },
       {
-        "text": "4 minutes, double the function timeout",
-        "explanation": "Wrong. Better than equal, but AWS's guidance is larger still, to cover throttling retries inside the event source mapping."
+        "text": "Visibility equal to the function timeout leaves no room for throttling retries, so messages reappear, are received again and count towards maxReceiveCount; raise visibility to at least six times the function timeout",
+        "explanation": "Correct. The visibility clock starts when the batch is received. If Lambda has to retry a throttled invocation, the messages can become visible again and be received a second time (duplicates), and each receive counts towards the redrive policy's limit (healthy messages in the DLQ). AWS recommends at least six times the function timeout, plus any batching window, here at least 12 minutes."
       },
       {
-        "text": "12 minutes, six times the function timeout",
-        "explanation": "Correct. AWS recommends a visibility timeout of at least six times the function timeout (plus any batching window), which gives Lambda room to retry a throttled batch before the messages become visible again."
+        "text": "The dead-letter queue is misconfigured; delete it so that messages are retried forever",
+        "explanation": "Wrong. Removing the DLQ would hide the symptom and let genuine poison messages loop indefinitely. The cause is the visibility timeout, and AWS also recommends a maxReceiveCount of at least 5 so throttling alone does not dead-letter messages."
       }
     ],
-    "answer": 3,
-    "workedExample": "1. Apply the rule from the AWS docs:\n\n```formula\nV ≥ 6 × T_fn + T_batch\nV ≥ 6 × 2 min + 0 min\nV ≥ 12 min\nwhere\nV: the queue's visibility timeout\n≥: is at least\nT_fn: the Lambda function's timeout, here 2 minutes\nT_batch: the batching window (MaximumBatchingWindowInSeconds), 0 because none is set\nmin: minutes\nIn words: the visibility timeout should be at least six times the function timeout plus any batching window, here 12 minutes.\n```\n\n2. So 12 minutes is the minimum.\n3. Why so much? The event source mapping receives a batch, which starts the visibility clock. If the function is throttled, Lambda retries the invocation; all of that must fit before the messages reappear.\n4. Also set `maxReceiveCount` on the redrive policy to at least 5, so throttling alone does not push messages into the DLQ.",
+    "answer": 2,
+    "workedExample": "1. Start from the clue that *healthy* messages were dead-lettered and some were processed twice. Both are what happens when messages become visible again while their first attempt is still in progress.\n2. The visibility clock starts when Lambda's poller receives the batch. If the function is throttled, Lambda retries the invocation, and that waiting time also runs against the 2-minute visibility timeout.\n3. Once the timeout passes, the messages reappear. A second poller receives them (duplicate processing), and each receive increments the receive count. Reach `maxReceiveCount` and SQS moves a message to the DLQ even though the code never failed on it.\n4. Fix: follow AWS's guidance of a visibility timeout of at least **six times the function timeout**, plus any batching window, so at least 12 minutes here. Set `maxReceiveCount` to at least 5 so throttling alone does not dead-letter messages.\n5. Keep the consumer idempotent, because at-least-once delivery still allows occasional duplicates.",
     "link": {
       "title": "Configuring an SQS event source for Lambda (AWS docs)",
       "url": "https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html"

@@ -71,27 +71,27 @@
     "id": "msg-event-driven-architecture-q11",
     "level": "basic",
     "type": "single",
-    "prompt": "A thin `ProductUpdated {productId}` event goes to 40 subscribing services, and each calls `GET /products/{id}` to fetch the details. A bulk price change updates 200,000 products in about a minute; assume subscribers immediately fetch and the product API cannot sustain 133,000 requests/s. What is the likely result, and the best fix?",
+    "prompt": "A thin ProductUpdated event contains only a product ID. Dozens of subscribing services immediately call the product API for details. A bulk update produces a sudden event burst and the product API saturates. Which redesign most directly removes this callback dependency?",
     "options": [
       {
-        "text": "Nothing unusual; each service just processes events a little more slowly",
-        "explanation": "Wrong. Every event triggers a callback from every subscriber, so the load on the product API multiplies by 40."
+        "text": "Add more subscribers to share the callback load",
+        "explanation": "Wrong. Independent subscriptions add another callback per event rather than sharing the existing callbacks."
       },
       {
-        "text": "The event bus will throttle and drop most of the events",
-        "explanation": "Wrong. 200,000 events in a minute is modest for most brokers. The pressure falls on the product API that every subscriber calls back."
+        "text": "Increase subscriber retry frequency",
+        "explanation": "Wrong. More retries add load to the already saturated API."
       },
       {
-        "text": "Subscribers should retry their callbacks more aggressively",
-        "explanation": "Wrong. Aggressive retries add load to an API that is already overloaded, turning a spike into a retry storm."
+        "text": "Switch the topic to FIFO",
+        "explanation": "Wrong. Per-group ordering does not supply the missing product data or remove callbacks."
       },
       {
-        "text": "The product API receives about 8 million calls in a minute and is overwhelmed; carry the changed state in the event so subscribers need not call back",
-        "explanation": "Correct. Event notification creates a callback storm proportional to events × subscribers. Event-carried state transfer puts the data consumers need in the event itself."
+        "text": "Carry the needed versioned product state in each event and maintain local projections",
+        "explanation": "Correct. Subscribers can use locally maintained state rather than calling the product API for every event, accepting schema coupling and propagation lag."
       }
     ],
     "answer": 3,
-    "workedExample": "1. Every event triggers one callback from every subscriber:\n\n```formula\nN = E × k\nN = 200000 × 40 = 8000000 calls\nR = N / T\nR = 8000000 calls / (60 s)\nR ≈ 133000 calls/s\nwhere\nN: total callbacks to the product API\nE: the number of ProductUpdated events, 200,000\nk: the number of subscribing services, 40\nR: the request rate the product API must handle\nT: the time the bulk change takes, about 60 seconds (s)\ncalls: GET requests to the product API\ns: seconds; \"/s\" means per second\n≈: approximately equal to\nIn words: 40 subscribers each calling back for 200,000 events is 8 million calls in a minute, about 133,000 a second.\n```\n\n2. That is far more than the product API can sustain.\n3. That is the thundering herd the lesson warns about with event notification.\n4. Fix: event-carried state transfer:\n\n```json\n{\"type\":\"ProductPriceChanged\",\n \"productId\":\"p-9\",\"price\":1299,\n \"currency\":\"GBP\",\"version\":17}\n```\n\n5. Subscribers update local copies with no callback. Include a version so out-of-order or duplicate events can be ignored.",
+    "workedExample": "1. The event is a notification, so every interested subscriber must fetch details separately.\n2. A bulk change multiplies callbacks across subscribers; adding retries can amplify the overload.\n3. Publish the state consumers need with stable event identity and a payload version. Apply absolute snapshots with version checks where appropriate.\n4. Consumers can then work from local projections. Define how those projections initialise, how stale data is tolerated and how the schema evolves.",
     "link": {
       "title": "What do you mean by \"Event-Driven\"? (Martin Fowler)",
       "url": "https://martinfowler.com/articles/201701-event-driven.html"

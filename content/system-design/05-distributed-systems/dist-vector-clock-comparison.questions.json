@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Compare element-wise:\n\n| | R1 | R2 | R3 |\n|---|---|---|---|\n| A | 2 | 1 | 0 |\n| B | 1 | 2 | 0 |\n\nThe rule for comparing vector clocks:\n\n```formula\nA ≤ B ⇔ ∀k: A[k] ≤ B[k]\nA ∥ B ⇔ A ≰ B ∧ B ≰ A\nwhere\nA: the first version's vector clock\nB: the second version's vector clock\nk: a position in the vectors (R1, R2 or R3)\n∀k: \"for every position k\"\n⇔: \"exactly when\"\n∧: \"and\": both must hold\n≤: less than or equal to; for vectors, in every position\n≰: not less than or equal to: bigger in at least one position\n∥: \"is concurrent with\": neither happened before the other\nIn words: one version happened before another only if it is no bigger in any position; if each is bigger somewhere, they're concurrent.\n```\n\n- Is A ≤ B? No (2 > 1 at R1).\n- Is B ≤ A? No (2 > 1 at R2).\n\nSo A ∥ B. In Riak these become **siblings**; the next read returns both, and the client writes back a merged value with clock [2, 2, 0] incremented on its coordinator.",
+    "workedExample": "Compare element-wise:\n\n| | R1 | R2 | R3 |\n|---|---|---|---|\n| A | 2 | 1 | 0 |\n| B | 1 | 2 | 0 |\n\nOne version happened before another only if it is no bigger in **any** position (and differs somewhere). Check both directions:\n\n- Is A ≤ B? No (2 > 1 at R1).\n- Is B ≤ A? No (2 > 1 at R2).\n\nSo A ∥ B. In Riak these become **siblings**; the next read returns both, and the client writes back a merged value with clock [2, 2, 0] incremented on its coordinator.",
     "link": {
       "title": "Vector clock (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Vector_clock"
@@ -33,27 +33,27 @@
     "id": "dist-time-ordering-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Three processes use vector clocks `[P1, P2, P3]`. P2's clock is **[1, 4, 2]**. It receives a message from P1 stamped **[3, 1, 0]**. What is P2's clock after the receive event?",
+    "prompt": "A shopping-cart service keeps each cart on three replicas, and during a partition two replicas can both accept updates to the same cart. Afterwards it must decide, from the stored metadata alone, whether one version already includes the other (keep the newer) or whether they were made independently (keep both and merge). Which scheme can make that decision?",
     "options": [
       {
-        "text": "[3, 4, 2]",
-        "explanation": "Wrong. That's the element-wise max, but the receive is itself an event on P2, so P2 must then increment its own entry."
+        "text": "Wall-clock timestamps with last-write-wins",
+        "explanation": "Wrong. LWW always picks one version by timestamp, so it cannot tell independent updates from ordered ones, and clock skew can even make it keep the older version."
       },
       {
-        "text": "[4, 5, 2]",
-        "explanation": "Wrong. Only the receiver's own entry is incremented. P1's entry is taken from the message as-is (the larger of 1 and 3)."
+        "text": "Lamport timestamps",
+        "explanation": "Wrong. A smaller Lamport timestamp is consistent with \"happened before\" and with \"concurrent\", so a single counter cannot separate the two cases the cart service needs."
       },
       {
-        "text": "[3, 5, 2]",
-        "explanation": "Correct. Take the larger value in each position, giving [3, 4, 2], then increment P2's own entry: [3, 5, 2]."
+        "text": "Version vectors with one counter per replica",
+        "explanation": "Correct. If one vector is no bigger than the other in every entry, it is an ancestor and can be replaced. If each is bigger somewhere, the updates were concurrent and both must be kept as siblings and merged."
       },
       {
-        "text": "[3, 5, 3]",
-        "explanation": "Wrong. Only the receiving process increments its own entry. P3 did nothing new, so its entry stays at the larger of 2 and 0, which is 2."
+        "text": "Hybrid logical clocks",
+        "explanation": "Wrong. An HLC is still a single scalar timestamp. Like a Lamport clock it respects causality one way, but it cannot reveal that two updates were concurrent."
       }
     ],
     "answer": 2,
-    "workedExample": "1. Element-wise max of local [1, 4, 2] and message [3, 1, 0]:\n\n| | P1 | P2 | P3 |\n|---|---|---|---|\n| local | 1 | 4 | 2 |\n| msg | 3 | 1 | 0 |\n| max | 3 | 4 | 2 |\n\n2. Increment own entry (P2): **[3, 5, 2]**.\n\n```formula\nV_new[j] = max(V[j], V′[j])\nV_new[2] = max(4, 1) + 1 = 5\nwhere\nV: P2's vector before the receive, [1, 4, 2]\nV′: V-prime, the vector on the message, [3, 1, 0]\nV_new: P2's vector after the receive\nj: any position (P1, P2 or P3)\nmax: the larger of its inputs\nIn words: take the larger value in every position; then, because the receive is an event on P2, add one to P2's own entry (position 2).\n```\n\nCheck: the send [3, 1, 0] ≤ [3, 5, 2] in every entry and they differ, so send → receive, as it must be.",
+    "workedExample": "Ask what each scheme can tell apart.\n\n1. **Wall clocks / LWW:** one number per version; the larger wins. Concurrent updates are never detected, just resolved by whichever clock read higher.\n2. **Lamport timestamps and HLCs:** one number per version. If a happened before b, a's number is smaller, but a smaller number does not prove a happened first. \"Concurrent\" and \"before\" look the same.\n3. **Version vectors:** one counter per replica. Compare entry by entry:\n  - cart versions [2, 1, 0] and [3, 1, 0]: the first is no bigger anywhere, so it is an ancestor; keep [3, 1, 0].\n  - cart versions [2, 1, 0] and [1, 2, 0]: each is bigger somewhere, so the updates were **concurrent**; keep both and merge.\n\nThat is why Dynamo-style stores such as Riak use version vectors to keep siblings rather than silently dropping one update.",
     "link": {
       "title": "Vector clock (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Vector_clock"

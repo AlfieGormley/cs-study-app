@@ -33,27 +33,27 @@
     "id": "msg-pubsub-fanout-q7",
     "level": "advanced",
     "type": "single",
-    "prompt": "An SNS topic receives 4,000 messages per second and fans out to 6 SQS queues. Assume full batches of 10 for every receive/delete, with no retries or empty polls. Roughly how many SQS API calls per second does the consumer side make, and how does that compare with no batching?",
+    "prompt": "An SNS topic receives a steady stream of orders and fans out to 6 SQS queues. Each queue's consumers currently receive and delete one message per API call. Six more teams now want their own subscriptions. Assuming no retries or empty polls, which prediction about consumer-side SQS API calls is right?",
     "options": [
       {
-        "text": "About 400 per second, versus 4,000 without batching",
-        "explanation": "Wrong. This forgets the fan-out: each of the 6 queues gets all 4,000 messages per second, so the counts must be multiplied by 6."
+        "text": "Unchanged, because SNS still receives each order only once",
+        "explanation": "Wrong. SNS is published to once, but it delivers a separate copy into every subscribed queue. Each copy must be received and deleted by that queue's consumers, so consumer-side traffic scales with the number of subscriptions."
       },
       {
-        "text": "About 48,000 per second either way, because batching does not reduce request count",
-        "explanation": "Wrong. ReceiveMessage can return up to 10 messages and DeleteMessageBatch deletes up to 10, so a full batch replaces 10 requests with 1."
+        "text": "It doubles, and batching cannot help because every message still needs its own receive and delete",
+        "explanation": "Wrong on batching. Each message must be received and deleted, but one ReceiveMessage or DeleteMessageBatch call can handle up to 10 messages, so full batches cut the number of calls roughly tenfold."
       },
       {
-        "text": "About 2,400 per second, versus 24,000 without batching",
-        "explanation": "Wrong. This counts receives only. Each message must also be deleted after processing, which doubles the number of calls."
+        "text": "It grows about 36-fold, because each new subscription multiplies the existing ones",
+        "explanation": "Wrong. Subscriptions add copies; they do not multiply each other. Twelve subscriptions mean twelve copies of each message, twice as many as six."
       },
       {
-        "text": "About 4,800 per second, versus 48,000 without batching",
-        "explanation": "Correct. 6 × 4,000 = 24,000 messages per second reach consumers. Unbatched, that is 24,000 receives plus 24,000 deletes = 48,000 calls. Batches of 10 cut each to 2,400, so 4,800 in total."
+        "text": "It doubles, because each new subscription receives and deletes its own copy; full batches of 10 could cut the total about tenfold",
+        "explanation": "Correct. Consumer-side calls grow with the publish rate times the number of subscriptions, so going from 6 to 12 doubles them. Batching divides calls by the average batch size, so full batches of 10 bring the doubled total below today's unbatched level."
       }
     ],
     "answer": 3,
-    "workedExample": "1. **Fan-out multiplies volume**, and **each message needs a receive and a delete**:\n\n```formula\nλ_q = 4000 msg/s × 6 = 24000 msg/s\nR = 2 × λ_q / b\nR = 2 × 24000/s / 1 = 48000 calls/s\nR = 2 × 24000/s / 10 = 4800 calls/s\nwhere\nλ_q: lambda, messages per second reaching consumers across all 6 queues\nR: SQS API calls per second on the consumer side\n2: one ReceiveMessage and one DeleteMessage per message\nb: messages per API call: 1 unbatched, 10 with full batches\nmsg: messages\ncalls: API requests\ns: seconds; \"/s\" means per second\nIn words: 6 queues turn 4,000 messages a second into 24,000; a receive and a delete each makes 48,000 calls, and full batches of 10 cut that to 4,800.\n```\n\n2. Over a 30-day month at an illustrative flat $0.40 per million billable requests, ignoring free tiers, volume discounts and extra payload request units, that is roughly $49,800 versus $4,980 for the consumer side alone.\n\nIn practice batches are not always full at low traffic, so measure the real average batch size.",
+    "workedExample": "1. Each subscription needs its own delivered copy, and its workers receive and delete that copy independently.\n2. Adding the same number of subscriptions again doubles those consumer operations under the stated assumptions.\n3. Batching combines up to ten messages in one receive or batch-delete request, reducing API calls when batches fill.\n4. Measure actual batch fill, empty polls and retries before estimating costs; publish and delivery charges are separate.",
     "link": {
       "title": "Fanout SNS notifications to SQS queues",
       "url": "https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html"

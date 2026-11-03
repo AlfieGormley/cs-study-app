@@ -57,20 +57,16 @@ v1:     50          v2:     50'
                                 45 (new)
 ```
 
-v2 created four nodes (50', 30', 40' and 45); everything else is shared. Both roots remain valid. In a balanced tree, the copied root-to-leaf route is only as long as the tree is tall:
+v2 creates four nodes: the copies of 50, 30 and 40, plus the new leaf 45. Both roots remain valid, and every subtree away from the changed path is shared.
 
-```formula
-p ≈ log_2(n)
-p ≈ log_2(10^6) ≈ 20
-where
-p: the number of nodes copied by one insert (the root-to-leaf path)
-n: the number of keys in the balanced tree
-log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n
-≈: approximately equal to
-In words: one insert copies about as many nodes as the tree has levels, which grows with the logarithm of the number of keys.
-```
+In a balanced tree the path is logarithmic, giving O(log n) extra time and memory for an update to n keys. The teaching BST above does not balance itself: sorted insertions can create a chain and require linear copying. A production balanced persistent tree must also copy any nodes changed by rebalancing.
 
-So each update costs O(log n) time and memory: about 20 new nodes per insertion into a million-key tree, instead of copying a million. This only holds if the tree stays balanced; a badly unbalanced tree would copy a path as long as the whole chain.
+> [!analogy] Real-world analogy: Revised binders
+> To revise one page, keep the old binder and create a new contents path pointing to the replacement, reusing unchanged sections.
+>
+> **How it maps:** Each saved root identifies a version; copied ancestors point towards the changed page, and untouched subtrees remain shared.
+>
+> **Where it stops:** Shared pages must be immutable. Keeping old binders also keeps their referenced pages alive, so history still consumes memory.
 
 Other techniques:
 
@@ -83,9 +79,5 @@ Other techniques:
 - Logarithmic update overhead requires a balanced tree and immutable shared nodes.
 
 ## Further reading
-- [Sparse Table — cp-algorithms](https://cp-algorithms.com/data_structures/sparse-table.html)
-- [Range minimum query — Wikipedia](https://en.wikipedia.org/wiki/Range_minimum_query)
-- [Persistent data structure — Wikipedia](https://en.wikipedia.org/wiki/Persistent_data_structure)
-- [Rope (data structure) — Wikipedia](https://en.wikipedia.org/wiki/Rope_(data_structure))
-- [Text Buffer Reimplementation — VS Code blog](https://code.visualstudio.com/blogs/2018/03/23/text-buffer-reimplementation)
-- [Making Data Structures Persistent](https://www.cs.cmu.edu/~sleator/papers/making-data-structures-persistent.pdf)
+- [Making Data Structures Persistent — Driscoll, Sarnak, Sleator and Tarjan](https://www.cs.cmu.edu/~sleator/papers/making-data-structures-persistent.pdf)
+- [Clojure persistent data structures](https://clojure.org/reference/data_structures)

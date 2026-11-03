@@ -11,7 +11,7 @@ Here n is the number of keys or stream items, and k is the requested sample size
 
 Balanced binary search trees such as red–black and AVL trees guarantee O(log n) operations (time growing in proportion to the logarithm of n, the number of keys stored), but their rebalancing rules are fiddly to get right. **Randomised structures** take another route: make a few random choices, and the structure is balanced *with high probability*, whatever order the keys arrive in.
 
-The second half of this lesson goes the other way: using randomness *as the output*. Picking k items uniformly from a stream of unknown length, and shuffling an array so every order is equally likely, both have short algorithms that are easy to get subtly wrong.
+Later sampling lessons go the other way: using randomness *as the output*. Picking k items uniformly from a stream of unknown length, and shuffling an array so every order is equally likely, both have short algorithms that are easy to get subtly wrong.
 
 ## Expected vs worst case
 
@@ -29,32 +29,16 @@ L2: H ------> 10 -------> 30 ---------> None
 L1: H -> 5 -> 10 -> 20 -> 30 -> 40 ---> None
 ```
 
-When a key is inserted, it gets level 1, then flips a coin: heads, also join level 2; heads again, level 3; and so on. The chance of heads is called the promotion probability. Three numbers follow from it:
+Every inserted key appears on the bottom level. Independent promotion draws decide whether it also appears on the next level, and then the next. With fair coins, about half the keys reach the second level and a quarter reach the third, on average. Those are expected proportions, not exact quotas.
 
-```formula
-P(ℓ ≥ m) = p^{m − 1}
-E[ℓ] = 1 / (1 − p)
-H ≈ log_{1/p}(n)
-P(ℓ ≥ 3) = (1/2)^2 = 1/4
-E[ℓ] = 1 / (1 − 1/2) = 2
-H ≈ log_2(1,000,000) ≈ 20
-where
-ℓ: the level a newly inserted key ends up with (1, 2, 3, …)
-m: any level number we ask about
-p: the promotion probability, strictly between zero and one; the chance of heads on each flip; 1/2 in the example, 1/4 in Redis
-P(ℓ ≥ m): the probability that the key reaches level m or higher
-p^{m − 1}: m − 1 copies of p multiplied together, one factor per heads needed
-E[ℓ]: the expected (long-run average) level of a key
-H: a large-n estimate of the whole list’s maximum occupied level, ignoring additive constants and a finite cap
-n: the positive number of keys in the skip list
-log_{1/p}(n): the logarithm of n to base 1/p: how many times you can divide n by 1/p before reaching 1
-log_2(n): the base-2 logarithm of n, the special case p = 1/2
-≥: is at least
-≈: approximately equal to
-In words: each extra level needs one more heads, so levels thin out geometrically; an average key sits on 2 levels at p = 1/2, and the tallest towers reach about log_2(n) levels.
-```
+Higher levels become progressively sparser. Search can pass many keys there, then refine its position on lower levels. Independence from insertion order is what protects the expected bound when keys arrive already sorted.
 
-So with a million keys and fair coins, about half the nodes reach level 2, a quarter level 3, and the list is about 20 levels tall. These are averages over the independent random draws; any single run can be a little taller or shorter.
+> [!analogy] Real-world analogy: Express and local trains
+> An express service skips many stations; a local service reaches all of them.
+>
+> **How it maps:** Upper skip-list levels skip keys, while lower levels provide finer access. Search drops to a finer level before it would pass the target.
+>
+> **Where it stops:** Skip-list stops are chosen randomly and linked by key order. They are not scheduled routes, and random promotion gives expected rather than hard worst-case travel bounds.
 
 ## Key takeaways
 
@@ -62,9 +46,5 @@ So with a million keys and fair coins, about half the nodes reach level 2, a qua
 - Geometric promotion creates progressively sparser express lanes.
 
 ## Further reading
-- [Skip list — Wikipedia](https://en.wikipedia.org/wiki/Skip_list)
-- [Treap — Wikipedia](https://en.wikipedia.org/wiki/Treap)
-- [Treap (Cartesian tree) — cp-algorithms](https://cp-algorithms.com/data_structures/treap.html)
-- [Reservoir sampling — Wikipedia](https://en.wikipedia.org/wiki/Reservoir_sampling)
-- [Fisher–Yates shuffle — Wikipedia](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle)
-- [Pugh’s Skip List Cookbook](https://drum.lib.umd.edu/bitstreams/17176ef8-8330-4a6c-8b75-4cd18c570bec/download)
+- [Skip Lists — William Pugh](https://drum.lib.umd.edu/bitstreams/17176ef8-8330-4a6c-8b75-4cd18c570bec/download)
+- [Skip-list structure — Open Data Structures](https://opendatastructures.org/ods-python/4_1_Basic_Structure.html)

@@ -3,7 +3,7 @@ id: msg-synchronous-dependency-risks
 title: Synchronous dependencies: availability and tail latency
 level: basic
 minutes: 4
-summary: Calculate the reliability and latency costs of waiting for several required services.
+summary: Predict how waiting on several required services erodes availability, tail latency and capacity.
 sourceLesson: msg-sync-vs-async
 ---
 
@@ -23,58 +23,35 @@ This is simple and gives you an immediate answer, which is exactly what you want
 
 But synchronous chains have three structural weaknesses:
 
-- **Availability multiplies.** If Checkout requires three services that are each 99.9% available and their failures are independent, all three must be up at once, so together they are only about 99.7% available (worked out below). Correlated failures change this calculation, and Checkout has its own failure modes. That is about 26 hours of downtime a year instead of 8.8.
-- **Latency adds up.** Sequential dependent calls add their durations; parallel fan-out waits for the required critical path, and tail latency (p99) gets worse as you add hops, because the slowest dependency dominates. If a request touches 5 services with independent delays and each is slow 1% of the time, the request hits at least one slow call about 4.9% of the time (worked out below): tail slowness becomes more frequent at the request level; exact quantiles depend on the full latency distributions.
+- **Availability multiplies.** If Checkout requires three services that are each 99.9% available and their failures are independent, all three must be up at once, so together they are only about 99.7% available. Correlated failures change this calculation, and Checkout has its own failure modes. That is about 26 hours of downtime a year instead of 8.8.
+- **Latency adds up.** Sequential dependent calls add their durations; parallel fan-out waits for the required critical path, and tail latency (p99) gets worse as you add hops, because the slowest dependency dominates. If a request touches 5 services with independent delays and each is slow 1% of the time, the request hits at least one slow call about 4.9% of the time: tail slowness becomes more frequent at the request level; exact quantiles depend on the full latency distributions.
 - **Load is coupled.** A spike at the front door hits every downstream service at the same instant. If Fraud can only handle 500 requests a second, Checkout can only handle 500 requests a second.
 
-Both numbers come from one rule of probability: when events are independent, the chance that all of them happen is the product of their separate chances. For availability, a request that needs every dependency succeeds only when all of them are up:
+Both numbers come from one rule of probability: when events are independent, the chance that all of them happen is the product of their separate chances. A request that needs every dependency succeeds only when all of them are up, and is fast only when every call is fast.
 
-```formula
+```formula reference
 A_chain = A_1 × A_2 × A_3
-A_chain = 0.999 × 0.999 × 0.999
-A_chain ≈ 0.997 = 99.7%
-where
-A_chain: the availability of the chain: the fraction of time all three dependencies are up together, so the request can succeed (ignoring Checkout's own failures)
-A_1: the availability of the first dependency (Payments): the fraction of time it is up, here 0.999 (99.9%)
-A_2: the availability of the second dependency (Inventory), here 0.999
-A_3: the availability of the third dependency (Fraud), here 0.999
-≈: approximately equal to (the result is rounded)
-%: per cent; 0.997 is the same as 99.7%
-In words: when every dependency is required, multiply their availabilities; three 99.9% services together are only about 99.7% available.
-```
-
-To turn an availability into downtime, multiply the fraction of time it is *not* up by the 8,760 hours in a 365-day year:
-
-```formula
-D = (1 − A) × 8760 h
-D_one = (1 − 0.999) × 8760 h ≈ 8.8 h
-D_chain = (1 − 0.997) × 8760 h ≈ 26 h
-where
-D: expected downtime per year, in hours (h)
-A: an availability, as a fraction between 0 and 1
-D_one: the yearly downtime of one 99.9% service
-D_chain: the yearly downtime of the chain of three, which is about 99.7% available
-h: hours
-≈: approximately equal to
-In words: each extra required dependency adds its own downtime, so three 99.9% services cost about three times the downtime of one.
-```
-
-For tail latency, it is easier to work out the chance that *every* call is fast and subtract that from 1:
-
-```formula
 P_slow = 1 − (1 − p)^k
-P_slow = 1 − 0.99^5
-P_slow ≈ 1 − 0.951 = 0.049
 where
-P_slow: the probability that a request hits at least one slow call, as a fraction (0.049 is 4.9%)
-p: the probability that any one call is slow, here 0.01 (1%)
-k: the number of independent calls the request must wait for, here 5
-^: to the power of; 0.99^5 means 5 copies of 0.99 multiplied together
-≈: approximately equal to
-In words: if each of 5 calls is fast 99% of the time, all 5 are fast only about 95% of the time, so about 1 request in 20 is slow.
+A_chain: the availability of the chain: the fraction of time all three required dependencies are up together, ignoring Checkout's own failures
+A_1: the availability of the first dependency (Payments), as a fraction; 99.9% is 0.999
+A_2: the availability of the second dependency (Inventory), as a fraction
+A_3: the availability of the third dependency (Fraud), as a fraction
+P_slow: the probability that a request hits at least one slow call
+p: the probability that any one call is slow, as a fraction; 1% is 0.01
+k: the number of independent calls the request must wait for
+^: to the power of; (1 − p)^k is the chance that all k calls are fast
+In words: multiply the availabilities of required dependencies, so three 99.9% services give about 99.7%; and a request that waits for five calls, each slow 1% of the time, is slow about 5% of the time.
 ```
 
-Both formulas assume independence. Shared causes (one database, one network link, one bad deploy) make failures and slow calls happen together, so real systems can be better or worse than these numbers, and you should measure.
+Both relationships assume independence. Shared causes (one database, one network link, one bad deploy) make failures and slow calls happen together, so real systems can be better or worse than these numbers, and you should measure. The practical lesson does not depend on the exact figure: every extra *required* hop on the synchronous path adds its own downtime and its own chance of a slow response.
+
+> [!analogy] Real-world analogy: a journey with connecting trains
+> A trip that needs three connecting trains only works if all three run. Each line might be reliable on its own, but the more connections you need, the more often something spoils the whole trip. If you wait on a platform for several friends arriving on different trains, you leave when the *last* one arrives.
+>
+> **How it maps:** Each train is a required dependency. Needing every connection is a series dependency, so the journey fails more often than any one line (availability multiplies). Waiting for every friend is parallel fan-out: the slowest arrival sets your departure time (tail latency).
+>
+> **Where it stops:** Trains on one network often fail together (one signal fault, one strike), which is exactly the shared-cause case that breaks the independence assumption. And a train timetable is fixed, whereas a service can time out, retry or degrade gracefully rather than simply waiting.
 
 ## Key takeaways
 

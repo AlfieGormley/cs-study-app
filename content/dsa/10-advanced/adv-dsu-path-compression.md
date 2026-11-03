@@ -76,7 +76,4 @@ Note that `union` returns whether a merge actually happened. That boolean is wha
 - Union returns false when its two arguments already share a root.
 
 ## Further reading
-- [Disjoint-set data structure — Wikipedia](https://en.wikipedia.org/wiki/Disjoint-set_data_structure)
-- [Disjoint Set Union — cp-algorithms](https://cp-algorithms.com/data_structures/disjoint_set_union.html)
-- [Kruskal's algorithm — Wikipedia](https://en.wikipedia.org/wiki/Kruskal%27s_algorithm)
-- [Ackermann function — Wikipedia](https://en.wikipedia.org/wiki/Ackermann_function)
+- [Disjoint-set unions — cp-algorithms](https://cp-algorithms.com/data_structures/disjoint_set_union.html)

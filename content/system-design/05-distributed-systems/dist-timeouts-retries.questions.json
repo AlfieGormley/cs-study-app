@@ -93,27 +93,27 @@
     "id": "dist-why-hard-q12",
     "level": "advanced",
     "type": "single",
-    "prompt": "A request passes through a web tier, an API tier and a database tier. Each tier makes **up to 3 attempts** on failure. The database starts timing out on every call. How many database calls can one user request now trigger, and what's the usual fix?",
+    "prompt": "A request passes through a web tier, an API tier and a data service that queries the database. **Each of the three makes up to 3 attempts at its downstream call** (the first try plus 2 retries). During a database slowdown, the database receives many times more queries than there are user requests, even though user traffic is flat. What best explains this, and what is the usual fix?",
     "options": [
       {
-        "text": "9 calls; add jitter to the backoff.",
-        "explanation": "Wrong count. 9 is the API tier's total (3 web attempts × 3 API attempts). Each of those makes 3 database attempts, giving 27. Jitter spreads retries out but doesn't reduce their number."
+        "text": "Users are refreshing the page; add a CAPTCHA.",
+        "explanation": "Wrong. User traffic is flat, so the extra calls are generated inside the system. Each failed attempt at one tier starts a fresh round of attempts at the tier below."
       },
       {
-        "text": "3 calls; nothing needs fixing because only the database retries.",
-        "explanation": "Wrong. Every tier retries independently, so the attempts multiply rather than add."
+        "text": "Jitter is missing; add jitter to the backoff and keep every tier's retries.",
+        "explanation": "Wrong. Jitter spreads retries out in time so they don't arrive in synchronised waves, but it doesn't reduce how many there are. With three retrying tiers the count is still multiplied."
       },
       {
-        "text": "27 calls; retry at a single layer and use retry budgets or circuit breakers.",
-        "explanation": "Correct. 3 × 3 × 3 = 27. Retrying at one layer caps amplification at 3×, and a retry budget limits added attempts, while a circuit breaker can reject calls after a configured failure threshold."
+        "text": "Independent retries at every tier multiply; retry at one layer and add a retry budget or circuit breaker.",
+        "explanation": "Correct. Every web attempt triggers up to 3 API attempts, and each of those up to 3 database attempts, so the worst case is 27 database calls per user request. Retrying at one layer caps that at 3, a retry budget limits extra attempts, and a circuit breaker fails fast once errors are widespread."
       },
       {
-        "text": "81 calls; remove all retries.",
-        "explanation": "Wrong. 81 would be four tiers. Removing every retry also throws away the benefit for brief, transient errors; the aim is to bound retries, not ban them."
+        "text": "Retries are harmful; remove every retry from the stack.",
+        "explanation": "Wrong. Retries are useful for brief, transient errors. The aim is to bound them (one layer, a budget, backoff), not to ban them."
       }
     ],
     "answer": 2,
-    "workedExample": "Multiply attempts down the stack:\n\n| Tier | Attempts | Running total |\n|---|---|---|\n| Web | 3 | 3 |\n| API | 3 each | 9 |\n| DB | 3 each | **27** |\n\nThe general rule, when every layer retries independently:\n\n```formula\nC = a^L\nC = 3^3 = 27\nwhere\nC: the worst-case number of database calls for one user request (a count)\na: attempts per layer, counting the first try; here 3\nL: the number of stacked layers that retry; here 3\nIn words: retries multiply down the stack, so the load grows as a power of the number of retrying layers.\n```\n\nSo a database that is already struggling receives 27× its normal load from the retries alone, which keeps it down. Standard practice:\n\n1. Retry at **one** layer.\n2. Exponential backoff with jitter.\n3. A **retry budget** (e.g. retries may add at most 10% extra load) or a circuit breaker that fails fast when errors are widespread.",
+    "workedExample": "Trace one user request while every database query fails:\n\n1. The web tier makes up to 3 attempts at the API.\n2. Each of those API calls makes up to 3 attempts at the data service: up to 9.\n3. Each of those makes up to 3 queries to the database: up to 3 × 3 × 3 = **27** queries for one user request.\n\nSo the struggling database receives a large multiple of its normal load from retries alone, which keeps it down. A fourth retrying layer would make it 81. Standard practice:\n\n1. Retry at **one** point in the stack.\n2. Exponential backoff with jitter.\n3. A **retry budget** (for example, retries may add at most about 10% extra load) or a circuit breaker that fails fast when errors are widespread.",
     "link": {
       "title": "Timeouts, retries and backoff with jitter (AWS)",
       "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"

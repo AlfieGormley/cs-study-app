@@ -3,27 +3,27 @@
     "id": "msg-sync-vs-async-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "Checkout synchronously calls Payments, Inventory and Fraud on every request. Each dependency is independently 99.9% available. Ignoring Checkout's own failures, what is the best-case availability of the checkout request?",
+    "prompt": "Checkout requires successful responses from Payments, Inventory and Fraud. Each service can fail independently. A colleague says adding Fraud cannot reduce availability because Payments was already the least available dependency. Which explanation is right?",
     "options": [
       {
-        "text": "99.9%, because the chain is only as weak as its weakest link",
-        "explanation": "Wrong. 'Weakest link' would apply if only one dependency could fail. Here any of the three failing fails the request, so the probabilities multiply and availability is lower than any single dependency."
+        "text": "Correct: only the least available dependency affects checkout",
+        "explanation": "Wrong. A failure of any required service can fail checkout, including a failure while every other service is healthy."
       },
       {
-        "text": "About 99.97%, because the three services provide redundancy for each other",
-        "explanation": "Wrong. Redundancy means any one of several copies can serve the request. These are three different services that are all required, which is a series dependency, not a parallel one."
+        "text": "Adding Fraud creates redundancy",
+        "explanation": "Wrong. Redundancy needs alternatives that can serve the same purpose. Fraud is another required result."
       },
       {
-        "text": "About 99.7%",
-        "explanation": "Correct. The request succeeds only if all three succeed: 0.999 × 0.999 × 0.999 ≈ 0.997. Unavailability roughly triples, from about 8.8 hours a year to about 26."
+        "text": "Fraud adds another way for checkout to fail",
+        "explanation": "Correct. Checkout needs every dependency to succeed. An independent Fraud outage can fail requests that would otherwise have succeeded."
       },
       {
-        "text": "97%, because each dependency removes 1% of availability",
-        "explanation": "Wrong. Each dependency is unavailable 0.1% of the time, not 1%. Multiplying 0.999 three times gives about 99.7%, so this answer is out by a factor of ten in unavailability."
+        "text": "The answer is always found by adding outage percentages",
+        "explanation": "Wrong. Overlapping outages must not be counted twice. Independence permits a product model; shared causes require a different analysis."
       }
     ],
     "answer": 2,
-    "workedExample": "1. A synchronous request needs **every** dependency to answer, so all three must be up at the same moment.\n2. For independent components that are all required, multiply their availabilities:\n\n```formula\nA = A_1 × A_2 × A_3\nA = 0.999 × 0.999 × 0.999\nA = 0.998001 × 0.999 ≈ 0.997003\nA ≈ 99.70%\nwhere\nA: the availability of the whole request: the fraction of time all three dependencies are up together\nA_1: the availability of Payments, here 0.999 (99.9%)\nA_2: the availability of Inventory, here 0.999\nA_3: the availability of Fraud, here 0.999\n≈: approximately equal to (rounded)\n%: per cent; 0.997 is 99.7%\nIn words: needing all three services means multiplying their availabilities, which gives about 99.7%.\n```\n\n3. So the request is unavailable about 0.3% of the time. Turn that into hours using the 8,760 hours in a year:\n\n```formula\nD = (1 − A) × 8760 h\nD_3 = 0.003 × 8760 h ≈ 26 h\nD_1 = 0.001 × 8760 h ≈ 8.8 h\nwhere\nD: expected downtime per year, in hours (h)\nA: an availability, as a fraction between 0 and 1\nD_3: yearly downtime of the three-service chain (about 99.7% available)\nD_1: yearly downtime of one 99.9% service\nh: hours\n≈: approximately equal to\nIn words: the chain is down about 26 hours a year, roughly three times the 8.8 hours of a single service.\n```\n\nThis assumes the three services fail independently. It is one reason to move non-essential work (for example, post-order analytics) off the synchronous path and onto a queue.",
+    "workedExample": "1. Identify the success condition: all three required responses must succeed.\n2. Consider a Fraud outage while Payments and Inventory are healthy. Checkout now fails, so Fraud adds exposure.\n3. The exact combined availability depends on each service and how failures overlap. Independence gives a useful model, but shared networks or databases can correlate failures.\n4. Move work off the response path only when the product does not need its result before responding.",
     "link": {
       "title": "Queue-Based Load Leveling pattern (Azure)",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
@@ -33,27 +33,27 @@
     "id": "msg-sync-vs-async-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "A product page calls 10 backend services **in parallel** and waits for all of them before rendering. Each service answers in about 50 ms 99% of the time, but 1% of its calls take about 1 second, independently of the others. Roughly what fraction of page loads take about a second or more?",
+    "prompt": "A product page calls 10 backend services **in parallel** and waits for all of them before rendering. Each service answers in about 50 ms 99% of the time, but 1% of its calls take about 1 second, independently of the others. Users report that roughly 1 page load in 10 takes about a second. Every service dashboard shows only 1% slow calls. What explains the gap?",
     "options": [
       {
-        "text": "About 1%, the same as each service",
-        "explanation": "Wrong. The page waits for the slowest of 10 calls. It is slow if **any** one of them is slow, which is far more likely than one particular call being slow."
+        "text": "Measurement noise: if each service is slow 1% of the time, pages must be slow about 1% of the time",
+        "explanation": "Wrong. That would hold if the page waited for one particular service. It waits for all ten, so it is slow whenever **any** one of them is slow, which is far more likely than one specific call being slow."
       },
       {
-        "text": "Essentially never, because all 10 would have to be slow at once",
-        "explanation": "Wrong. That is 0.01¹⁰, the chance that every call is slow. The page only needs one slow call to be slow, because it waits for all of them."
+        "text": "The services must be slow together, because a page is only slow when all 10 calls are slow",
+        "explanation": "Wrong. All ten being slow at once would be vanishingly rare (0.01 multiplied by itself ten times). The page needs only one slow call to be slow, because it waits for every result."
       },
       {
-        "text": "About 10%",
-        "explanation": "Correct. The chance that all 10 calls are fast is 0.99¹⁰ ≈ 0.904, so about 9.6% of page loads include at least one 1-second call. This illustrates tail amplification: about 9.6% of page loads include a slow dependency; exact quantile labels depend on the distribution and convention."
+        "text": "The page waits for the slowest of 10 calls, so it is slow if any one is slow: about 1 load in 10",
+        "explanation": "Correct. All ten calls are fast only about 90% of the time (0.99 multiplied by itself ten times is about 0.904), so roughly 9.6% of page loads include at least one 1-second call. This is tail amplification: per-service tails become common at the page level."
       },
       {
-        "text": "About 50%",
-        "explanation": "Wrong. That would need roughly 70 parallel calls (0.99⁷⁰ ≈ 0.5). With 10, it is just under 10%."
+        "text": "Parallel calls add their latencies, so ten 50 ms calls take 500 ms and push the page towards a second",
+        "explanation": "Wrong. Parallel calls overlap; the page waits for the slowest one, not the sum. Adding durations applies to sequential, dependent calls."
       }
     ],
     "answer": 2,
-    "workedExample": "1. The page is slow if **at least one** of the 10 calls is slow.\n2. It is easier to compute the opposite (all 10 fast) and subtract from 1:\n\n```formula\nP_fast = (1 − p)^k = 0.99^10\nP_fast ≈ 0.904\nP_slow = 1 − P_fast ≈ 0.096\nwhere\nP_fast: the probability that all calls are fast\nP_slow: the probability that at least one call is slow, so the page is slow; 0.096 is 9.6%\np: the probability that one call is slow, here 0.01 (1%)\nk: the number of independent calls the page waits for, here 10\n^: to the power of; 0.99^10 is 10 copies of 0.99 multiplied together\n≈: approximately equal to\nIn words: each call is fast 99% of the time, but all ten are fast only about 90% of the time, so roughly 1 page load in 10 is slow.\n```\n\n3. So 1-in-100 slowness per service becomes about 1-in-10 slowness per page.\n\nWays out:\n- Move calls whose results are not needed for the response onto a queue.\n- Set tight timeouts and render without non-essential parts.\n- Send a hedged (duplicate) request when a call is slower than its p95, as described in Google's *The Tail at Scale*.",
+    "workedExample": "1. The page waits for all ten results in parallel, so one slow required result delays the page.\n2. Each dashboard measures one service. The page is exposed to the slow-call risk of every required service, so its slow requests can be much more common.\n3. Parallel durations overlap; sequential dependent durations add. These are different critical paths.\n4. Consider omitting optional results after a timeout or moving unnecessary response-path work to a queue. Hedged requests can reduce some tail delays but add load and require safe duplicate handling; they need workload-specific controls.",
     "link": {
       "title": "The Tail at Scale (Google Research)",
       "url": "https://research.google/pubs/the-tail-at-scale/"

@@ -21,6 +21,13 @@ C2 refund <-------------------+
 C1 cancel order
 ```
 
+> [!analogy] Real-world analogy: booking a trip piece by piece
+> You book a flight, then a hotel, then try to hire a car and find none left. You cannot "un-happen" the flight and hotel bookings; you cancel them, perhaps paying a fee, and the confirmation emails stay in your inbox. Nobody held the flight seat open for you while you checked car availability.
+>
+> **How it maps:** Each booking is a local transaction committed immediately by a different business (service). Cancelling is a compensating transaction: a new action that semantically undoes the earlier one. Not holding the seat open is the saga giving up global locks.
+>
+> **Where it stops:** You notice the failure and cancel by hand; a saga needs a durable record of which steps completed so compensations run reliably after crashes and timeouts. And some steps, like an email already sent, have no cancellation at all, so the saga needs a pivot after which all remaining steps can complete through retries.
+
 ### Compensating actions
 
 A compensation is a *semantic* undo, not a rollback. A refund is not the same as never having charged: the customer may see two lines on their statement. Some actions can't be compensated at all (an email sent, a parcel shipped), so order steps carefully:

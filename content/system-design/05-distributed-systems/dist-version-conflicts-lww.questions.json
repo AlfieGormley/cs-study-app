@@ -33,30 +33,30 @@
     "id": "dist-crdts-gossip-q11",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A Riak read returns two siblings with version vectors **{A:2, B:1}** and **{A:1, B:2}**. The client merges them and writes the result back through coordinator B. What version vector should the new value carry?",
+    "prompt": "A Riak bucket has siblings enabled (`allow_mult`). A read returns two conflicting cart versions. The client merges the carts and writes the result back. The next read contains an additional sibling instead of one resolved value. Which client mistake can explain this?",
     "options": [
       {
-        "text": "{A:2, B:2}",
-        "explanation": "Wrong. That's the element-wise max, which dominates both siblings, but the write itself is a new update on B, so B's entry must also be incremented."
+        "text": "Siblings always persist until background anti-entropy runs.",
+        "explanation": "Wrong. A write whose version dominates the siblings makes them obsolete immediately; anti-entropy is not needed to collapse them."
       },
       {
-        "text": "{A:3, B:3}",
-        "explanation": "Wrong. Only the coordinating replica's entry is incremented. Bumping A as well would claim an update on A that never happened."
+        "text": "The client returned the full causal context from its read with the merged value.",
+        "explanation": "Wrong. Returning that context is the correct procedure: it tells Riak which siblings the new write has reconciled. Assuming no new concurrent update, the merged version can supersede them."
       },
       {
-        "text": "{A:1, B:1}",
-        "explanation": "Wrong. That's the element-wise minimum, which is dominated by both siblings, so the store would treat the merged value as older than both and discard it."
+        "text": "Version vectors cannot describe a merged value, so Riak needs last-write-wins for carts.",
+        "explanation": "Wrong. Dominating both siblings is exactly how a version vector records a merge. LWW would make things worse by discarding one cart's items."
       },
       {
-        "text": "{A:2, B:3}",
-        "explanation": "Correct. Take the element-wise max, {A:2, B:2}, so the new version dominates both siblings, then increment B for this write."
+        "text": "The client omitted the causal context from its read, so Riak could not tell which siblings it had reconciled.",
+        "explanation": "Correct. A write without context can be treated as concurrent with existing values and create more siblings. The precise sibling count and metadata depend on Riak settings, version and concurrent activity."
       }
     ],
     "answer": 3,
-    "workedExample": "1. Max of the siblings:\n\n| | A | B |\n|---|---|---|\n| sibling 1 | 2 | 1 |\n| sibling 2 | 1 | 2 |\n| max | 2 | 2 |\n\n2. Increment the coordinator's entry (B): **{A:2, B:3}**.\n3. Check: {A:2, B:1} ≤ {A:2, B:3} ✓ and {A:1, B:2} ≤ {A:2, B:3} ✓, so both siblings are now obsolete and can be discarded.\n\nIf the client had written without the context from its read, the store would see a new vector concurrent with both, and you'd have three siblings instead of one.",
+    "workedExample": "The client must communicate both the merged data and what it has seen.\n\n1. In an illustrative version-vector model, merging {A:2, B:1} and {A:1, B:2} takes the entry-wise maximum {A:2, B:2}.\n2. If the new update is coordinated by B, incrementing B produces {A:2, B:3}, which dominates both inputs.\n3. Riak clients return the causal context received with their read; they should not manufacture that context from cart contents. Without it, Riak may retain the new value as another sibling.\n\nThe vector calculation illustrates the ordering rule, not an exact prediction of Riak metadata. Repeated context-free writes can cause sibling explosion.",
     "link": {
-      "title": "Version vector (Wikipedia)",
-      "url": "https://en.wikipedia.org/wiki/Version_vector"
+      "title": "Riak conflict resolution and causal context",
+      "url": "https://docs.riak.com/riak/kv/latest/developing/usage/conflict-resolution/index.html"
     }
   }
 ]

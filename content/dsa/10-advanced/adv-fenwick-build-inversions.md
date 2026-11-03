@@ -30,26 +30,9 @@ By the time the loop reaches i, `t[i]` already contains everything from its smal
 
 ## Worked application: counting inversions
 
-An **inversion** is a pair of positions whose values violate ascending order:
+An **inversion** is an earlier element paired with a strictly smaller later element. Equal values do not count. Sorted input has no inversions; reversing distinct elements reverses the order of every pair.
 
-```formula
-I(a) = #{(i, j) : i < j and a[i] > a[j]}
-I([3, 1, 2, 5, 4]) = 3
-I_max = n(n − 1) / 2
-I_max = 5 × 4 / 2 = 10
-where
-a: the array, with a[k] its element at position k
-i, j: two positions in the array
-I(a): the number of inversions in a
-n: the number of elements in the array, 5 in the example
-I_max: the most inversions an array of n distinct elements can have, reached when it is in reverse order
-#{ }: the number of items in the set described inside the braces
-<: is less than
->: is greater than
-In words: count every pair where the earlier element is bigger than the later one; a reversed array has every pair in descending order.
-```
-
-A sorted array has 0 inversions; a reversed array of n distinct elements has the most possible, I_max, 10 for five elements. Walk left to right, keeping a Fenwick tree of how many times each value has been seen. For each element, the number of earlier elements greater than it is "elements seen so far" minus "seen elements ≤ it".
+Walk left to right with a Fenwick tree of frequencies for values already seen. For each current value, count earlier elements, then subtract how many are less than or equal to it. The remainder is how many earlier values are strictly greater. Insert the current value only after that query.
 
 ```python
 def count_inversions(a):
@@ -69,22 +52,9 @@ def count_inversions(a):
     return inv
 ```
 
-Each element adds the number of earlier elements bigger than it:
+The query includes the current value's rank, so equal earlier values are excluded from the inversion count. Compressing values to sorted ranks preserves comparisons while keeping the tree compact.
 
-```formula
-g[j] = j − P(r[j])
-I = g[0] + g[1] + g[2] + g[3] + g[4]
-I = 0 + 1 + 1 + 0 + 1 = 3
-where
-j: how many elements have been seen before the current one (the loop's `seen`, from 0)
-r[j]: the rank of the current value: its position among the distinct values in sorted order
-P(r[j]): how many already-seen values have rank at most r[j], read from the Fenwick tree
-g[j]: how many earlier elements are greater than the current one
-I: the total number of inversions
-In words: everything seen so far, minus the ones not bigger than the current value, is the number of earlier values that are bigger.
-```
-
-For `[3, 1, 2, 5, 4]` the three inversions are the pairs (3, 1), (3, 2) and (5, 4). For an array of n elements it runs in O(n log n), the same as the merge-sort method, and the same pattern answers "count of smaller numbers after self" and rank queries in leaderboards.
+For `[3, 1, 2, 5, 4]` the three inversions are the pairs (3, 1), (3, 2) and (5, 4). For an array of n elements it runs in O(n log n), the same as the merge-sort approach, and the same pattern answers "count of smaller numbers after self" and rank queries in leaderboards.
 
 **Coordinate compression** (mapping values to ranks) is what keeps the tree size equal to the number of distinct values rather than the largest value.
 
@@ -94,6 +64,4 @@ For `[3, 1, 2, 5, 4]` the three inversions are the pairs (3, 1), (3, 2) and (5, 
 - Coordinate-compressed counts reveal how many earlier elements exceed each value.
 
 ## Further reading
-- [Fenwick Tree — cp-algorithms](https://cp-algorithms.com/data_structures/fenwick.html)
-- [Fenwick tree — Wikipedia](https://en.wikipedia.org/wiki/Fenwick_tree)
-- [Segment Tree — cp-algorithms](https://cp-algorithms.com/data_structures/segment_tree.html)
+- [Fenwick trees — cp-algorithms](https://cp-algorithms.com/data_structures/fenwick.html)

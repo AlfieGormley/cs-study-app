@@ -16,6 +16,8 @@ You are reading a log stream of unknown length and want a uniform random sample 
 **Algorithm R** keeps the first k items. Then, for each later item `i` (counting from 0), it draws `j = randint(0, i)`; if `j < k`, the new item replaces `sample[j]`.
 
 ```python
+import random
+
 def reservoir(stream, k):
     sample = []
     for i, x in enumerate(stream):
@@ -35,44 +37,30 @@ def reservoir(stream, k):
 
 ### Why it is uniform
 
-Assume independent uniform draws and a sample size no bigger than the stream. Follow one item: it must first enter the sample, then survive every later step, where it is evicted only if the draw picks exactly its slot. Multiplying those chances, most factors cancel (the product telescopes):
+Assume independent uniform draws and a non-negative sample size. Every later item gets one draw over all positions seen so far. It enters only when that draw selects one of the sample slots; if it enters, each slot is equally likely to be replaced. As the stream grows, the chance of admission shrinks.
 
-```formula
+An early item starts with an advantage because it enters automatically, but must survive more opportunities for replacement. A later item has a smaller admission chance but fewer later replacements to survive. These effects balance: every stream position has the same final inclusion chance. Duplicate values still represent distinct stream positions.
+
+```formula reference
 P_enter = k / (i + 1)
 P_survive(t) = t / (t + 1)
 P = k/(i+1) × (i+1)/(i+2) × … × (n−1)/n
 P = k / n
-P = 10 / 1000 = 0.01
 where
-k: the sample size, 10 in the last line
-n: the positive total number of stream items, 1,000 in the last line; k ≤ n
-i: the position of the item we follow, counting from 0, with i ≥ k
-t: a later step, i < t ≤ n − 1
-P_enter: the probability the item gets into the sample when it arrives
-P_survive(t): the probability it is not evicted at step t (one minus 1/(t + 1))
-P: the probability it is in the final sample
-…: and so on, one factor per later step
-≤: is at most
-In words: each item's chance of getting in shrinks exactly as fast as later items' chances of knocking it out, so every item ends with the same chance, the sample size divided by the total item count.
+k: positive sample size, no greater than the stream length
+n: total number of stream items
+i: zero-based position of a later item, at least k
+t: a subsequent zero-based position
+P_enter: probability the item enters on arrival
+P_survive(t): probability an admitted item survives the later draw at position t
+P: probability the item appears in the final sample
+…: one survival factor for each later position
+In words: earlier items face more replacement attempts; later items are harder to admit. The factors cancel, leaving the same final inclusion chance for every position.
 ```
 
-The first k items start in with probability 1, and the same telescoping gives k/n: with 10 slots and 1,000 lines, every line has a 1 % chance. If the stream is shorter than k, the code returns everything it saw; a negative k is outside its contract.
+Equal inclusion chances alone do not prove that every possible subset is equally likely. Algorithm R has that stronger property too. Inductively, assume the old reservoir is a uniform subset. A new subset excluding the arriving item comes from retaining its old subset; one including the arriving item can come from any old subset that differs by the replaced item. Uniform admission and uniform slot selection make these routes balance.
 
-Equal inclusion probabilities alone do not prove uniform subsets. Algorithm R additionally gives every possible sample the same probability, by induction over each replacement step:
-
-```formula
-P(S) = 1 / C(n, k)
-C(n, k) = n! / (k! × (n − k)!)
-C(5, 2) = 120 / (2 × 6) = 10
-where
-S: one particular set of k items
-P(S): the probability that the final sample is exactly S
-C(n, k): "n choose k", the number of different k-item sets you can pick from n items
-n!: n factorial, 1 × 2 × … × n
-k: the sample size
-n: the stream length
-In words: every possible sample of k items is equally likely; from 5 items with 2 slots there are 10 possible pairs, each with probability 1/10.
-```
+If the stream is shorter than the requested sample, the code returns everything it saw. A zero-sized sample remains empty. A negative size is outside this example's contract.
 
 ## Key takeaways
 
@@ -80,9 +68,4 @@ In words: every possible sample of k items is equally likely; from 5 items with 
 - Uniform subsets need a replacement induction as well as equal item-inclusion probabilities.
 
 ## Further reading
-- [Skip list — Wikipedia](https://en.wikipedia.org/wiki/Skip_list)
-- [Treap — Wikipedia](https://en.wikipedia.org/wiki/Treap)
-- [Treap (Cartesian tree) — cp-algorithms](https://cp-algorithms.com/data_structures/treap.html)
-- [Reservoir sampling — Wikipedia](https://en.wikipedia.org/wiki/Reservoir_sampling)
-- [Fisher–Yates shuffle — Wikipedia](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle)
-- [Vitter’s reservoir-sampling paper](https://www.cs.umd.edu/~samir/498/vitter.pdf)
+- [Random Sampling with a Reservoir — Jeffrey Vitter](https://www.cs.umd.edu/~samir/498/vitter.pdf)

@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Two rules decide it:\n\n```formula\nR + W > N\nF = min(N − W, N − R)\nF = min(5 − 3, 5 − 3) = 2\nwhere\nN: replicas per key; here 5\nW: replicas that must acknowledge a write\nR: replicas that must respond to a read\nF: failures tolerated by both reads and writes\nmin: the smaller of its inputs\nIn words: reads and writes must add up to more than the replica count, and the operation needing more replicas sets how many failures you can survive for both.\n```\n\nWith 5 replicas, the read and write counts must add up to at least 6. To maximise the smaller failure tolerance, split evenly: 3 write acknowledgements and 3 read responses.\n\n| W | R | Overlap? | Tolerates |\n|---|---|---|---|\n| 5 | 1 | yes | 0 writes |\n| 3 | 3 | yes | 2 / 2 |\n| 2 | 3 | no | – |\n| 4 | 4 | yes | 1 / 1 |\n\nW = R = 3 is a majority of 5 (5 halved and rounded down, plus one), which is Cassandra's QUORUM.",
+    "workedExample": "Two rules decide it: the read and write counts must add up to more than the replica count, and the operation that needs more replicas sets how many failures you can survive for both.\n\nWith 5 replicas, the read and write counts must add up to at least 6. To maximise the smaller failure tolerance, split evenly: 3 write acknowledgements and 3 read responses.\n\n| W | R | Overlap? | Tolerates |\n|---|---|---|---|\n| 5 | 1 | yes | 0 writes |\n| 3 | 3 | yes | 2 / 2 |\n| 2 | 3 | no | – |\n| 4 | 4 | yes | 1 / 1 |\n\nW = R = 3 is a majority of 5 (5 halved and rounded down, plus one), which is Cassandra's QUORUM.",
     "link": {
       "title": "Dynamo paper (SOSP 2007)",
       "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Replicas: EU {e1, e2, e3}, US {u1, u2, u3}; N = 6.\n2. Write at LOCAL_QUORUM: acks from e1, e2. W = 2.\n3. Read at LOCAL_QUORUM in US: u1, u2. R = 2.\n4. Overlap test fails:\n\n```formula\nR + W > N\n2 + 2 > 6   ✗\nwhere\n✗: the condition is false\nR: replicas a read asks; here 2 US replicas\nW: replicas that acknowledged the write; here 2 EU replicas\nN: replicas per key across both data centres; here 6\nIn words: 4 replicas out of 6 can be two separate pairs, so the read can miss the write entirely.\n```\n\nOptions:\n\n- Write at `EACH_QUORUM` (2 in every DC): then any LOCAL_QUORUM read in any DC overlaps, at the cost of cross-region write latency.\n- Use `QUORUM` (4 of 6) for both.\n- Or pin each user to a home DC, so their reads and writes meet there.",
+    "workedExample": "1. Replicas: EU {e1, e2, e3}, US {u1, u2, u3}; N = 6.\n2. Write at LOCAL_QUORUM: acks from e1, e2. W = 2.\n3. Read at LOCAL_QUORUM in US: u1, u2. R = 2.\n4. Overlap test fails: the 2 replicas that took the write and the 2 that answered the read add up to 4, which is not more than the 6 replicas, so they can be two completely separate pairs. Cross-DC replication reaches the US asynchronously, after the client was told the write succeeded.\n\nOptions:\n\n- Write at `EACH_QUORUM` (2 in every DC): then any LOCAL_QUORUM read in any DC overlaps, at the cost of cross-region write latency.\n- Use `QUORUM` (4 of 6) for both.\n- Or pin each user to a home DC, so their reads and writes meet there.",
     "link": {
       "title": "Cassandra Dynamo architecture",
       "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
@@ -63,27 +63,27 @@
     "id": "dist-quorums-q12",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A key has **5 replicas per key, 4 write acknowledgements and 2 read responses** (N, W and R respectively). Do reads overlap writes, and how many unavailable replicas can writes and reads each tolerate?",
+    "prompt": "A key has **5 replicas; writes need 4 acknowledgements and reads need 2 responses**. During maintenance, **2 of the 5 replicas** are down at the same time. What do clients experience? Assume strict replica placement, durable stored versions, no concurrent writes and a version rule that follows completed writes in order.",
     "options": [
       {
-        "text": "Overlap: yes. Writes tolerate 1 down, reads tolerate 3 down.",
-        "explanation": "Correct. 4 + 2 = 6 > 5, so they overlap. Writes need 4 of 5, so 1 can be down; reads need 2 of 5, so 3 can be down."
+        "text": "Writes fail, but reads still succeed and still see the latest successful write.",
+        "explanation": "Correct. Only 3 replicas are up, fewer than the 4 a write needs, so writes fail. Reads need just 2 of the 3 survivors. Every earlier successful write reached 4 replicas, so any 2 replicas a read asks include at least one with that write (4 + 2 is more than 5)."
       },
       {
-        "text": "Overlap: no, because R is less than N/2.",
-        "explanation": "Wrong. The rule is about the read and write counts added together, not the read count alone. A small R is fine when W is large."
+        "text": "Both reads and writes carry on normally.",
+        "explanation": "Wrong. A write needs 4 acknowledgements and only 3 replicas are up. This configuration buys cheap reads at the cost of write availability."
       },
       {
-        "text": "Overlap: yes. Writes tolerate 4 down, reads tolerate 2 down.",
-        "explanation": "Wrong. That confuses the quorum size with the failures tolerated. Tolerance is the replicas left over: 5 − 4 for writes and 5 − 2 for reads."
+        "text": "Reads fail, but writes still succeed.",
+        "explanation": "Wrong, it's the other way round. Reads need only 2 replicas, so they survive up to 3 failures; writes need 4, so they survive only 1."
       },
       {
-        "text": "Overlap: yes. Both tolerate 2 down.",
-        "explanation": "Wrong. That would be W = R = 3. Here the split is uneven, so the tolerance is uneven too."
+        "text": "Reads succeed but may return stale data, because the read count is less than half the replicas.",
+        "explanation": "Wrong. Overlap depends on the read and write counts together, not on either alone. Every successful write is on 4 of the 5 replicas, so a 2-replica read always meets it."
       }
     ],
     "answer": 0,
-    "workedExample": "```formula\nR + W > N\n2 + 4 = 6 > 5\nF_w = N − W = 5 − 4 = 1\nF_r = N − R = 5 − 2 = 3\nwhere\nN: replicas per key; here 5\nW: replicas that must acknowledge a write; here 4\nR: replicas that must respond to a read; here 2\nF_w: replicas that can be down while writes succeed\nF_r: replicas that can be down while reads succeed\nIn words: reads and writes overlap, writes can lose only 1 replica, and reads can lose 3.\n```\n\n1. Overlap: 6 is more than 5 ✓.\n2. Writes: **1** replica may be down.\n3. Reads: **3** may be down.\n\nThis shape suits read-heavy workloads where cheap, highly available reads matter more than write availability. Note 4 is more than half of 5, so writes also overlap each other.",
+    "workedExample": "Ask two questions: can each operation still gather enough replicas, and do reads still meet writes?\n\n1. **Writes:** need 4 acknowledgements. With 2 replicas down, only 3 can answer, so writes fail. This setting tolerates just 1 replica down for writes.\n2. **Reads:** need 2 responses. 3 replicas are up, so reads succeed. This setting tolerates up to 3 replicas down for reads.\n3. **Overlap:** every successful write was acknowledged by 4 of the 5 replicas, leaving only 1 without it. A read of any 2 replicas cannot fit inside that single stale replica, so it reaches the write.\n\nThis shape suits read-heavy workloads where cheap, highly available reads matter more than write availability. Because each write reaches more than half the replicas, writes also overlap each other.",
     "link": {
       "title": "Dynamo: Amazon's Highly Available Key-value Store (SOSP 2007)",
       "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"

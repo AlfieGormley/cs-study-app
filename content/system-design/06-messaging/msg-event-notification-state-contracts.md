@@ -48,7 +48,7 @@ Consumers keep their own local copy of the data they care about.
 
 - **Name them in the past tense** for facts (`OrderPlaced`), and keep commands (`ShipOrder`) separate.
 - **Include an event ID, type, schema version, timestamp and aggregate ID.** CloudEvents standardises an envelope with required `id`, `source`, `specversion` and `type`, plus optional `time`, `subject` and `dataschema`. `specversion` versions the envelope, not your business payload; define aggregate identity and payload version deliberately.
-- **Evolve schemas compatibly**: add optional fields, never repurpose or remove required ones. Schema compatibility depends on the encoding and reader behavior. Configure the required backward/forward/transitive checks in the registry and CI; backward-only checks do not protect every old reader or replay.
+- **Evolve schemas compatibly**: add optional fields, never repurpose or remove required ones. Schema compatibility depends on the encoding and reader behavior. Configure backward and forward compatibility for the required readers. Transitive compatibility checks compare against all previous schema versions, not just the latest; backward-only checks do not protect every old reader or replay.
 - **Key events by aggregate ID** so per-entity ordering holds in a partitioned log.
 - Decide deliberately between **thin events** (notification) and **fat events** (state transfer). Fat events reduce coupling at runtime but increase coupling at the schema level.
 

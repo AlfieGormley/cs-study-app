@@ -11,28 +11,9 @@ Here n is the text or indexed-string length, m is the pattern length, and positi
 
 ### Why it is linear
 
-The text index i only moves forward. Each step raises k by at most 1, and each fallback lowers it by at least 1. k can never go below 0, so it cannot fall more often than it rose:
+The text index only moves forward. The matched length rises by at most one per text character. Each fallback lowers it by at least one, and it never becomes negative. Fallbacks therefore spend progress made earlier: one character can trigger several fallbacks, but the whole scan cannot have more fallbacks than earlier increases.
 
-```formula
-F ≤ R ≤ n
-T_search = O(n + F) = O(n)
-T_build = O(m)
-T = O(n + m)
-where
-F: the total number of fallbacks (k = pi[k − 1] steps) during the search
-R: the total number of times k rises by 1, at most once per text character
-n: the length of the text, in characters
-m: the length of the pattern, in characters
-k: the length of the current partial match
-T_search: the time for the search loop
-T_build: the time to build the prefix function
-T: the total time
-O(f): grows at most in proportion to f
-≤: is at most
-In words: every fallback undoes an earlier rise, and there is at most one rise per text character, so the whole search is linear in the text plus the pattern.
-```
-
-For a 1,000,000-character text and a 100-character pattern that is at most about 2,000,000 loop steps plus 200 for the table, however repetitive the input. Memory is O(m) for `pi`, excluding the returned list of match positions. The empty pattern matches at every text boundary.
+Searching takes O(n), and the same argument gives O(m) preprocessing for a pattern of length m. Total time is O(n + m), including repetitive inputs. The prefix table uses O(m) memory, excluding the returned match positions. The empty pattern matches at every text boundary.
 
 > [!tip] A concatenation trick
 > Compute the prefix function of `p + "#" + t`, where `#` appears in neither string. Every position where `pi` equals m is the end of a match. The separator stops a border from running past the pattern.
@@ -50,9 +31,8 @@ Here n is the text length, m the pattern length and C the number of Rabin–Karp
 KMP processes the text one character at a time and never looks back, so it works on a stream. The Z trick needs the whole text concatenated in memory.
 
 > [!note] What real libraries do
-> CPython's forward string search combines Boyer–Moore/Horspool-style skipping with a two-way algorithm and adaptive selection based on input sizes and observed work. The two-way path has a linear worst-case bound.
->
-> Content gap: no universal fastest-algorithm ranking is given; that requires reproducible benchmarks for the workload and implementation.
+> CPython's forward string search combines Boyer–Moore/Horspool-style skipping with a two-way algorithm, selecting between them based on input sizes and observed work. The two-way path has a linear worst-case bound.
+> Benchmark the actual workload and implementation before deciding which algorithm is fastest.
 
 ## Key takeaways
 
@@ -60,8 +40,6 @@ KMP processes the text one character at a time and never looks back, so it works
 - Choose deterministic matching when collision verification or stream access matters.
 
 ## Further reading
-- [Prefix function and Knuth–Morris–Pratt — cp-algorithms](https://cp-algorithms.com/string/prefix-function.html)
-- [Rabin–Karp algorithm — Wikipedia](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm)
+- [CPython’s forward string-search implementation](https://raw.githubusercontent.com/python/cpython/v3.14.0/Objects/stringlib/fastsearch.h)
+- [Prefix function and KMP — cp-algorithms](https://cp-algorithms.com/string/prefix-function.html)
 - [Z-function — cp-algorithms](https://cp-algorithms.com/string/z-function.html)
-- [Suffix Array — cp-algorithms](https://cp-algorithms.com/string/suffix-array.html)
-- [Suffix array — Wikipedia](https://en.wikipedia.org/wiki/Suffix_array)

@@ -11,9 +11,9 @@ Lamport clocks preserve causality but cannot detect concurrent events. A vector 
 
 ## Vector clocks
 
-A vector clock keeps one counter **per process**. With N processes, each process holds a list of N counters, V[1] to V[N]: its best knowledge of how many events every process has had.
+A vector clock keeps one counter **per process**. Each process holds a list with one counter for every process: its best knowledge of how many events each process has had. On a local event or a send, a process adds one to its own entry only, and attaches the whole list to outgoing messages. On a receive, it takes the larger value in every position, then adds one to its own entry.
 
-```formula
+```formula reference
 V_new[i] = V[i] + 1
 V_new[j] = max(V[j], V′[j])
 where
@@ -31,7 +31,7 @@ For example, if P2's clock is [1, 4, 2] and it receives a message stamped [3, 1,
 
 To compare two vector timestamps V and W:
 
-```formula
+```formula essential
 V ≤ W ⇔ ∀k: V[k] ≤ W[k]
 V → W ⇔ V ≤ W ∧ V ≠ W
 V ∥ W ⇔ V ≰ W ∧ W ≰ V

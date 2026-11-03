@@ -11,9 +11,9 @@ Here n is the number of input elements. Fenwick positions start at 1; the empty 
 
 ## The lowbit trick
 
-The lowest set bit of i is `i & -i` in code. This works because of two's complement, the way computers store negative integers:
+The lowest set bit of i is `i & -i` in code. It isolates the rightmost one in the binary representation. In two's-complement arithmetic, negation preserves that bit while flipping the higher bits; AND discards those higher bits. The bit-level derivation is optional:
 
-```formula
+```formula reference
 lowbit(i) = i & (−i)
 −i = (~i) + 1
 12 = …0000 1100₂
@@ -27,7 +27,7 @@ lowbit(i): the value of the lowest (rightmost) 1-bit of i
 &: bitwise AND: a bit is 1 in the result only where it is 1 in both inputs
 ₂: the number is written in binary (base 2)
 …: the same digit repeats to the left (all 0s for a positive number, all 1s for a negative one)
-In words: flipping every bit and adding one carries through the trailing zeros and stops at the lowest 1, so i and −i share exactly that one bit, and AND keeps only it.
+In words: negating a positive index preserves its lowest set bit and flips all higher bits, so AND with the original index keeps just that lowest bit.
 ```
 
 So `lowbit(12)` is 4: 12 is 1100 in binary, and its rightmost 1 is worth 4. For any odd number the answer is 1.
@@ -36,17 +36,7 @@ Python integers behave as if they had infinitely many sign bits, so `i & -i` wor
 
 Each entry therefore covers this block:
 
-```formula
-t[i] = a[i − lowbit(i) + 1] + … + a[i]
-t[6] = a[6 − 2 + 1] + … + a[6] = a[5] + a[6]
-where
-i: the index of the entry, from 1 to n
-t[i]: the value stored at index i of the Fenwick array
-a[k]: the array element at position k
-lowbit(i): the value of the lowest 1-bit of i
-…: every element in between
-In words: entry i holds the sum of the lowbit(i) elements that end at position i.
-```
+Entry `t[i]` stores a block ending at position `i`, with length `i & -i`. At index six the block length is two, so the entry covers positions five and six, not the whole prefix.
 
 For an eight-element array:
 
@@ -69,6 +59,4 @@ Odd indices hold single elements; powers of two hold whole prefixes.
 - Each tree entry stores the block of that length ending at its index.
 
 ## Further reading
-- [Fenwick Tree — cp-algorithms](https://cp-algorithms.com/data_structures/fenwick.html)
-- [Fenwick tree — Wikipedia](https://en.wikipedia.org/wiki/Fenwick_tree)
-- [Segment Tree — cp-algorithms](https://cp-algorithms.com/data_structures/segment_tree.html)
+- [Fenwick trees — cp-algorithms](https://cp-algorithms.com/data_structures/fenwick.html)

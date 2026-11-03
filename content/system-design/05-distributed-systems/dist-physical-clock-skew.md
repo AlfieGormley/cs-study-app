@@ -18,28 +18,13 @@ Each server has two kinds of clock:
 | Time-of-day | Timestamps | Can jump back or forward |
 | Monotonic | Measuring durations | Only moves forward |
 
-In Linux these are `CLOCK_REALTIME` and `CLOCK_MONOTONIC`. Rule one: **never measure a timeout with the time-of-day clock**. An NTP step can make an elapsed time negative.
+In Linux these are `CLOCK_REALTIME` and `CLOCK_MONOTONIC`. Rule one: **never measure a timeout with the time-of-day clock**. An NTP step can make an elapsed time negative. On Linux, `CLOCK_MONOTONIC` excludes time spent suspended; `CLOCK_BOOTTIME` includes it. Choose suspend behaviour deliberately for a timeout or lease, and remember that a local timer does not protect a resource from a paused stale owner.
 
 ### Drift and skew
 
 Quartz crystals run slightly fast or slow, and it varies with temperature. Drift depends on the oscillator and operating conditions. The 2012 Spanner paper used a conservative allowance of 200 parts per million (ppm): at that rate a clock gains or loses up to 200 microseconds every second.
 
-To see what that means over a day, multiply the drift rate by the time that passes:
-
-```formula
-Δ = r × t
-Δ = 0.0002 × 86,400 s
-Δ ≈ 17 s
-where
-Δ: delta, the total error the clock builds up, in seconds (s)
-r: the drift rate as a fraction; 200 ppm means 200 parts per million, which is 200 / 1,000,000 = 0.0002
-t: the time that passes without correction, in seconds; one day is 24 × 60 × 60 = 86,400 s
-s: second
-≈: approximately equal to (the exact value is 17.28 s)
-In words: a clock that drifts by 200 parts per million is off by about 17 seconds after a day if nothing corrects it.
-```
-
-This calculation assumes a constant rate. Treat it as a bound only when the hardware and operating conditions justify that maximum drift rate; temperature can change the actual rate. A 10 ppm clock would build up less than a second a day.
+Over a day (86,400 seconds), an uncorrected clock drifting at that rate would be about 17 seconds out. That figure assumes a constant rate. Treat it as a bound only when the hardware and operating conditions justify that maximum drift rate; temperature can change the actual rate. A 10 ppm clock would build up less than a second a day.
 
 **Skew** is the difference between two clocks at one moment. Two clocks that drift in opposite directions grow apart at the sum of their rates.
 

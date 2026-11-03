@@ -40,16 +40,9 @@ The same shape appears in **entity resolution** (deduplicating customer records 
 
 ## Variants worth knowing
 
-- **Weighted union-find** stores, for each node, a value relative to its parent (an offset, a ratio, a bit recording whether a path length is odd or even). `find` accumulates values along the path. This solves "evaluate division" (given some ratios between variables, work out others, as in the block below) and "is this graph bipartite?" online.
+- **Weighted union-find** stores, for each node, a value relative to its parent (an offset, a ratio, a bit recording whether a path length is odd or even). `find` accumulates values along the path. This solves "evaluate division" (given some ratios between variables, work out others) and "is this graph bipartite?" online.
 
-```formula
-a / b = 2
-b / c = 3
-a / c = (a / b) × (b / c) = 2 × 3 = 6
-where
-a, b, c: unknown non-zero quantities that are only described by their ratios to each other
-In words: if a is twice b and b is three times c, then a is six times c; weighted union-find stores each ratio on the edge to the parent and multiplies along the path to the root.
-```
+For example, if one quantity is twice a second and the second is three times a third, the first is six times the third. A weighted parent link stores one such relation; following the path combines them. Compression must update those relations along with the parent pointers.
 
 - **Offline deletion**: union-find cannot split a set. For a known deletion-only history, first build the final graph, then process removals backwards as additions. Mixed additions and deletions need extra machinery.
 - Hash-map parents: when elements are strings or sparse coordinates, use a dict instead of a list, creating entries on first sight.
@@ -66,7 +59,4 @@ In words: if a is twice b and b is three times c, then a is six times c; weighte
 - Weighted parents carry relations; known deletion-only histories can be processed backwards.
 
 ## Further reading
-- [Disjoint-set data structure — Wikipedia](https://en.wikipedia.org/wiki/Disjoint-set_data_structure)
-- [Disjoint Set Union — cp-algorithms](https://cp-algorithms.com/data_structures/disjoint_set_union.html)
-- [Kruskal's algorithm — Wikipedia](https://en.wikipedia.org/wiki/Kruskal%27s_algorithm)
-- [Ackermann function — Wikipedia](https://en.wikipedia.org/wiki/Ackermann_function)
+- [Disjoint-set unions — cp-algorithms](https://cp-algorithms.com/data_structures/disjoint_set_union.html)

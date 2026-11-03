@@ -21,7 +21,7 @@ Here n is the length of the text in characters and m the number of characters in
 | Delete a range | O(n) | Implementation-dependent |
 | Iterate all | O(n) | O(n) |
 
-These bounds assume balanced trees and bounded leaf sizes, and constant-time character indexing in the flat representation. UTF-8 byte offsets and Unicode character positions need additional care. Inserting new text must read/copy its m characters; deletion can also incur work to reclaim removed nodes. Concatenation creates a new root over two ropes, then rebalances. Insert is split at the position, then two concatenations. Immutable rope nodes can share unchanged structure between versions, making undo history proportional to changed paths plus inserted text. Retaining roots keeps that shared storage alive.
+These bounds assume balanced trees and bounded leaf sizes, and constant-time character indexing in the flat representation. UTF-8 byte offsets and Unicode character positions need additional care. Inserting new text must read/copy its m characters; deletion can also incur work to reclaim removed nodes. Concatenation creates a new root over two ropes, then rebalances. Insert is split at the position, then two concatenations. Immutable rope nodes can share unchanged structure between versions, making saved-version storage proportional to changed paths plus inserted text. Retaining roots keeps that shared storage alive.
 
 ### Real-world use
 
@@ -41,9 +41,5 @@ Ropes are not always better. For short strings, pointer overhead and lost cache 
 - Read or copy inserted characters and account for reclamation and pointer overhead.
 
 ## Further reading
-- [Sparse Table — cp-algorithms](https://cp-algorithms.com/data_structures/sparse-table.html)
-- [Range minimum query — Wikipedia](https://en.wikipedia.org/wiki/Range_minimum_query)
-- [Persistent data structure — Wikipedia](https://en.wikipedia.org/wiki/Persistent_data_structure)
-- [Rope (data structure) — Wikipedia](https://en.wikipedia.org/wiki/Rope_(data_structure))
-- [Text Buffer Reimplementation — VS Code blog](https://code.visualstudio.com/blogs/2018/03/23/text-buffer-reimplementation)
 - [SGI rope implementation overview](https://stlab.adobe.com/stldoc_ropeimpl.html)
+- [VS Code text-buffer implementation](https://code.visualstudio.com/blogs/2018/03/23/text-buffer-reimplementation)

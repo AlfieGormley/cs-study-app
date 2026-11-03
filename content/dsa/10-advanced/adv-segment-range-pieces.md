@@ -16,21 +16,7 @@ Throughout this lesson n is the number of elements in the array, and O(f) means 
 - A plain array makes updates O(1) (a fixed amount of work) but queries O(n).
 - A prefix-sum array makes sum queries O(1) but every update O(n), because every later prefix changes.
 
-On large arrays, many O(n) operations can become expensive. A **segment tree** makes both operations O(log n). For a million elements the difference is stark:
-
-```formula
-c_scan = n = 1,000,000
-c_tree ≈ log_2(n) ≈ 20
-where
-n: the number of elements in the array, a million here
-c_scan: roughly how many elements one O(n) query or update touches
-c_tree: roughly how many tree levels one segment-tree operation walks through
-log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n
-≈: approximately equal to
-In words: scanning touches every element, while a segment tree only walks down about 20 levels for a million elements.
-```
-
-A segment tree does a few nodes of work per level, so the real count is a small multiple of 20, still tens of thousands of times less than a scan. It works for any operation that combines associatively, not just sums.
+On large arrays, many linear-time operations become expensive. A **segment tree** balances the trade-off: point updates and range queries each take O(log n), provided each summary has constant size and combining two summaries takes constant time. It works for associative operations, including sums, minima and maxima.
 
 ## The idea: store answers for halves, quarters, eighths...
 
@@ -48,19 +34,16 @@ For `a = [5, 2, 8, 1, 9, 3, 7, 4]` with sums:
  5   2   8   1    9   3    7   4
 ```
 
-Any range can be assembled from a handful of these precomputed pieces. Writing S(l, r) for the sum of `a[l..r]`:
+A query for indices 2 through 5 uses the stored nodes for 2 through 3 and 4 through 5. Their totals, 9 and 12, give 21. The query stops at those nodes because each is fully covered; it need not visit their leaves.
 
-```formula
-S(2, 5) = S(2, 3) + S(4, 5)
-S(2, 5) = 9 + 12 = 21
-where
-S(l, r): the sum of the array elements from index l to index r, both included; the label [l,r]=value in the drawing is S(l, r)
-l: the first index of a range
-r: the last index of a range
-In words: the range 2 to 5 splits into two stored nodes, 2 to 3 and 4 to 5, so adding their two stored sums gives the answer.
-```
+Only the two ends of a requested range can cut through nodes at each level. Everything between them uses fully covered pieces, which is why a query needs only logarithmically many nodes.
 
-That is two nodes instead of four elements. For long ranges the saving is enormous: any range needs at most about two nodes per level of the tree.
+> [!analogy] Real-world analogy: Totals by district
+> A delivery service keeps parcel totals for regions, districts and streets.
+>
+> **How it maps:** A request covering a whole district uses its stored total; only partly covered districts need smaller pieces. Segment-tree nodes similarly summarise nested contiguous ranges.
+>
+> **Where it stops:** The tree uses fixed binary splits, and its combine must be associative. Geographic districts need not satisfy either rule.
 
 ## Key takeaways
 
@@ -68,6 +51,4 @@ That is two nodes instead of four elements. For long ranges the saving is enormo
 - Fully covered pieces combine into the requested range without scanning all elements.
 
 ## Further reading
-- [Segment Tree — cp-algorithms](https://cp-algorithms.com/data_structures/segment_tree.html)
-- [Segment tree, the interval-stabbing version — Wikipedia](https://en.wikipedia.org/wiki/Segment_tree)
-- [Range minimum query — Wikipedia](https://en.wikipedia.org/wiki/Range_minimum_query)
+- [Segment trees — cp-algorithms](https://cp-algorithms.com/data_structures/segment_tree.html)

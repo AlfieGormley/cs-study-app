@@ -50,7 +50,7 @@ COMMIT;
 If the message is redelivered, the insert violates the primary key, the transaction rolls back, and the consumer acks the duplicate. Because the dedup record and the effect commit atomically, there is no window where one exists without the other.
 
 > [!warning] Dedup outside the transaction is racy
-> "Check Redis for the ID, do the work, then write the ID to Redis" fails two ways: a crash after the work but before the Redis write causes a duplicate, and two consumers receiving the same message concurrently both see "not processed". Use an atomic claim (a unique insert, or Redis `SET key NX`) and make the effect itself safe to retry.
+> "Check Redis for the ID, do the work, then write the ID to Redis" fails two ways: a crash after the work but before the Redis write causes a duplicate, and concurrent consumers can both see "not processed". An atomic Redis claim alone does not close the gap to a separate database effect: a crash after the claim can instead suppress unfinished work. For database effects, commit the unique claim and effect in the same transaction; external effects need provider-enforced idempotency and recovery of uncertain outcomes.
 
 The ID must be stable across retries. Use a producer-assigned ID (an event ID or a business-operation key; orderId + eventType is only sufficient if that event type can occur once per order), **not** the broker's delivery ID, which may change on redelivery.
 

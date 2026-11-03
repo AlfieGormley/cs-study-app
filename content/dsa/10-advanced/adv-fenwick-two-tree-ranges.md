@@ -11,30 +11,21 @@ Here n is the number of input elements. Fenwick positions start at 1; the empty 
 
 ### Range update, range query
 
-Use two trees, `b1` and `b2`. For the code’s range-add arguments `l`, `r` and `x`, `b1` stores the difference-array boundaries and `b2` stores their position-weight corrections. The complete calls below show both updates to each tree. The prefix sum is then:
+A tree of differences can recover one current element, but a prefix total must count each difference once for every later included position. Two trees separate that repeated contribution from its correction.
 
-```formula
+`b1` stores differences; `b2` stores each difference multiplied by the number of positions before it. Multiply the first tree's prefix by the query endpoint, then subtract the second tree's prefix. The correction removes positions that lie before each difference began.
+
+```formula reference
 P(i) = i P_1(i) − P_2(i)
-P_1(i) = x   when l ≤ i ≤ r
-P_2(i) = x(l − 1)   when l ≤ i ≤ r
-P(i) = xi − x(l − 1) = x(i − l + 1)
-P_2(i) = x(l − 1) − xr   when i > r
-P(i) = 0 − x(l − 1 − r) = x(r − l + 1)
-P(4) = 5 × 4 − 5 × 2 = 10
-P(7) = 0 × 7 − (10 − 30) = 20
 where
-i: the position the prefix sum ends at
-P(i): the true sum of the first i elements
-P_1(i): the prefix sum read from tree b1
-P_2(i): the prefix sum read from tree b2, a correction term
-l, r: the first and last positions of the range add
-x: the amount added to each element in the range
-≤: is at most
->: is greater than
-In words: inside the range, b1 counts x for every position up to i, which is too much by the l − 1 positions before the range, and b2 subtracts exactly that; past the range, b2 alone leaves x times the range length.
+i: the one-based endpoint of the requested prefix
+P(i): the sum of the first i elements
+P_1(i): the prefix sum of differences held in b1
+P_2(i): the prefix sum of weighted differences held in b2; each difference is multiplied by its position minus one
+In words: the first tree repeats each difference across the whole prefix; the second removes the positions before that difference actually starts.
 ```
 
-Before the range both trees read 0, so the prefix sum is 0, as it should be. The last two lines are a worked example: add 5 to positions 3 to 6 of an 8-element array of zeros. At position 4 the answer is 10 (two elements of 5 so far); at position 7 it is 20 (all four elements of 5). Several range adds simply add up, because both trees are linear.
+For example, adding five to positions three through six of an initially zero array leaves positions one and two unchanged. A prefix ending at four includes two increased elements and totals ten; one ending at seven includes all four and totals twenty. Boundary cancellation makes later prefixes stop growing for that update. Several range additions combine by addition.
 
 ```python
 class RangeFenwick:
@@ -63,6 +54,4 @@ class RangeFenwick:
 - Subtract prefix totals to recover any inclusive range total.
 
 ## Further reading
-- [Fenwick Tree — cp-algorithms](https://cp-algorithms.com/data_structures/fenwick.html)
-- [Fenwick tree — Wikipedia](https://en.wikipedia.org/wiki/Fenwick_tree)
-- [Segment Tree — cp-algorithms](https://cp-algorithms.com/data_structures/segment_tree.html)
+- [Fenwick trees — cp-algorithms](https://cp-algorithms.com/data_structures/fenwick.html)

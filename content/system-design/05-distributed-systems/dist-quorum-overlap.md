@@ -33,9 +33,8 @@ In the simplified Dynamo ring picture, the key's primary copies go on the next N
 
 If **R + W > N**, every read set overlaps every write set in at least one node, so a read contacts at least one participant in each completed write. Returning the intended newest version additionally depends on durable retained versions and the reconciliation protocol; set overlap alone does not establish that.
 
-```formula
+```formula essential
 R + W > N
-2 + 2 > 3
 where
 R: the number of replicas that must respond to a read
 W: the number of replicas that must acknowledge a write
@@ -44,6 +43,13 @@ In words: if the replicas a read hears from plus the replicas that took the writ
 ```
 
 Why it works: the write landed on W of the N replicas. If a read needs more replicas than the number left without the write, it cannot fit entirely inside that stale group, so it must reach at least one replica with the write. That is the same inequality rearranged. With 3 replicas, 2 write acknowledgements and 2 read responses, the two pairs cannot be 4 different nodes out of 3.
+
+> [!analogy] Real-world analogy: three flatmates and a parcel
+> Three flatmates share a house. When a parcel is left with a neighbour, the person who hears about it tells one other flatmate, so two of the three know. Later, anyone wondering about it asks two of the three. However the pairs are chosen, at least one person asked was one of the two who knew, because two pairs drawn from three people must share somebody.
+>
+> **How it maps:** The three flatmates are three replicas of a key, the two who know are a write acknowledged by two replicas, asking two is a read from two replicas, and the shared person is the replica that the overlap rule guarantees is in both sets.
+>
+> **Where it stops:** A flatmate who heard two different stories needs a rule for which is newer; replicas need version numbers, timestamps or vector clocks to decide which copy is newest. And real stores can quietly substitute stand-in replicas during failures (sloppy quorums), which breaks the guarantee.
 
 ```
 N=3, W=2, R=2:
@@ -56,27 +62,15 @@ The read reconciles versions: a timestamp rule picks a winner, while a vector cl
 
 There is a second overlap condition people forget: any two *write* sets must overlap too, so two writes can't both complete on disjoint replicas without at least one node seeing both.
 
-```formula
+```formula essential
 W > N / 2
-W + W > N
 where
 W: the number of replicas that must acknowledge a write
 N: the number of replicas that store the key
-In words: if every write reaches more than half the replicas, any two writes share at least one replica. The two lines say the same thing.
+In words: if every write reaches more than half the replicas, any two writes share at least one replica.
 ```
 
-Read-write overlap alone does not imply write-write overlap. For example:
-
-```formula
-N = 5; W = 2; R = 4
-R + W = 4 + 2 = 6 > 5
-2W = 2 × 2 = 4 ≤ 5
-where
-N: the number of replicas for a key; here 5
-W: the number of write acknowledgements; here 2
-R: the number of read responses; here 4
-In words: Each read meets every write, but the two writes can fit on separate groups of replicas.
-```
+Read-write overlap alone does not imply write-write overlap. For example, with 5 replicas, writes acknowledged by 2 and reads answered by 4, every read meets every write (4 + 2 is more than 5), but two writes are not forced to meet (2 + 2 is not more than 5).
 
 Two concurrent writes of 2 replicas each can land on {A, B} and {C, D} and never meet. Then only the version-ordering rule (often a timestamp) decides which one survives.
 

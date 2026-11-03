@@ -15,9 +15,8 @@ In event time, how does an operator know that the 09:00–09:01 window is comple
 
 The simplest and most common strategy is **bounded out-of-orderness**: assume no event arrives more than a fixed delay behind the newest one seen so far.
 
-```formula
+```formula reference
 W ≈ t_max − δ
-W ≈ 09:01:12 − 10 s = 09:01:02
 where
 W: the watermark: the event time up to which the processor believes it has seen everything
 t_max: the largest event timestamp seen so far, here 09:01:12
@@ -27,7 +26,14 @@ s: seconds
 In words: the watermark trails the newest event time by the allowed delay, so events up to 10 seconds out of order still count.
 ```
 
-Here W has passed 09:01:00, the end of the 09:00–09:01 window, so that window can fire. This is a conceptual formula: Flink's bounded generator actually produces 09:01:01.999.
+For example, after seeing an event at 09:01:12 with a ten-second bound, event-time progress is about 09:01:02. Once emitted, that watermark lets the 09:00–09:01 window fire. Flink subtracts an extra millisecond and emits watermarks periodically; this is not a guarantee to fire at a particular wall-clock time.
+
+> [!analogy] Real-world analogy: publishing a sports result with late corrections
+> An organiser publishes an initial result after allowing time for score sheets to arrive, then accepts corrections until an announced deadline.
+>
+> **How it maps:** The watermark is the processor's estimate that enough event-time progress has arrived to publish. Allowed lateness keeps the result open to corrections, and a corrected total replaces the earlier total.
+>
+> **Where it stops:** Stream progress follows timestamps across active inputs, not simply a wall-clock deadline. The estimate can be wrong, and discarded late events need a separate correction policy.
 
 This Flink API fragment needs imports, an `Order` type and attachment to the source. It describes watermark configuration, not a complete running job or a fixed wall-clock output.
 

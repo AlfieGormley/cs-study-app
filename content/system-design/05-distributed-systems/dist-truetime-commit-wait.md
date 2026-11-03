@@ -13,7 +13,7 @@ HLCs handle uncertain physical time with causal ordering and read restarts. Span
 
 Google Spanner takes the opposite approach: make physical time trustworthy by **bounding the uncertainty**. Each data centre has GPS receivers and atomic clocks. Instead of a single time, the TrueTime API returns an interval that is guaranteed to contain the true time:
 
-```formula
+```formula essential
 TT.now() = [earliest, latest]
 latest − earliest ≈ 2 × ε
 where
@@ -32,7 +32,7 @@ Physical time is guaranteed to be inside the interval. ε isn't fixed: it grows 
 
 To commit a transaction, Spanner:
 
-1. picks a timestamp no earlier than `TT.now().latest`, also respecting participant prepare timestamps and prior timestamp order,
+1. picks a commit timestamp `s` no earlier than `TT.now().latest`, also respecting participant prepare timestamps and prior timestamp order,
 2. waits until `TT.now().earliest > s`,
 3. then makes the commit visible.
 
@@ -44,22 +44,22 @@ To commit a transaction, Spanner:
                 commit visible
 ```
 
-After the wait, `s` is definitely earlier than true current time. Any transaction that starts later in physical time will get a larger timestamp. That's how Spanner gets **external consistency** (strict serializability) with timestamp ordering.
+After the wait, the commit timestamp `s` is definitely earlier than true current time. Any transaction that starts later in physical time will get a larger timestamp. That's how Spanner gets **external consistency** (strict serializability) with timestamp ordering.
 
-For a simple illustrative case, assume the timestamp is the top of the interval and the uncertainty stays roughly constant. The cost is the wait itself: and the wait ends when the bottom of the interval has passed it, which takes about the interval's full width:
+> [!analogy] Real-world analogy: dating a form with an unreliable watch
+> Your watch might be up to two minutes wrong either way. Suppose everyone follows the same dating rule. To be sure that anyone who starts their form after you hand yours in writes a later time, you write the latest time it could possibly be, then wait until even the earliest possible time has passed what you wrote before handing yours in. That wait is about four minutes: twice your possible error.
+>
+> **How it maps:** The watch's possible error is ε, the time you write is the commit timestamp, waiting is commit wait, and handing the form in is making the commit visible. Anyone who starts afterwards and follows the same latest-possible-time rule stamps their form after yours.
+>
+> **Where it stops:** Your watch has no guaranteed error bound; TrueTime's interval is backed by GPS and atomic-clock time masters and is designed to contain the true time. Spanner also does useful work, such as replication, during the wait.
 
-```formula
-s = TT.now().latest
-TT.now().earliest > s
-t_wait ≈ 2 × ε
-t_wait ≈ 2 × 4 ms = 8 ms
+For a simple illustrative case, assume the timestamp is the top of the interval and the uncertainty stays roughly constant. The wait ends when the bottom of the interval has passed the timestamp, which takes about the interval's full width:
+
+```formula reference
+t_wait ≈ 2ε
 where
-s: the commit timestamp Spanner picks for the transaction
-TT.now(): the TrueTime call, which returns an interval [earliest, latest] containing the true time
-latest: the top of that interval
-earliest: the bottom of that interval
 t_wait: the commit wait, how long the commit stays invisible, in milliseconds (ms)
-ε: epsilon, TrueTime's current error bound, in ms; here 4 ms
+ε: epsilon, TrueTime's current error bound, in ms
 ≈: approximately equal to
 ms: millisecond, one thousandth of a second
 In words: Spanner stamps the commit with the latest possible current time, then waits until even the earliest possible current time is later than that stamp, which takes about twice the error bound.

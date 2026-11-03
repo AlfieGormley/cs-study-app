@@ -13,7 +13,7 @@ A failed replica can miss writes even while the rest of a cluster remains health
 
 Strict quorums lose availability when replicas are unreachable. If B and C are down (with 3 replicas per key and 2 write acknowledgements needed), a write to key k fails, even though most of the cluster is healthy.
 
-A **sloppy quorum** accepts the write on the next healthy nodes on the ring, outside the preference list:
+A **sloppy quorum** accepts the write on the next healthy nodes on the ring, outside the primary replica set:
 
 ```
 pref list: B, C, D  (B, C down)
@@ -22,6 +22,13 @@ E stores it with a hint: "for B"
 ```
 
 When B comes back, E's **hinted handoff** process delivers the write to B and deletes its copy.
+
+> [!analogy] Real-world analogy: a neighbour takes in your parcel
+> You are out when a courier calls, so a neighbour signs for the parcel and puts a note on it saying whose it is. When you get home, they bring it round. The courier's delivery counts as done even though the parcel is not yet in your house.
+>
+> **How it maps:** You are the unreachable replica B, the neighbour is the stand-in node E, the note is the hint, and bringing the parcel round is hinted handoff. Counting the delivery as done is the stand-in's acknowledgement counting towards the write quorum.
+>
+> **Where it stops:** Until the parcel is handed over, anyone checking your house will not find it: a read of the usual replicas can miss the write. Hint coverage is bounded: for example, Cassandra stops recording new hints after a replica has been down beyond its configured window. That is different from discarding all already-recorded hints at the window boundary; repair must recover writes the hints do not cover.
 
 Trade-off: sloppy quorums boost write availability, but R + W > N no longer guarantees overlap, because the W nodes may not be among the N that a reader asks. Until handoff completes, a read from B, C, D can miss the write. Riak uses sloppy quorums by default (its `PR` and `PW` settings can require that a number of true, "primary" replicas respond); Cassandra stores hints (for up to 3 hours by default, `max_hint_window`) but still counts only true replicas towards the consistency level, except at `ANY`.
 

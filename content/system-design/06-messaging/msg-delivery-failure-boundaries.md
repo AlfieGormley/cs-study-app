@@ -39,8 +39,15 @@ These categories describe a defined failure model and processing boundary. Early
 
 **Exactly-once** *delivery* across a network is impossible in general. What systems actually provide is **exactly-once processing** (often called *effectively-once*): messages may be delivered more than once, but their **effects** are applied once.
 
-> [!note] The formula
-> **Effectively-once = at-least-once delivery + idempotent (or deduplicated) processing.** Every practical exactly-once system, including Kafka's, is built this way.
+> [!note] Name the guarantee's boundary
+> Retrying delivery while making repeated effects harmless is a common way to achieve effectively-once processing. Check how effects and progress commit together, how long duplicates can be recognised, and which failures the guarantee covers.
+
+> [!analogy] Real-world analogy: a lost receipt
+> You pay at a shop, but the receipt printer fails. The missing receipt alone cannot tell you whether the payment went through.
+>
+> **How it maps:** The receipt is the acknowledgement. Its absence does not distinguish an unsuccessful effect from a successful effect whose acknowledgement was lost. A stable operation ID lets the system recognise a retry.
+>
+> **Where it stops:** Human staff can investigate directly. An automated consumer needs durable duplicate handling coordinated with the effect; simply remembering that an attempt started is insufficient.
 
 ## Key takeaways
 

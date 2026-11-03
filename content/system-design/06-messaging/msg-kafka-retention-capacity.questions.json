@@ -41,27 +41,27 @@
     "id": "msg-kafka-log-streaming-q7",
     "level": "intermediate",
     "type": "single",
-    "prompt": "You expect a peak of 90,000 records per second on a new topic. Load tests show one consumer instance can process 4,000 records per second (it calls a database). Assume balanced keys and sufficient broker/database capacity. You want 50% headroom for growth. Roughly how many partitions should you create?",
+    "prompt": "Load tests show that the planned consumers would only just keep up with peak traffic on a new keyed Kafka topic. The team wants growth and failure headroom. Keys are balanced today. Which planning approach is best?",
     "options": [
       {
-        "text": "23",
-        "explanation": "Wrong. 90,000 ÷ 4,000 = 22.5, rounded up to 23, is the bare minimum with no headroom. Any growth or a slow consumer would leave you unable to scale out without repartitioning."
+        "text": "Choose exactly enough partitions for today's minimum worker count",
+        "explanation": "Wrong. A group cannot assign partitions to more consumers than it has partitions, leaving no room for worker growth."
       },
       {
-        "text": "About 34–36",
-        "explanation": "Correct. You need ≥ 22.5 consumers at peak; with 50% headroom that is about 34. Rounding up to a number like 36 (divisible by many consumer counts) keeps assignment even."
+        "text": "Allow measured partition and worker headroom, then validate broker and database capacity",
+        "explanation": "Correct. More parallel assignments can help only when enough workers and downstream capacity exist. Headroom must be tested, including recovery."
       },
       {
-        "text": "3, one per broker",
-        "explanation": "Wrong. Partition count is driven by consumer parallelism and throughput, not broker count. Three partitions would cap you at 3 consumers, or 12,000 records per second."
+        "text": "Set the partition count equal to the broker count",
+        "explanation": "Wrong. Consumer processing capacity and key distribution also matter; a broker can host many partitions."
       },
       {
-        "text": "1,000, to be safe",
-        "explanation": "Wrong. Far too many partitions add broker memory, file handles, longer failovers and slower rebalances, and most partitions would be nearly empty. Capacity headroom should be proportionate."
+        "text": "Choose an arbitrarily huge partition count",
+        "explanation": "Wrong. Partitions consume resources and affect failover and rebalances. Unmeasured excess has a cost."
       }
     ],
     "answer": 1,
-    "workedExample": "1. **Consumers needed at peak**, then **add headroom** of 50%:\n\n```formula\nC = R / r\nC = 90000/s / (4000/s) = 22.5\nC_h = C × 1.5 = 33.75\nwhere\nC: consumers (and so partitions) needed at peak with no spare capacity\nR: the peak record rate, 90,000 records per second\nr: records per second one consumer can process, 4,000\nC_h: consumers needed with 50% headroom (× 1.5)\ns: seconds; \"/s\" means per second\nIn words: 22.5 consumers keep up exactly at peak, so you need at least 23; with 50% headroom that becomes about 34.\n```\n\n2. Round 33.75 up to 34.\n3. **Round to something convenient**: 36 divides evenly by 2, 3, 4, 6, 9, 12 and 18 consumers, so partitions spread evenly as you scale.\n4. **Check the broker side**: 36 partitions × replication factor 3 = 108 partition replicas; validate their storage, I/O, memory and controller overhead on the actual cluster.\n\nPartitions are cheap to over-provision a little and expensive to add later on keyed topics.",
+    "workedExample": "1. Measure consumer processing with realistic payloads and downstream calls.\n2. Plan enough partitions to support the worker fleet needed for peak traffic plus justified headroom.\n3. Check key skew, replication costs, broker resources and shared database limits; adding partitions cannot cure a hot key or an overloaded database.\n4. Test failover and rebalances. Growing a keyed topic later can remap records, so capacity planning also protects ordering.",
     "link": {
       "title": "Kafka consumer design (Confluent)",
       "url": "https://docs.confluent.io/kafka/design/consumer-design.html"

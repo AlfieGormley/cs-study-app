@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Rule: in one consumer group, each partition → exactly one consumer.\n2. 6 partitions can be spread over at most 6 consumers.\n3. 8 − 6 = **2 idle** consumers.\n4. To use 8 (or more) consumers, the topic needs at least 8 partitions, Alternatively, increase processing concurrency inside the assigned consumers (for example, a per-key worker pool as in Confluent's parallel consumer).\n\nThis is why partition count is chosen with future consumer parallelism in mind.",
+    "workedExample": "1. A conventional consumer group assigns a partition to one member at a time.\n2. The six partitions can keep six members assigned, leaving two without partitions.\n3. More group members alone cannot divide an existing partition. Internal processing concurrency is possible, but needs completion tracking and any required per-key ordering.\n4. Adding partitions affects keyed placement, so plan that change with ordering and migration requirements in mind.",
     "link": {
       "title": "Kafka consumer design (Confluent)",
       "url": "https://docs.confluent.io/kafka/design/consumer-design.html"
@@ -67,7 +67,7 @@
     "options": [
       {
         "text": "Move to incremental rebalancing (the KIP-848 protocol with `group.protocol=consumer` on Kafka 4.0+, or the `CooperativeStickyAssignor`) and add static membership with `group.instance.id`",
-        "explanation": "Correct. Eager rebalancing revokes every partition from every consumer on each membership change, and a rolling deploy triggers dozens of them. Incremental protocols pause only the partitions that move, and static membership lets a restarted instance reclaim its partitions without triggering a rebalance at all."
+        "explanation": "Correct. Eager rebalancing revokes all assignments during membership changes. Incremental protocols let unaffected assignments continue, and static membership can avoid an unnecessary rebalance when an instance returns within the session timeout with stable membership and subscriptions."
       },
       {
         "text": "Add partitions so each rebalance has less work per consumer",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. A rolling deploy of 30 instances = 30 departures + 30 arrivals = up to **60 membership changes**.\n2. **Eager**: each change makes every consumer revoke everything → 60 group-wide pauses.\n3. **Cooperative / KIP-848**: only partitions that actually move are paused; consumers retaining unaffected assignments can continue; the number affected depends on the assignment.\n4. **Static membership**: an instance restarting within the session timeout with the same `group.instance.id` can retain its assignment if membership and subscriptions otherwise remain stable; this reduces avoidable rebalances.\n5. On Kafka 4.0+ the new protocol is enabled on brokers by default; clients opt in with `group.protocol=consumer`.",
+    "workedExample": "1. A rolling deploy repeatedly changes membership. With eager assignment, those changes can pause the whole group.\n2. Cooperative assignment or the newer broker-driven protocol keeps unaffected assignments running while changed assignments are transferred.\n3. Static membership can preserve an assignment across a short restart when identity, group membership and subscriptions remain suitable; it is not an unconditional guarantee.\n4. On Kafka 4.0+, clients opt into the new protocol with group.protocol=consumer. Validate protocol migration and client compatibility before rollout.",
     "link": {
       "title": "KIP-848: the next generation of the consumer rebalance protocol",
       "url": "https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol"

@@ -13,20 +13,18 @@ Raft commits a current-term log entry after durable replication to a majority. T
 
 A majority is more than half the nodes, and the cluster keeps working as long as a majority is alive:
 
-```formula
+```formula essential
 M = ⌊N / 2⌋ + 1
-F = N − M = ⌊(N − 1) / 2⌋
-M = ⌊5 / 2⌋ + 1 = 2 + 1 = 3
-F = 5 − 3 = 2
+F = N − M
 where
-N: the number of nodes in the cluster; here 5
+N: the number of nodes in the cluster
 M: the majority, the smallest number of nodes that is more than half of N
 F: the number of nodes that can fail while a majority is still alive
 ⌊ ⌋: floor: round down to the nearest whole number, so ⌊2.5⌋ = 2
-In words: a majority is half the cluster rounded down, plus one; the cluster survives losing everyone else.
+In words: a majority is half the cluster rounded down, plus one; the cluster survives losing everyone else. Five nodes need 3 and survive 2 failures.
 ```
 
-Because M + M is always more than N, any two majorities share at least one node. That shared node is what carries committed entries from one leader to the next.
+Because two majorities together always add up to more than the whole cluster, any two majorities share at least one node. That shared node is what carries committed entries from one leader to the next.
 
 | Nodes | Majority | Tolerates |
 |---|---|---|
@@ -39,7 +37,7 @@ Even sizes add cost without extra tolerance. Each write needs a majority; more r
 
 Commit latency is set by the **majority's** slowest member, not the cluster's. The leader counts itself, so in a five-node cluster it waits for the second-fastest follower acknowledgement (including its `fsync`). With a fast leader and two fast followers, even two slow followers can be bypassed; three slow followers force the leader to wait for at least one slow acknowledgement.
 
-```formula
+```formula reference
 k = M − 1
 T_commit ≈ RTT_k
 where

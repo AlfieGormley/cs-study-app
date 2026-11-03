@@ -11,7 +11,7 @@ Once acknowledgement timing is correct, the remaining SQS design choices are how
 
 ## SQS limits, polling and FIFO throughput
 
-Other SQS details worth knowing:
+Other SQS details worth knowing (quotas as of 2026):
 
 | Setting | Value |
 |---|---|
@@ -24,21 +24,9 @@ For anything bigger than the limit (images, large documents), use the **claim ch
 
 Use **long polling** (`WaitTimeSeconds=20`). Short polling returns immediately even when the queue is empty, which wastes requests (and money, since SQS bills per request) and can miss messages because it samples only a subset of servers.
 
-Standard SQS queues offer nearly unlimited throughput but only **best-effort ordering** and **at-least-once** delivery. **SQS FIFO queues** guarantee order within a *message group* and deduplicate within a 5-minute window, at lower throughput. Without high-throughput mode, a FIFO queue handles 300 API calls per second per action (`SendMessage`, `ReceiveMessage`, `DeleteMessage`). Each call can carry a batch of up to 10 messages, which sets the ceiling:
+Standard SQS queues offer nearly unlimited throughput but only **best-effort ordering** and **at-least-once** delivery. **SQS FIFO queues** guarantee order within a *message group* and deduplicate within a 5-minute window, at lower throughput. Without high-throughput mode, a FIFO queue handles 300 API calls per second per action (`SendMessage`, `ReceiveMessage`, `DeleteMessage`). Each call can carry a batch of up to 10 messages, so batching is what lifts the ceiling from 300 to about 3,000 messages per second per action. If a FIFO producer throttles at exactly 300 or 3,000 messages a second, that limit is the first suspect.
 
-```formula
-R_max = C × b
-R_max = 300/s × 10 = 3000 msg/s
-where
-R_max: the most messages per second one action (for example SendMessage) can move
-C: API calls per second allowed per action: 300 for a FIFO queue without high-throughput mode
-b: messages per call (the batch size), at most 10 in SQS
-msg: messages
-s: seconds; "/s" means per second
-In words: 300 calls a second, each carrying up to 10 messages, is at most 3,000 messages a second per action; unbatched it is only 300.
-```
-
-**High-throughput mode** spreads groups across internal partitions and raises this to thousands or tens of thousands of calls per second, depending on the region, provided you use many distinct message group IDs.
+**High-throughput mode** spreads message groups across internal partitions and raises the limit to thousands or tens of thousands of calls per second, depending on the region (as of 2026). SQS hashes each message group ID to choose a partition, so the extra capacity only appears if you use many distinct message group IDs. Every message in one group still lands on one partition, because the group's order must be kept.
 
 ## Key takeaways
 

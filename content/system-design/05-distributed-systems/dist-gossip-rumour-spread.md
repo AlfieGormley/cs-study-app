@@ -25,19 +25,24 @@ round 3: 8 ...
 doubling: the ideal case
 ```
 
+> [!analogy] Real-world analogy: news spreading round a school
+> One pupil hears some news at morning break. At every break after that, everyone who knows tells one classmate picked at random. At first the number who know roughly doubles each break. Near the end, most of the people you pick already know, so the last few pupils take several more breaks to hear it.
+>
+> **How it maps:** Pupils are nodes, each break is a gossip round, telling one classmate is fanout 1 push gossip, and the slow finish is the tail that adds extra rounds beyond the doubling phase.
+>
+> **Where it stops:** Gossip nodes exchange summaries and pull missing updates as well as pushing them, which shortens the tail, and they keep gossiping forever rather than stopping once the news is out. Messages can also be lost or nodes be down, which a school playground rarely models.
+
 The doubling picture is the optimistic phase. Because peers are picked at random, more and more messages land on nodes that already know, and the last few uninformed nodes take a while to be hit. For ideal synchronous push gossip on a complete graph, starting from one informed node with independent uniform peer choices, reliable delivery and fanout 1 (each informed node tells one peer per round), the leading terms of the asymptotic expected round count are:
 
-```formula
+```formula reference
 r ≈ log_2(N) + ln(N)
-r ≈ log_2(1,000) + ln(1,000)
-r ≈ 10 + 6.9 ≈ 17
 where
 r: the number of gossip rounds until every node knows
-N: the number of nodes in the cluster; here 1,000
+N: the number of nodes in the cluster
 log_2: the base-2 logarithm: how many times you double 1 to reach N; this counts the doubling phase
 ln: the natural logarithm (base e ≈ 2.718); this counts the slow tail of finding the last few nodes
 ≈: approximately equal to
-In words: about log₂N rounds to reach most nodes by doubling, plus about ln N more to mop up the stragglers.
+In words: about one round per doubling to reach most nodes, plus a slower tail to reach the last few nodes; for 1,000 nodes that is roughly 10 rounds plus 7.
 ```
 
 With one round per second, the leading-term estimate for a 1,000-node cluster is about 17 seconds, before the asymptotic constant and implementation effects. This is an estimate, not a completion deadline. Push-pull (where uninformed nodes also *ask* random peers) finishes the tail much faster. Either way the number of rounds grows with the logarithm of the cluster size, written O(log N): doubling the cluster adds only about one or two rounds.

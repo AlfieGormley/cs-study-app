@@ -3,27 +3,27 @@
     "id": "dist-time-ordering-q5",
     "level": "advanced",
     "type": "single",
-    "prompt": "TrueTime reports an error bound ε (epsilon) of 4 ms: the true time is within 4 ms either side of the local clock. A Spanner transaction picks its commit timestamp s as TT.now().latest, the latest the current time could be. Roughly how long does commit wait take, and why is it needed? Assume stable uncertainty and no other timestamp constraint raises s.",
+    "prompt": "TrueTime returns an interval guaranteed to contain the true time, extending an error bound either side of the local clock. Suppose a Spanner variant stamped each commit with `TT.now().latest` but made it **visible immediately**, skipping commit wait. What could go wrong?",
     "options": [
       {
-        "text": "0 ms: the timestamp is already in the past.",
-        "explanation": "Wrong. s is the *latest* possible current time, so physical time may still be before s. Exposing the commit now could let a later transaction get a smaller timestamp."
+        "text": "Nothing: `latest` is already later than the true time, so every later transaction gets a larger timestamp.",
+        "explanation": "Wrong. `latest` can be up to about twice the error bound beyond the true time. A transaction that starts on another server just after this commit becomes visible can pick a timestamp below it, because its own `latest` has not yet caught up."
       },
       {
-        "text": "About 4 ms, to let replication finish.",
-        "explanation": "Wrong on both counts. The wait is about 2ε (the full interval width), and its purpose is timestamp ordering, not replication, which happens via Paxos in parallel."
+        "text": "Replication could lose committed data.",
+        "explanation": "Wrong. Commit wait is about timestamp ordering, not durability. Replication through Paxos is a separate mechanism and still happens."
       },
       {
-        "text": "About 8 ms, so that s is guaranteed to be in the past before the commit becomes visible.",
-        "explanation": "Correct. The wait lasts until TT.now().earliest > s, about 2ε. Afterwards any transaction starting later gets a larger timestamp, giving external consistency."
+        "text": "A transaction that starts after the commit is visible could get a smaller timestamp, so timestamp order would contradict real-time order.",
+        "explanation": "Correct. Commit wait holds the commit back until even `TT.now().earliest` has passed its timestamp. Only then is the timestamp certainly in the past, so any later transaction's timestamp is larger. Without it, external consistency (strict serializability) breaks."
       },
       {
-        "text": "Until NTP resynchronises all clocks.",
-        "explanation": "Wrong. Spanner doesn't wait for clock sync; it waits out the known uncertainty bound."
+        "text": "The error bound would grow, because the time masters would be polled less often.",
+        "explanation": "Wrong. The error bound depends on time since the last synchronisation with the time masters and on drift allowances, not on whether commits wait."
       }
     ],
     "answer": 2,
-    "workedExample": "Write the TrueTime interval using local clock estimate t at the moment the timestamp is chosen:\n\n```formula\nTT.now() = [t − ε, t + ε]\ns = t + ε\nt_now − ε > t + ε\nt_now > t + 2 × ε = t + 8 ms\nwhere\nTT.now(): TrueTime's answer to \"what time is it?\", an interval guaranteed to contain the true time\nt: the local clock estimate when the commit timestamp is chosen\nε: epsilon, the error bound; here 4 ms\ns: the commit timestamp, the top of the interval\nt_now: the local clock estimate later, while Spanner waits; TT.now().earliest is then t_now − ε\nms: millisecond\nIn words: the commit must wait until even the earliest possible current time is past s, and that takes about 2ε of physical time.\n```\n\n1. The wait condition is TT.now().earliest > s, which is the third line.\n2. So the wait lasts about **8 ms** (2ε).\n3. Now s is earlier than true current time.\n4. Any transaction T2 starting after T1's commit is visible picks a timestamp at least as large as TT.now().latest, which is already bigger than s.\n\nSo timestamp order matches real-time order. Spanner overlaps the wait with Paxos replication, so the real cost is often less.",
+    "workedExample": "Follow two transactions with an error bound of 4 ms.\n\n1. T1 is stamped with the top of its interval, so its timestamp can be up to about 8 ms (twice the error bound) ahead of the true time.\n2. Without waiting, T1 becomes visible right away.\n3. A client sees T1's result and starts T2 on another server 1 ms later. T2 picks the top of *its* interval, which is only a few milliseconds ahead of true time: it can be **smaller** than T1's timestamp.\n4. Now T2, which started after T1 was visible, is ordered before T1. Snapshot reads at T2's timestamp would not see T1.\n\nCommit wait closes the gap: T1 stays invisible until even the earliest possible current time has passed its timestamp, about twice the error bound, roughly 8 ms here. Anything starting after that sees a later `latest` and gets a larger timestamp. Spanner overlaps the wait with Paxos replication, so the added latency is often smaller.",
     "link": {
       "title": "Spanner (OSDI 2012)",
       "url": "https://www.usenix.org/system/files/conference/osdi12/osdi12-final-16.pdf"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Commit wait lasts about twice the error bound:\n\n```formula\nt_wait ≈ 2 × ε\nt_wait ≈ 2 × 4 ms = 8 ms\nt_wait ≈ 2 × 50 ms = 100 ms\nwhere\nt_wait: the commit wait, in milliseconds (ms)\nε: epsilon, TrueTime's error bound: normally about 4 ms, degraded 50 ms\n≈: approximately equal to\nms: millisecond\nIn words: the commit wait scales with the clock uncertainty, so a 12.5-fold larger error bound makes every commit wait 12.5 times longer.\n```\n\n1. Normal: about **8 ms**.\n2. Degraded: about **100 ms**.\n3. Safety: TT.now() still brackets physical time, so after the wait the commit timestamp is definitely in the past.\n\nThis is the core idea behind TrueTime: express clock uncertainty explicitly and pay for it in **latency**, rather than risk correctness when clocks get worse. Contrast an LWW store, which silently misorders writes when skew grows.",
+    "workedExample": "Ask what the commit wait depends on.\n\n1. Commit wait lasts until the bottom of the TrueTime interval has passed the commit timestamp, which takes about twice the error bound.\n2. Normal: an error bound of about 4 ms, so each commit waits about **8 ms**.\n3. Degraded: an error bound of about 50 ms, so each commit waits about **100 ms**: latency rises in proportion to the uncertainty.\n4. Safety is unchanged: the interval still contains the true time, so after the wait the commit timestamp is definitely in the past.\n\nThis is the core idea behind TrueTime: express clock uncertainty explicitly and pay for it in **latency**, rather than risk correctness when clocks get worse. Contrast an LWW store, which silently misorders writes when skew grows.",
     "link": {
       "title": "Spanner: Google's Globally-Distributed Database (OSDI 2012)",
       "url": "https://www.usenix.org/system/files/conference/osdi12/osdi12-final-16.pdf"

@@ -23,30 +23,9 @@ A **treap** is a binary search tree where each node also has a random **priority
 BST order on keys, max-heap on priorities
 ```
 
-For distinct keys and priorities, there is exactly one tree satisfying both rules. And it is the same tree you would get by inserting the keys in decreasing priority order into a plain BST. Since priorities are random, that is a random insertion order, and a BST built from random insertions has expected depth O(log n), where n is the number of keys:
+For distinct keys and priorities, exactly one tree satisfies both rules: the highest-priority key must be the root, and its key separates the left and right subtrees. Applying the same argument recursively fixes the whole tree.
 
-```formula
-H_n = Σ (1 / j)   for 1 ≤ j ≤ n
-D = 2(1 + 1 / n)H_n − 4
-D ≈ 2 ln(n) − 2.85
-D ≈ 2 ln(5000) − 2.85 ≈ 17.0 − 2.85 ≈ 14
-2 ln(n) ≈ 1.39 × log_2(n)
-where
-D: the expected depth of a uniformly selected existing node, in edges from the root, for a random permutation of n distinct keys
-H_n: the n-th harmonic number, the sum of reciprocals from 1 through n
-j: the summation index, a whole number from 1 to n
-Σ: add the indicated terms over the stated summation bounds
-≤: is at most
-n: the number of keys, 5,000 in the second line
-ln(n): the natural logarithm of n, to base e ≈ 2.718
-log_2(n): the base-2 logarithm of n; 2 ln(n) equals about 1.39 × log_2(n) because ln(2) ≈ 0.693
-≈: approximately equal to
-In words: the average depth grows like 2 ln(n), less a small constant of about 2.85, so for large n a randomly built tree is only about 39 % deeper on average than a perfectly balanced one.
-```
-
-The average depth is about 14 for 5,000 keys (the leading term 2 ln(n) alone gives 17); the deepest node is somewhat deeper, but still logarithmic in expectation.
-
-So the treap's shape no longer depends on the order keys actually arrived. Inserting 5,000 sorted keys into a plain BST gives a chain of height 4,999 edges; a treap with independent random priorities has expected logarithmic height, though a linear-height outcome remains possible.
+This is also the tree obtained by inserting keys into a plain BST in decreasing priority order. Independent random priorities therefore give the shape of a random insertion order, even when the actual keys arrive sorted. Expected height and operation cost are O(log n) for n keys. A rare linear-height outcome remains possible; this is not a deterministic height bound.
 
 ### Split and merge
 
@@ -55,7 +34,7 @@ The cleanest treap implementations use two operations:
 - `split(t, key)` returns two treaps: keys below `key`, and the rest.
 - `merge(a, b)` joins two treaps when every key in a is smaller than every key in b. The root is whichever root has the higher priority.
 
-Assume distinct keys and independent priorities; `insert` below requires a key not already present. `TNode` generates a random priority, with a counter to break rare finite-precision ties. The ideal analysis assumes independent continuous priorities; this finite implementation approximates that model.
+Assume distinct keys and independent priorities; `insert` below requires a key not already present. `TNode` generates a random priority, with a counter to break rare ties between representable priorities. The ideal analysis assumes independent continuous priorities; this finite implementation approximates that model.
 
 The example uses `import random`, introduced with the skip-list implementation; run that import when using this excerpt separately.
 
@@ -119,8 +98,4 @@ Split and merge are what make treaps popular in competitive programming. An **im
 - Merge requires all left-treap keys to precede every right-treap key.
 
 ## Further reading
-- [Skip list — Wikipedia](https://en.wikipedia.org/wiki/Skip_list)
-- [Treap — Wikipedia](https://en.wikipedia.org/wiki/Treap)
-- [Treap (Cartesian tree) — cp-algorithms](https://cp-algorithms.com/data_structures/treap.html)
-- [Reservoir sampling — Wikipedia](https://en.wikipedia.org/wiki/Reservoir_sampling)
-- [Fisher–Yates shuffle — Wikipedia](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle)
+- [Treaps — Open Data Structures](https://opendatastructures.org/ods-python/7_2_Treap_Randomized_Binary.html)

@@ -3,27 +3,27 @@
     "id": "dist-time-ordering-q2",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Process P1 has Lamport clock 7 and P2 has Lamport clock 3. P1 sends a message to P2. What is P2's clock value for the receive event?",
+    "prompt": "A developer implements Lamport clocks, but on receiving a message sets the counter to **its own counter + 1**, ignoring the timestamp on the message. P1's counter is 7 and P2's is 3 when P1 sends P2 a message. What goes wrong?",
     "options": [
       {
-        "text": "4",
-        "explanation": "Wrong. That's P2's own counter + 1, ignoring the incoming timestamp. Lamport's rule takes the max first."
+        "text": "Nothing: ties are broken by process id, so the total order is still consistent with causality.",
+        "explanation": "Wrong. Tie-breaking only orders events with equal timestamps. Here the receive can get a *smaller* timestamp than the send, so the order is wrong, not just tied."
       },
       {
-        "text": "8",
-        "explanation": "Wrong. 8 is the timestamp on the message itself (P1 increments to 8 before sending). The receiver must then go strictly higher."
+        "text": "Counters grow too quickly and overflow.",
+        "explanation": "Wrong. Ignoring the message timestamp makes counters grow more slowly, not faster. Overflow is not the issue."
       },
       {
-        "text": "9",
-        "explanation": "Correct. P1 increments to 8 and stamps the message 8. P2 sets max(3, 8) + 1 = 9."
+        "text": "The receive can be stamped lower than the send that caused it (4 versus 8), so a later event can look earlier.",
+        "explanation": "Correct. P1 stamps the message 8. P2 sets 3 + 1 = 4. Now the receive, which happened after the send, has the smaller timestamp, breaking the one guarantee Lamport clocks give: if a happened before b, a's timestamp is smaller."
       },
       {
-        "text": "11",
-        "explanation": "Wrong. That adds the two clocks (3 + 8), which isn't part of the algorithm."
+        "text": "Lamport clocks can no longer detect concurrent events.",
+        "explanation": "Wrong. Lamport clocks never could detect concurrency in general; that needs vector clocks. The new bug is worse: they no longer even respect causality."
       }
     ],
     "answer": 2,
-    "workedExample": "Apply Lamport's two rules:\n\n```formula\nL_1 = 7 + 1 = 8\nL_2 = max(L, t) + 1\nL_2 = max(3, 8) + 1 = 9\nwhere\nL_1: P1's counter after the send; the message carries this value\nL_2: P2's counter after the receive\nL: P2's counter before the receive; here 3\nt: the timestamp on the incoming message; here 8\nmax: the larger of its inputs\nIn words: the sender adds one before sending; the receiver jumps past both its own counter and the message's timestamp, then adds one.\n```\n\nCheck the guarantee: send (8) → receive (9), and 8 < 9 as required.",
+    "workedExample": "Follow the message.\n\n1. P1 increments from 7 to 8 for the send and stamps the message 8.\n2. Correct rule: P2 takes the larger of its own counter (3) and the message's timestamp (8), then adds one: 9. The receive is after the send, and 8 < 9 says so.\n3. Buggy rule: P2 just adds one to its own counter: 4. Now the receive has a smaller timestamp than the send that caused it.\n4. Any system that orders events by Lamport timestamp (a totally ordered mutex queue, a log merge) would now put the receive *before* the send.\n\nThe max step is what pulls a receiver's counter past everything it has heard about. Without it, timestamps no longer respect happens-before.",
     "link": {
       "title": "Lamport timestamp (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Lamport_timestamp"

@@ -13,7 +13,7 @@ Wall time cannot reliably answer whether one event influenced another. Logical c
 
 Lamport's 1978 paper defined order without clocks. It uses two pieces of notation:
 
-```formula
+```formula essential
 a → b
 a ∥ b
 where
@@ -32,11 +32,18 @@ Event *a* **happens before** *b* (a → b) if:
 
 If neither event happens before the other, the events are **concurrent**. Concurrent doesn't mean simultaneous; it means neither could have influenced the other.
 
+> [!analogy] Real-world analogy: could the rumour have reached you?
+> Ann tells Bob some news, and Bob later mentions it to Carol. Ann's news could have shaped what Carol then decided, because a chain of conversations connects them. Meanwhile Dev, who spoke to none of them, decided something too. However the clocks on their phones compare, Ann's news could not have influenced Dev.
+>
+> **How it maps:** Each person is a process, each conversation is a message, and "a chain of conversations connects them" is happens-before. Ann's news and Dev's decision are concurrent: no chain links them in either direction, whatever the time on anyone's watch.
+>
+> **Where it stops:** People also learn things through channels nobody records, such as a newspaper or an overheard remark. Happens-before only counts messages the system can see, so information that travels outside the system (a phone call between two clients) creates real influence that the clocks never record.
+
 ## Lamport clocks
 
-Each process keeps a single whole-number counter, L, starting at 0. Two rules update it:
+Each process keeps a single whole-number counter, starting at 0. Two rules update it: before every local event or send, add one (and stamp an outgoing message with the new value); on every receive, take the larger of your own counter and the message's timestamp, then add one.
 
-```formula
+```formula reference
 L_new = L + 1
 L_new = max(L, t) + 1
 where
@@ -47,7 +54,7 @@ max: the larger of its inputs, e.g. max(3, 8) = 8
 In words: on a local event or a send, add one (and attach the new value to the message); on a receive, jump past both your own counter and the message's timestamp, then add one.
 ```
 
-The first rule applies before every local event or send; the second on every receive. Worked example: P1's counter is 7 and P2's is 3. P1 sends a message, so its counter becomes 7 + 1 = 8 and the message carries 8. P2 receives it and sets its counter to the larger of 3 and 8, plus one, which is 9. The send (8) comes before the receive (9), as it must.
+Worked example: P1's counter is 7 and P2's is 3. P1 sends a message, so its counter becomes 7 + 1 = 8 and the message carries 8. P2 receives it and sets its counter to the larger of 3 and 8, plus one, which is 9. The send (8) comes before the receive (9), as it must.
 
 ```
  P1        P2        P3
@@ -60,7 +67,7 @@ The first rule applies before every local event or send; the second on every rec
 
 The guarantee Lamport clocks give:
 
-```formula
+```formula essential
 a → b ⇒ L(a) < L(b)
 where
 a: an event

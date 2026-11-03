@@ -46,7 +46,7 @@ This is exactly the situation the CAP theorem talks about: during a partition, e
 
 ## Unreliable clocks and process pauses
 
-Every machine has its own quartz clock, and they drift (Google assumes up to 200 ppm, around 17 seconds a day if never corrected). NTP corrects them, but only to within a few milliseconds on a good LAN, and much worse over the internet. Clocks can even **jump backwards** when NTP steps them.
+Servers commonly keep time with quartz oscillators, which drift. The 2012 Spanner paper allowed for up to 200 ppm of local clock drift, around 17 seconds a day if never corrected. NTP corrects them, but typically only to within tens of milliseconds over the internet; better than a millisecond on a local network needs ideal conditions. Clocks can even **jump backwards** when NTP steps them.
 
 Processes can also pause without noticing:
 

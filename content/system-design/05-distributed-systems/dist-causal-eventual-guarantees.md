@@ -24,11 +24,11 @@ Causal: nobody sees "Congrats!" before
 
 Without causal consistency, Carol might see Bob's "Congrats!" before Alice's posts arrive, or see the posts in reverse, which reads as Bob celebrating a sacking.
 
-Causal consistency is, in effect, the **strongest model that remains available during partitions**: each side keeps working and merges causal histories later. (Strictly, Mahajan et al. proved this for a slight strengthening called real-time causal, and it needs *sticky* availability, where each client keeps talking to the same replica.) Systems track causality with version vectors or dependency metadata; MongoDB offers causally consistent sessions.
+Causal consistency can remain available during partitions when clients keep talking to a replica that has their dependencies (*sticky* availability). Mahajan et al. proved a precise upper bound for systems that are always available and **one-way convergent**: real-time causal consistency, a strengthening of causal consistency, is achievable and no stronger model is. Here, one-way convergence means that a replica can catch up using incoming messages without requiring an acknowledgement path back. Those assumptions matter; this is not an unrestricted ranking of every consistency model. Systems track causality with version vectors or dependency metadata; MongoDB offers causally consistent sessions.
 
 ## Eventual consistency
 
-**Eventual consistency** promises only that if writes stop, all replicas *eventually* converge to the same value. It says nothing about what you read in the meantime: stale values, values going backwards, writes out of order.
+**Eventual consistency** promises only that if writes stop and updates can eventually reach the relevant replicas, they *eventually* converge to the same value. It says nothing about what you read in the meantime: stale values, values going backwards, writes out of order.
 
 It's what you get from Dynamo-style stores with low quorum settings, DNS, and asynchronous read replicas. It is cheap and highly available, and fine for things like like-counts and product views. But "eventually" has no bound, and convergence needs a conflict-resolution rule (covered in the CRDT units later in this module).
 

@@ -47,8 +47,8 @@
     "aliases": [
       "idempotency keys"
     ],
-    "definition": "A unique identifier a client sends with a request so the server can recognise a retry of the same operation and return the original result instead of doing the work again. The key must identify the operation (for example the order), not the attempt.",
-    "example": "Sending key \"order-77:charge\" with every retry of a payment means the card is charged at most once.",
+    "definition": "An identifier reused for every attempt at the same logical operation, allowing a server to recognise retries and return the recorded result. Protection depends on the server atomically recording the result with the side effect and retaining the key for the retry window.",
+    "example": "Using \"order-77:charge\" for each retry prevents duplicate charging while the payment service retains and enforces that operation key.",
     "source": "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/"
   },
   {
@@ -165,7 +165,7 @@
       "asynchronous model",
       "asynchronous system"
     ],
-    "definition": "A timing model with no bounds at all on message delay or processing speed: a message is eventually delivered, but could take any amount of time. The FLP result shows deterministic consensus cannot guarantee termination in it.",
+    "definition": "A timing model with no known bounds on message delay or process speed. Message reliability is a separate assumption: FLP uses reliable eventual delivery and still rules out guaranteed deterministic consensus termination when a process may crash.",
     "source": "https://groups.csail.mit.edu/tds/papers/Lynch/jacm85.pdf"
   },
   {
@@ -237,8 +237,9 @@
       "NTP",
       "Network Time Protocol"
     ],
-    "definition": "The standard internet protocol for synchronising computer clocks with time servers. It estimates the offset from a round trip of four timestamps and typically keeps clocks within about a millisecond on a good LAN and tens of milliseconds over the internet.",
-    "source": "https://www.rfc-editor.org/rfc/rfc5905"
+    "definition": "The standard internet protocol for synchronising computer clocks with time servers. It estimates offset from four timestamps and filters repeated samples; accuracy depends on the path, oscillator and configuration, and persistent one-way delay asymmetry biases the estimate.",
+    "source": "https://www.rfc-editor.org/rfc/rfc5905",
+    "example": ""
   },
   {
     "id": "lan",
@@ -314,8 +315,8 @@
       "Raft leader",
       "Raft leaders"
     ],
-    "definition": "The node that coordinates writes for a group of replicas: clients send writes to it, it decides their order and sends them to the followers. Raft, Kafka and most databases elect one leader at a time.",
-    "source": "https://en.wikipedia.org/wiki/Leader_election"
+    "definition": "A node that accepts writes for a group of replicas (or for one partition of the data), puts them in order and sends them to the other replicas, its followers. Raft groups and Kafka partitions elect one leader at a time; multi-leader replication instead lets several leaders accept writes for the same data and merge conflicting ones.",
+    "source": "https://en.wikipedia.org/wiki/Replication_(computing)"
   },
   {
     "id": "leader-election",
@@ -351,7 +352,7 @@
       "chatty APIs",
       "chatty services"
     ],
-    "definition": "An interface that needs many small back-and-forth requests to get one job done. Each request pays a network round trip, so chatty APIs are fine inside a data centre and slow across a WAN.",
+    "definition": "An interface that needs many small back-and-forth requests to complete one job. Sequential requests each pay a network round trip, so performance becomes particularly sensitive to delay as services are placed farther apart.",
     "source": "https://en.wikipedia.org/wiki/Fallacies_of_distributed_computing"
   },
   {
@@ -945,8 +946,9 @@
       "leap-smeared",
       "leap smearing"
     ],
-    "definition": "Spreading a leap second over many hours by running clocks very slightly slow or fast, instead of inserting an extra second at once. Google and AWS time services do this.",
-    "source": "https://developers.google.com/time/smear"
+    "definition": "Spreading a leap second over many hours by running clocks very slightly slow or fast instead of inserting an extra second at once. Google Public NTP and Amazon Time Sync over NTP smear; Amazon’s PTP hardware clock follows unsmeared UTC.",
+    "source": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/set-time.html",
+    "example": ""
   },
   {
     "id": "last-write-wins",
@@ -971,9 +973,7 @@
   {
     "id": "transitivity",
     "term": "Transitivity",
-    "aliases": [
-      "transitive"
-    ],
+    "aliases": [],
     "definition": "The property that if a relates to b and b relates to c, then a relates to c. Happens-before is transitive: a → b and b → c give a → c.",
     "source": "https://en.wikipedia.org/wiki/Transitive_relation"
   },
@@ -1129,9 +1129,9 @@
   {
     "id": "timestamp-integer-overflow",
     "term": "Integer overflow",
-    "definition": "When a calculation produces a number too large for the space reserved for it, so it wraps around to a very small or negative value.",
+    "definition": "When a result exceeds the range of an integer representation. Depending on the language and type it may wrap, raise an error or have undefined behaviour; a wrapping timestamp can jump to a small or negative value.",
     "example": "A signed 64-bit count of nanoseconds overflows after about 292 years.",
-    "source": "https://en.wikipedia.org/wiki/Integer_overflow"
+    "source": "https://eel.is/c++draft/basic.fundamental"
   },
   {
     "id": "out-of-order-execution",
@@ -1140,7 +1140,7 @@
       "executed instructions out of order",
       "CPU reordering"
     ],
-    "definition": "A CPU technique of running instructions in a different order from the program when that is faster, while making the results look as if they ran in order. It is invisible to a program reading a clock.",
+    "definition": "A CPU technique that executes instructions in a different order when doing so preserves the required architectural results. Precise low-level timing can require ordering barriers; this does not explain an NTP-sized wall-clock jump in an ordinary request-duration measurement.",
     "source": "https://en.wikipedia.org/wiki/Out-of-order_execution"
   },
   {
@@ -1304,7 +1304,7 @@
     "aliases": [
       "sloppy quorums"
     ],
-    "definition": "A quorum that accepts writes on healthy nodes outside a key’s preference list when the proper replicas are unreachable. It keeps writes available but breaks the guarantee that reads overlap writes.",
+    "definition": "A quorum that can count healthy fallback nodes outside a key’s primary replica set when its usual replicas are unreachable. In Dynamo, the preference list includes these fallback candidates. Sloppy placement improves availability but can break read/write intersection within the primary set.",
     "source": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
   },
   {
@@ -1968,7 +1968,7 @@
       "consumer groups",
       "Kafka consumer groups"
     ],
-    "definition": "A set of consumers sharing a Kafka topic, where each partition is read by exactly one member at a time. Ownership moves in a rebalance when members join or leave.",
+    "definition": "A set of consumers sharing a Kafka topic, with each partition assigned to one member of the group at a time. Assignment changes during rebalances; a stale worker may still have in-flight external work, so external effects need deduplication and sequencing or fencing.",
     "source": "https://kafka.apache.org/documentation/#intro_consumers"
   },
   {
@@ -2340,7 +2340,7 @@
     "aliases": [
       "at-least-once"
     ],
-    "definition": "A delivery guarantee in which every message arrives, possibly more than once. Consumers must deduplicate.",
+    "definition": "A delivery guarantee that permits duplicates and promises eventual delivery within its stated failure, retry and retention assumptions. It cannot promise arrival after permanent loss or an expired retention window. Consumers need idempotent processing or deduplication if repeated effects would be harmful.",
     "source": "https://kafka.apache.org/documentation/#semantics"
   },
   {
@@ -2349,8 +2349,9 @@
     "aliases": [
       "exactly-once"
     ],
-    "definition": "A guarantee that each message is processed once and only once. Networks can’t provide it directly; systems approximate it with at-least-once delivery plus deduplication.",
-    "source": "https://kafka.apache.org/documentation/#semantics"
+    "definition": "A delivery promise must state its boundary: receiving a message once differs from applying its effect once. Exactly-once processing can be implemented within a transactional scope by atomically recording the effect and the message identity or consumed position; an external effect needs a compatible transaction or idempotency contract.",
+    "source": "https://kafka.apache.org/documentation/#semantics",
+    "example": ""
   },
   {
     "id": "dual-write-problem",
@@ -2805,5 +2806,47 @@
     ],
     "definition": "Between events in a happens-before formula, a right arrow means the first event could influence the second. In protocol drawings and walkthroughs it may instead show a message, transformation or next step; use the surrounding formula or figure to identify the intended relation.",
     "source": "https://lamport.azurewebsites.net/pubs/time-clocks.pdf"
+  },
+  {
+    "id": "precision-time-protocol",
+    "term": "Precision Time Protocol (PTP)",
+    "aliases": [
+      "PTP"
+    ],
+    "definition": "A clock-synchronisation protocol (IEEE 1588) often using hardware timestamps for precise network timing. Its delay calculation assumes symmetric paths unless a correction for known path asymmetry is applied; precision does not remove unknown asymmetry.",
+    "source": "https://www.linuxptp.org/documentation/ptp4l/"
+  },
+  {
+    "id": "causal-context",
+    "term": "Causal context",
+    "aliases": [
+      "version context"
+    ],
+    "definition": "The version metadata, such as a version vector, that a store like Riak returns with a read and expects back with the next write. It tells the store which earlier versions the write has already seen, so it can replace them instead of keeping them as siblings.",
+    "source": "https://docs.riak.com/riak/kv/latest/learn/concepts/causal-context/index.html"
+  },
+  {
+    "id": "sibling-explosion",
+    "term": "Sibling explosion",
+    "definition": "When a key rapidly collects many siblings that nobody reconciles, often because clients write without the causal context from their reads. The object grows, reads slow down and nodes can struggle to handle it.",
+    "source": "https://docs.riak.com/riak/kv/latest/developing/usage/conflict-resolution/index.html"
+  },
+  {
+    "id": "circuit-breaker",
+    "term": "Circuit breaker",
+    "aliases": [
+      "circuit breakers"
+    ],
+    "definition": "A wrapper around calls to a dependency that stops sending them, failing fast instead, once failures pass a threshold, then lets a few trial calls through later to see whether the dependency has recovered. It stops a struggling service being buried under retries.",
+    "source": "https://martinfowler.com/bliki/CircuitBreaker.html"
+  },
+  {
+    "id": "one-way-convergence",
+    "term": "One-way convergence",
+    "aliases": [
+      "one-way convergent"
+    ],
+    "definition": "A convergence property under which a node can eventually incorporate updates known to another node using messages from that node, without requiring a simultaneous return path. Mahajan and colleagues use a precise form of this property in their upper bound on always-available consistency.",
+    "source": "https://www.cs.utexas.edu/~lorenzo/papers/cac-tr.pdf"
   }
 ]

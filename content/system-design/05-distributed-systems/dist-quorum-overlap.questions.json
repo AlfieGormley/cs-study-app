@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. State: A = v2, B = v2, C = v1.\n2. Overlap test:\n\n```formula\nR + W > N\n1 + 2 > 3   ✗\nwhere\n✗: the condition is false: 1 + 2 = 3, which is not more than 3\nR: replicas a read asks; here 1\nW: replicas that acknowledged the write; here 2 (A and B)\nN: replicas per key; here 3\nIn words: the read and write sets add up to exactly the replica count, not more, so they can miss each other completely.\n```\n\nSo a read set {C} and the write set {A, B} can be disjoint.\n\n3. The read picks one replica (often the fastest or a random one). If it picks C, it gets v1. The chance is one in three only if selection is uniform; fastest-replica routing need not be uniform.\n\nTo guarantee v2 under these assumptions, use 2 read responses: the read and write counts then sum to 4, more than the 3 replicas. Thus any two replicas include A or B. C would then be fixed by read repair or anti-entropy.",
+    "workedExample": "1. State after the write: A = v2, B = v2, C = v1.\n2. Overlap test: the read asks 1 replica and the write reached 2. Together that is 3, which is **not more than** the 3 replicas, so the read set and the write set can miss each other completely.\n3. A read set of {C} and the write set {A, B} are disjoint. The read picks one replica (often the fastest or a random one); if it picks C, it gets v1. The chance is one in three only if selection is uniform; fastest-replica routing need not be uniform.\n\nTo guarantee v2 under these assumptions, use 2 read responses: the read and write counts then sum to 4, more than the 3 replicas, so any two replicas include A or B. C would then be fixed by read repair or anti-entropy.",
     "link": {
       "title": "Cassandra Dynamo architecture",
       "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
@@ -48,12 +48,12 @@
         "explanation": "Wrong. It does give a real guarantee: every read set intersects every write set."
       },
       {
-        "text": "Every later read sees at least one of the two writes, but the writes may sit on disjoint replicas, so which one wins depends only on the version rule (e.g. timestamps).",
-        "explanation": "Correct. Reads overlap writes (4 + 2 = 6, more than 5), but writes don't overlap each other (2 + 2 = 4, which is not greater than 5). Without write-write overlap, no replica is forced to see both and order them."
+        "text": "Every later read set intersects each completed write set, but the writes may use disjoint replicas; reconciliation still depends on the version rule.",
+        "explanation": "Correct. Reads overlap each write set (4 + 2 is more than 5), but the two write sets need not overlap each other (2 + 2 is not more than 5). Intersections do not themselves order writes or preserve every version."
       }
     ],
     "answer": 3,
-    "workedExample": "Two separate conditions:\n\n```formula\nR + W > N\n4 + 2 > 5   ✓\nW > N / 2\n2 > 2.5   ✗\nwhere\n✓: the condition is true\n✗: the condition is false\nR: replicas a read asks; here 4\nW: replicas a write needs; here 2\nN: replicas per key; here 5\nIn words: reads are big enough to meet every write, but writes are too small to be sure of meeting each other.\n```\n\n| Condition | Here | Gives |\n|---|---|---|\n| R + W > N | 6 > 5 ✓ | read meets write |\n| W > N/2 | 2 > 2.5 ✗ | write meets write |\n\nPossible state:\n\n```\nA:x1 B:x1 C:x2 D:x2 E:old\nread {A,B,C,D} -> sees x1 and x2\n```\n\nThe reader sees both and picks by version. With last-write-wins and skewed clocks, an earlier write in physical time can win. Write-write overlap (W ≥ 3) at least ensures some replica sees both writes, but concurrent writes still need a real ordering mechanism (versions read first, or consensus) to be linearizable.",
+    "workedExample": "Check the read-write condition and the write-write condition separately:\n\n| Condition | Here | Gives |\n|---|---|---|\n| R + W > N | 6 > 5 ✓ | read meets write |\n| W > N/2 | 2 > 2.5 ✗ | write meets write |\n\nPossible state:\n\n```\nA:x1 B:x1 C:x2 D:x2 E:old\nread {A,B,C,D} -> sees x1 and x2\n```\n\nThe reader sees both and picks by version. With last-write-wins and skewed clocks, an earlier write in physical time can win. Write-write overlap (W ≥ 3) at least ensures some replica sees both writes, but concurrent writes still need a real ordering mechanism (versions read first, or consensus) to be linearizable.",
     "link": {
       "title": "Quorum (distributed computing) (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Quorum_%28distributed_computing%29"

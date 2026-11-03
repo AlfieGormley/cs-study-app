@@ -30,11 +30,8 @@ The tool for this is a **partition key** (Kafka, Kinesis) or a **message group I
 
 For sustained provisioned-shard sizing without record aggregation, a Kinesis shard supports 1 MB/s **or** 1,000 records per second of writes, whichever comes first, and shared GetRecords reads have a 2 MB/s shard limit (enhanced fan-out has per-consumer capacity), so you size shards on both bytes and record count and take the larger answer:
 
-```formula
+```formula reference
 S = ⌈max(W / (1 MB/s), R / (1000/s))⌉
-S = ⌈max(2 MB/s / (1 MB/s),
-         4000/s / (1000/s))⌉
-S = ⌈max(2, 4)⌉ = 4
 where
 S: the minimum number of shards
 ⌈ ⌉: ceiling: round up to the next whole number, because you cannot have part of a shard
@@ -47,6 +44,8 @@ In words: work out how many shards the byte rate needs and how many the record r
 ```
 
 Small records hit the record limit first and large records hit the byte limit first. Both limits apply to each shard, so a hot partition key can overload one shard even when the stream's average is fine.
+
+This estimate assumes evenly distributed keys, no record aggregation and sustained rates. Add headroom and check actual shard metrics; a stream-wide average can hide an overloaded shard.
 
 SQS FIFO is notable: it does not lock a whole partition. A single receive can return multiple messages in group order-17; additional receives for that group wait until the in-flight messages are deleted or visible again, but any other group can be served. So parallelism scales with the number of **active groups**, not a fixed partition count.
 
@@ -69,5 +68,6 @@ Mitigations:
 
 ## Further reading
 
+- [Kinesis quotas and limits (AWS)](https://docs.aws.amazon.com/streams/latest/dev/service-sizes-and-limits.html)
 - [Amazon SQS FIFO queues (AWS docs)](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues.html)
 - [Kafka consumer (Confluent docs)](https://docs.confluent.io/platform/current/clients/consumer.html)

@@ -55,24 +55,9 @@ def char_at(node, i):
     return node.s[i]
 ```
 
-Tracing `char_at(root, 10)` on the rope above:
+For character ten, the root's left subtree contains nine characters, so go right with index one. The right child's left chunk, `na`, has two characters, so go left and read its character one: `a`.
 
-```formula
-i = 10,   w_root = 9
-i ≥ w_root,   so i = 10 − 9 = 1
-i = 1 < w_right = 2
-c = "na"[1] = "a"
-where
-i: the index of the wanted character, counting from 0 within the current subtree
-w_root: the root's weight: the length of its left subtree, 6 + 3 = 9 characters
-w_right: the weight of the root's right child: the length of "na", 2 characters
-c: the character found
-≥: is at least
-<: is less than
-In words: at the root the index is not below the weight, so go right and subtract the 9 skipped characters; at the next node 1 is below the weight 2, so go left to the leaf "na", whose character 1 is "a".
-```
-
-Character 10 of `Hello_my_name_is_Simon` is indeed `a`. The cost is one step per level, so a balanced rope finds any character in O(log n) steps for n characters.
+The weights translate a whole-document position into a position relative to the current subtree. Each right descent subtracts exactly the skipped left-subtree length. With balanced, bounded-size chunks, navigation takes O(log n) for n characters; the unbalanced example class itself does not enforce that guarantee.
 
 ## Key takeaways
 
@@ -80,8 +65,5 @@ Character 10 of `Hello_my_name_is_Simon` is indeed `a`. The cost is one step per
 - A right descent subtracts the skipped left-subtree length from the index.
 
 ## Further reading
-- [Sparse Table — cp-algorithms](https://cp-algorithms.com/data_structures/sparse-table.html)
-- [Range minimum query — Wikipedia](https://en.wikipedia.org/wiki/Range_minimum_query)
-- [Persistent data structure — Wikipedia](https://en.wikipedia.org/wiki/Persistent_data_structure)
-- [Rope (data structure) — Wikipedia](https://en.wikipedia.org/wiki/Rope_(data_structure))
-- [Text Buffer Reimplementation — VS Code blog](https://code.visualstudio.com/blogs/2018/03/23/text-buffer-reimplementation)
+- [SGI rope implementation overview](https://stlab.adobe.com/stldoc_ropeimpl.html)
+- [VS Code text-buffer implementation](https://code.visualstudio.com/blogs/2018/03/23/text-buffer-reimplementation)

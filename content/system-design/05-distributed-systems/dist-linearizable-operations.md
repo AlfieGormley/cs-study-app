@@ -54,6 +54,13 @@ C:              |-read-| -> 0   ILLEGAL
 
 B saw the new value; C started *after* B finished, yet saw the old one. That's what happens with naive async replication: B hit an up-to-date replica, C hit a lagging one.
 
+> [!analogy] Real-world analogy: one scoreboard versus printed score sheets
+> At a match there is one scoreboard. The instant it changes, everyone who looks afterwards sees the new score; nobody who glances later can see the old one. Now imagine instead that runners carry printed score sheets to different stands, some faster than others. A fan in one stand can see the goal, text a friend in another stand, and the friend's sheet still shows the old score.
+>
+> **How it maps:** The single scoreboard is linearizability: the system behaves like one copy, and each update takes effect at one instant. The printed sheets are asynchronous replicas, and the fan reading an old sheet after their friend saw the new one is the violation in the diagram above.
+>
+> **Where it stops:** Reading a scoreboard is instant, but an operation takes time; a read that overlaps a write may legitimately return either value. And a real linearizable system is many machines coordinating to *act* like one board, which costs latency and availability.
+
 ### Composability
 
 Linearizability is **local** (Herlihy and Wing call it *composable*): if every individual object is linearizable, the system as a whole is linearizable. You can shard keys across independent linearizable groups and still reason about each one alone. Sequential consistency does **not** compose: two objects that are each sequentially consistent can together produce a history that no single order explains.

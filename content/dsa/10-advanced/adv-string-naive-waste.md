@@ -9,25 +9,9 @@ sourceLesson: adv-string-algorithms
 
 Here n is the text or indexed-string length, m is the pattern length, and positions count from zero. Costs count constant-time character and word operations unless noted.
 
-The naive way to find a pattern p (length m) in a text t (length n) tries every start position and compares character by character. In the worst case every start position compares the whole pattern:
+The naive matcher tries each possible start and compares characters from the beginning of the pattern. If a mismatch occurs late, it may repeat almost all those comparisons at the next start. In the worst case this costs O(nm), where n is text length and m is pattern length.
 
-```formula
-C_naive ≤ (n − m + 1)m
-T_naive = O(nm)   for 1 ≤ m ≤ n
-C_naive ≈ (10^6 − 5 + 1) × 5 ≈ 5 × 10^6
-where
-C_naive: the number of character comparisons naive matching makes
-T_naive: the total naive matching work for a non-empty pattern that fits in the text
-n: the length of the text t, in characters
-m: the length of the pattern p, in characters
-n − m + 1: the number of places the pattern can start inside the text
-O(f): "grows at most in proportion to f", ignoring constant factors
-≤: is at most
-≈: approximately equal to
-In words: naive matching can compare up to m characters at each of about n start positions, so its cost grows with the product of the two lengths.
-```
-
-The second line is the classic bad case: searching for `aaaab` (five characters) in a million `a`s matches four `a`s and fails on the `b` at every start, about five million comparisons, and finds nothing. When mismatches come early (typical English text), naive matching is much closer to n comparisons.
+Searching for `aaaab` inside a long run of `a`s exposes the waste: each attempt rechecks four successful comparisons before failing on the `b`. Early mismatches can make naive matching much cheaper, but repetitive input removes that advantage.
 
 The algorithms in this lesson avoid that waste in different ways. **KMP** and the **Z-function** reuse previous matches instead of restarting the search at every position. **Rabin–Karp** compares hashes instead of strings. **Suffix arrays** pre-process the text once so that many later queries are fast.
 
@@ -48,11 +32,8 @@ KMP precomputes, for every prefix of the pattern, exactly this "how much can I k
 ## Key takeaways
 
 - Repeated prefixes make naive matching retry the same successful comparisons.
-- A border tells a matcher which already-matched characters it can retain.
+- A string border tells a matcher which already-matched characters it can retain.
 
 ## Further reading
-- [Prefix function and Knuth–Morris–Pratt — cp-algorithms](https://cp-algorithms.com/string/prefix-function.html)
-- [Rabin–Karp algorithm — Wikipedia](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm)
+- [Prefix function and KMP — cp-algorithms](https://cp-algorithms.com/string/prefix-function.html)
 - [Z-function — cp-algorithms](https://cp-algorithms.com/string/z-function.html)
-- [Suffix Array — cp-algorithms](https://cp-algorithms.com/string/suffix-array.html)
-- [Suffix array — Wikipedia](https://en.wikipedia.org/wiki/Suffix_array)

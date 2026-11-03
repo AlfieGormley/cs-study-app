@@ -11,23 +11,7 @@ Here n is the non-empty input array’s length. Big-O bounds count constant-time
 
 ## The iterative bottom-up version
 
-For point updates and commutative operations there is a compact, fast, non-recursive form. It needs only 2n slots, with the leaves in the second half:
-
-```formula
-leaf(j) = n + j
-parent(i) = ⌊i / 2⌋
-n = 8:  leaf(5) = 13,  parent(13) = 6
-where
-n: the number of elements in the array
-j: an array position, from 0 to n − 1
-leaf(j): the index in the tree array of element j's leaf
-i: any tree index other than the root (index 1)
-parent(i): the index of i's parent
-⌊ ⌋: floor: round down to the nearest whole number
-In words: element j is stored at slot n + j, and halving any index (rounding down) moves one level up.
-```
-
-In Python, `i // 2` is exactly the floor of i / 2 for non-negative i.
+For point updates and commutative operations there is a compact non-recursive form. For n input elements it uses `2 * n` slots: element `a[j]` lives at `t[n + j]`. The parent of an index `i` is `i // 2`. The code below builds the tree and answers half-open ranges, including an empty range.
 
 ```python
 def build(a):
@@ -57,17 +41,16 @@ def query(t, n, l, r):  # half-open [l, r)
 
 It avoids recursive-call overhead.
 
-> [!note] Content gap: performance multiplier
-> No fixed speedup is supplied because the original “several times faster” claim lacked a reproducible benchmark for a specified implementation and workload.
+Benchmark recursive and iterative implementations on the intended workload before claiming a speedup.
 
 ## Where segment trees are used
 
 - Competitive programming and interviews: range sum/min/max with updates, "count of smaller numbers after self" (after coordinate compression), and booking problems such as "maximum number of overlapping events" (range add plus range max).
 - **Computational geometry**: sweep-line algorithms, such as computing the area of a union of rectangles, keep a segment tree over the y-coordinates.
-- **Huge index ranges**: a dynamic (sparse) segment tree creates nodes only when touched, so it can cover indices up to 10^9 with memory proportional to the operations performed.
+- **Huge index ranges**: a dynamic (sparse) segment tree creates nodes only when touched, so it can cover indices up to a billion with memory proportional to the operations performed.
 
 > [!note] A name clash
-> In computational geometry, "segment tree" traditionally names a related structure that stores a set of *intervals* and answers "which intervals contain point x?" in O(log n + k), where n is the number of stored intervals and k is the number of intervals reported. The Wikipedia article describes that version. The array-based segment tree in this lesson is the meaning used in competitive programming and interviews.
+> In computational geometry, "segment tree" traditionally names a related structure that stores a set of *intervals* and answers "which intervals contain point x?" in O(log n + k), where n is the number of stored intervals and k is the number of intervals reported. The array-based segment tree in this lesson is the meaning used in competitive programming and interviews.
 
 ## Pitfalls
 
@@ -82,6 +65,5 @@ It avoids recursive-call overhead.
 - Keep half-open ranges distinct from inclusive ranges and choose the simplest structure for the workload.
 
 ## Further reading
-- [Segment Tree — cp-algorithms](https://cp-algorithms.com/data_structures/segment_tree.html)
-- [Segment tree, the interval-stabbing version — Wikipedia](https://en.wikipedia.org/wiki/Segment_tree)
-- [Range minimum query — Wikipedia](https://en.wikipedia.org/wiki/Range_minimum_query)
+- [Segment trees — cp-algorithms](https://cp-algorithms.com/data_structures/segment_tree.html)
+- [Interval stabbing with segment trees — National Tsing Hua University](https://www.cs.nthu.edu.tw/~wkhon/ds/ds10/tutorial/tutorial6.pdf)

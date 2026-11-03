@@ -22,7 +22,7 @@ Hayashibara et al. (2004), used by Cassandra and Akka, output a **suspicion leve
 - Each node records recent heartbeat inter-arrival times and models them as a distribution (the original paper uses a normal distribution with the observed mean and variance; Cassandra uses a simpler exponential model).
 - From that model it works out how unlikely the current silence is, and turns that into φ:
 
-```formula
+```formula reference
 φ = −log_10(P_later(t))
 where
 φ: phi, the suspicion level; a plain number with no unit, higher means more suspicious
@@ -33,25 +33,23 @@ s: second
 In words: φ = 3 means the model gives a healthy node a 1-in-1,000 chance of being this quiet; each extra 1 in φ makes the silence ten times less likely.
 ```
 
-In Cassandra's exponential model, the probability of a heartbeat being later than t falls off exponentially with t, and φ reduces to a straight line:
+In Cassandra's exponential model, the probability of a heartbeat being even later falls off exponentially as the silence grows, and φ becomes a straight line:
 
-```formula
+```formula reference
 P_later(t) = e^{−t/μ}
 φ = (t / μ) × log_10(e)
-φ = (1.1 s / 1 s) × 0.434 ≈ 0.48
 where
 P_later(t): the modelled chance a heartbeat is later than t
-t: the time since the last heartbeat, in seconds (s); here 1.1 s
-μ: mu, the mean interval between heartbeats, in seconds; here 1 s
+t: the time since the last heartbeat, in seconds (s)
+μ: mu, the mean interval between heartbeats, in seconds
 e: Euler's number, about 2.718, the base of natural logarithms
 log_10(e): the base-10 logarithm of e, about 0.434
 φ: phi, the suspicion level (no unit)
 s: second
-≈: approximately equal to
 In words: in this model φ grows steadily with silence, at a rate set by the average heartbeat interval; variation in the intervals doesn't enter into it.
 ```
 
-With a 1-second mean interval, this model reaches Cassandra's default threshold of 8 after 8 / 0.434 ≈ 18 seconds of silence. A peer with a longer average interval takes proportionally longer to convict.
+In other words, φ is the silence measured in average heartbeat intervals, multiplied by a fixed constant of about 0.434. With a 1-second mean interval, this model reaches Cassandra's default threshold of 8 after about 18 seconds of silence. A peer with a longer average interval takes proportionally longer to convict.
 
 | φ | Modelled heartbeat tail probability |
 |---|---|
@@ -64,6 +62,13 @@ The application chooses a threshold (Cassandra's `phi_convict_threshold` default
 ### SWIM
 
 SWIM (Das, Gupta and Motivala, 2002) is a scalable membership protocol, used in HashiCorp's memberlist (Consul, Nomad, Serf).
+
+> [!analogy] Real-world analogy: asking friends to try a phone number
+> You ring a friend and get no answer. Before assuming something has happened to them, you ask two mutual friends to try. If either gets through, the problem was your phone or your line. If nobody gets through, you start to worry, and tell others you are worried, but your friend can still turn up and say "I'm fine".
+>
+> **How it maps:** Your call is A's direct ping to B, the mutual friends are SWIM's helpers sending ping-req, getting through via a friend is an indirect ack, worrying aloud is gossiping that B is in the **suspect state**, and "I'm fine" is B refuting suspicion with a higher incarnation number.
+>
+> **Where it stops:** If the friends also fail to get through, that still does not prove your friend has gone; their calls may share the same broken route. SWIM declares a member dead only after a suspicion timeout, and that remains a decision under uncertainty.
 
 ```
 A             B          C (helpers)

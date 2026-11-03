@@ -3,27 +3,27 @@
     "id": "msg-stream-processing-q3",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A Flink job uses 1-minute tumbling event-time windows with `forBoundedOutOfOrderness(10 s)` on a single source. The largest event time seen so far is **10:05:07**. An event with timestamp **10:04:58** now arrives. What happens?",
+    "prompt": "A Flink job uses one-minute tumbling event-time windows and the default event-time trigger. Its current emitted watermark is 10:04:56.999, and the 10:04–10:05 window has not fired. An event timestamped 10:04:58 arrives. What happens?",
     "options": [
       {
-        "text": "It is late and dropped, because 10:04:58 is before the latest event",
-        "explanation": "Wrong. Being older than the latest event is normal out-of-orderness. The emitted watermark is about 10:04:57 (10:04:56.999 in Flink), and this event is newer. Window acceptance depends on the window end and its allowed-lateness cleanup time, not just being older than the newest record."
+        "text": "It is dropped because it arrived after a newer event",
+        "explanation": "Wrong. Out-of-order arrival alone does not mean the event is too late. Its timestamp is still ahead of the current watermark."
       },
       {
-        "text": "It is added to the 10:05–10:06 window",
-        "explanation": "Wrong. Event-time windows assign records by their own timestamp. 10:04:58 belongs to 10:04–10:05, whenever it arrives."
+        "text": "It is assigned to the 10:05–10:06 window because processing is happening now",
+        "explanation": "Wrong. Event-time membership uses the record's timestamp, not the processing clock."
       },
       {
-        "text": "It is added to the 10:04–10:05 window, which has not fired yet",
-        "explanation": "Correct. The watermark is about 10:05:07 − 10 s = 10:04:57; Flink subtracts one additional millisecond. The 10:04–10:05 window fires only when the watermark reaches its end, 10:05:00, so it is still open and the event is included."
+        "text": "It joins the open 10:04–10:05 window",
+        "explanation": "Correct. Its timestamp lies inside that window, and the watermark has not yet reached the window's last included millisecond."
       },
       {
-        "text": "The 10:04–10:05 window has fired, so the event creates a duplicate window",
-        "explanation": "Wrong. The window has not fired: the watermark (10:04:57) is still below the window end (10:05:00)."
+        "text": "It creates a duplicate window because it is out of order",
+        "explanation": "Wrong. It updates the existing window for its timestamp; out-of-order arrival does not create another copy of the window."
       }
     ],
     "answer": 2,
-    "workedExample": "1. **Watermark**: the newest event time minus the bound, minus the extra millisecond Flink subtracts:\n\n```formula\nW = t_max − δ − 1 ms\nW = 10:05:07 − 10 s − 1 ms\nW = 10:04:56.999\nwhere\nW: the watermark: the event time up to which Flink assumes it has seen everything\nt_max: the largest event time seen so far, 10:05:07\nδ: delta, the out-of-orderness bound, 10 seconds (s)\nms: milliseconds\ns: seconds\nIn words: Flink assumes nothing older than about 10:04:57 is still to come.\n```\n\n2. **Target window** for 10:04:58: the window from 10:04:00 up to (but not including) 10:05:00.\n3. **Has it fired?** The window fires once the watermark reaches its last millisecond, 10:04:59.999. The watermark is only about 10:04:57, so not yet.\n4. **Is the event late?** An event behind the watermark is late in event-time progress, but whether this window accepts it depends on its end, trigger and allowed-lateness cleanup time. 10:04:58 is after the watermark of about 10:04:57, so it is on time.\n5. So it joins the open window. The window will fire after an event at 10:05:10 or later has been seen and the corresponding periodic watermark has been emitted.",
+    "workedExample": "1. Use the record's timestamp to choose the window: 10:04:58 belongs between 10:04:00 and the exclusive end at 10:05:00.\n2. Compare progress with the trigger boundary: the stated watermark is before 10:04:59.999, so the default trigger has not fired.\n3. The record joins that open window. The newest timestamp seen elsewhere is not itself the acceptance cutoff.\n4. Later window acceptance depends on the trigger and allowed-lateness cleanup policy, not merely on whether a record is older than another record.",
     "link": {
       "title": "Timely stream processing (Apache Flink)",
       "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "```formula\nW_op = min(W_0, W_1, …, W_11)\nW_op = min(10:31, 10:31, …, 09:58)\nW_op = 09:58\nwhere\nW_op: the watermark of the operator that reads all 12 partitions\nW_0: the watermark of partition 0, here 10:31\nW_1: the watermark of partition 1, here 10:31\nW_11: the watermark of partition 11, stuck at 09:58\n…: and so on for the partitions in between\nmin: the smallest of the values\nIn words: the operator can only be as far along as its slowest input, so one stuck partition holds everything at 09:58.\n```\n\n1. Each source split (partition) generates its own watermark from the events it sees.\n2. Downstream operators take the **minimum**, because they can only claim completeness up to the least advanced input.\n3. P11's last event put its watermark at 09:58, and with no new events it never advances.\n4. Windows ending after 09:58 never fire.\n5. Fix: `WatermarkStrategy...withIdleness(Duration.ofMinutes(1))`. After a minute without events, P11 is marked idle and excluded from the minimum until data returns.\n6. Alerting idea: monitor the watermark lag (`currentInputWatermark` vs wall clock) per operator.",
+    "workedExample": "1. Each source partition reports event-time progress. An operator uses the least advanced active input because that input may still deliver older events.\n2. A silent partition stops advancing, so windows after its watermark remain open even while other partitions continue.\n3. Configure idleness detection to exclude inputs that have been silent for the chosen interval, allowing progress to follow active inputs.\n4. When the idle input resumes, its old records may now be late. Choose allowed lateness, correction or discard handling deliberately.\n5. Monitor watermark progress alongside source activity; idleness detection does not prove delayed data cannot arrive.",
     "link": {
       "title": "Timely stream processing (Apache Flink)",
       "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"

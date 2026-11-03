@@ -25,21 +25,7 @@ State is useful both for looking up another stream’s data and for remembering 
 4. If distinct countries > 3, emit an alert.
 5. Register an event-time timer to clear state for idle cards, so state does not grow forever.
 
-A rough state estimate multiplies the number of keys by the state each one holds:
-
-```formula
-M = n × b
-M = 50000000 × 200 B = 10 GB
-where
-M: the total state held across the job
-n: the number of cards with state, here 50 million
-b: an illustrative state size per card, 200 bytes (B)
-B: bytes
-GB: gigabytes, billions of bytes
-In words: 50 million cards at 200 bytes each is about 10 GB of state, before storage overhead.
-```
-
-That figure is only illustrative. The rolling event list is variable-sized; a reliable capacity estimate is absent because event rate, lateness buffers, indexes, compaction and checkpoint costs were not measured.
+State grows with both the number of active cards and the events retained per card. A busier card or a longer lateness allowance can increase its state even when the key count is unchanged. Measure event lists, lateness buffers, indexes, storage overhead and checkpoint costs; a fixed bytes-per-card estimate misses those changes.
 
 ## Stream vs batch
 
@@ -50,7 +36,7 @@ A stream processor that can replay a retained log can recompute history, so one 
 - Stream–table enrichment materialises a local lookup instead of making one remote call per event.
 - Historical replay needs table versions valid at each event time; a compacted latest-value table alone loses that history.
 - Key fraud state by card, process eligible event-time order, evict old entries and remove card data after inactivity.
-- The 10 GB illustration excludes variable event lists, indexes, lateness buffers and recovery overhead; measure them.
+- Size state from active keys and their retained history, including lateness buffers and recovery overhead.
 
 ## Further reading
 

@@ -37,15 +37,14 @@ Compaction never touches the **active segment**, and it keeps record offsets unc
 - **Zero-copy.** Brokers use `sendfile` to move bytes from page cache to socket without copying through user space (when TLS is not in use).
 - **Batching and compression.** Producers batch records per partition (`linger.ms`, `batch.size`) and compress whole batches with lz4 or zstd.
 
-Universal cluster throughput and an unsourced historical message-count benchmark are absent because no representative measured setup is established here. Benchmark payload sizes, replication, compression and consumer work for the intended deployment.
+Benchmark payload sizes, replication, compression and consumer work for the intended deployment; there is no universal cluster throughput figure.
 
 ## Choosing the number of partitions
 
 Partitions bound consumer parallelism, so size for the slowest consumer. Measure one consumer's processing rate, then divide the target throughput by it:
 
-```formula
+```formula reference
 P ≥ T / c
-P ≥ 60 MB/s / (5 MB/s) = 12
 where
 P: the number of partitions
 ≥: is at least
@@ -53,12 +52,12 @@ T: the target throughput of the topic, here 60 megabytes per second (MB/s)
 c: the measured processing rate of one consumer, here 5 MB/s
 MB: megabytes
 s: seconds; "MB/s" means megabytes per second
-In words: each partition is read by one consumer in a group, so you need at least as many partitions as consumers it takes to keep up: here 12.
+In words: enough partitions must be available to assign work to the consumers needed at the measured rate; this estimate assumes balanced traffic and sufficient broker and downstream capacity.
 ```
 
-Then add headroom for growth, for example doubling to 24, because adding partitions later remaps keys.
+In the illustrative workload, twelve equally busy consumers would just keep up. Add measured headroom for growth and failures, because adding partitions later remaps keys. Extra partitions alone do not add workers or make an overloaded database faster.
 
-Too many partitions cost broker memory, open files, longer leader elections and slower rebalances. A universal partition-count recommendation is absent because reliable limits depend on Kafka version, controller/broker resources and workload; test failover and rebalance behavior at the planned scale.
+Too many partitions cost broker memory, open files, longer leader elections and slower rebalances. Reliable limits depend on Kafka version, controller/broker resources and workload; test failover and rebalance behaviour at the planned scale.
 
 ## Key takeaways
 

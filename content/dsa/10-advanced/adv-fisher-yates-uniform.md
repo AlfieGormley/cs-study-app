@@ -14,6 +14,8 @@ Here n is the number of keys or stream items, and k is the requested sample size
 To shuffle an array uniformly, walk from the end. At each position `i`, swap `a[i]` with `a[j]` for `j = randint(0, i)`, which can pick `i` itself.
 
 ```python
+import random
+
 def shuffle(a):
     for i in range(len(a) - 1, 0, -1):
         # Choose among the positions not yet
@@ -24,20 +26,16 @@ def shuffle(a):
         a[i], a[j] = a[j], a[i]
 ```
 
-Think of it as drawing cards from a hat: the last position gets any of the items, the one before it any of the items left, and so on. Count the equally likely runs:
+At each step, choose uniformly among the items not yet placed. Once a position is filled, later steps never touch it. For any target ordering, there is exactly one sequence of choices that puts those items into their target positions, and all such sequences have equal probability. The argument applies to distinct labelled items; duplicate values can be treated as separately labelled occurrences.
 
-```formula
-N_runs = n(n − 1) × … × 1 = n!
-N_runs = 3 × 2 × 1 = 6 = 3!
-where
-N_runs: the number of different, equally likely sequences of random draws
-n: the number of items in the array, 3 in the second line
-n!: n factorial, the product of every whole number from 1 to n; also the number of permutations (orderings) of n items
-…: and so on down to 1
-In words: the draws can play out in exactly as many ways as there are orderings, one run per ordering, so every ordering is equally likely.
-```
+It takes O(n) time for n items and works in place. Python's `random.shuffle` uses this backward-swap procedure.
 
-For three items there are 6 runs and 6 orderings, each with probability 1/6. It takes O(n) time (proportional to n) and works in place. This is the version Durstenfeld published in 1964 and Knuth gives as Algorithm P; Python's `random.shuffle` uses it.
+> [!analogy] Real-world analogy: Drawing names from a hat
+> Draw a name for the last seat, then choose among the remaining names for the next seat.
+>
+> **How it maps:** Fisher–Yates chooses an item from the remaining prefix and fixes one final position per step. Swapping keeps the remaining items available without shifting the array.
+>
+> **Where it stops:** The random draws must be independent and uniform. A predictable generator is unsuitable when the result must be secret, even if the swapping procedure is correct.
 
 ## Key takeaways
 
@@ -45,8 +43,5 @@ For three items there are 6 runs and 6 orderings, each with probability 1/6. It 
 - Each permutation corresponds to one equally likely sequence of draws.
 
 ## Further reading
-- [Skip list — Wikipedia](https://en.wikipedia.org/wiki/Skip_list)
-- [Treap — Wikipedia](https://en.wikipedia.org/wiki/Treap)
-- [Treap (Cartesian tree) — cp-algorithms](https://cp-algorithms.com/data_structures/treap.html)
-- [Reservoir sampling — Wikipedia](https://en.wikipedia.org/wiki/Reservoir_sampling)
-- [Fisher–Yates shuffle — Wikipedia](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle)
+- [Python random-number generation](https://docs.python.org/3/library/random.html)
+- [CPython’s shuffle implementation](https://raw.githubusercontent.com/python/cpython/v3.14.0/Lib/random.py)

@@ -1,9 +1,9 @@
 ---
 id: msg-burst-backlog-draining
-title: Absorb a burst and calculate the drain time
+title: Absorb a burst: backlog and drain time
 level: basic
 minutes: 4
-summary: Work out backlog growth, spare drain capacity and the longest FIFO wait.
+summary: Predict how a burst builds a backlog, why only spare capacity drains it and how long the last message waits.
 sourceLesson: msg-sync-vs-async
 ---
 
@@ -25,54 +25,35 @@ Imagine an image-thumbnail service. Uploads arrive in bursts: 2,000 per second f
       └──────────────────────▶ time
 ```
 
-Without a queue, you need 20 workers (2,000 ÷ 100) sitting mostly idle to survive the peak. With a queue and 2 workers (200 per second capacity), the backlog grows while arrivals exceed capacity:
+Without a queue, you need 20 workers (2,000 ÷ 100) sitting mostly idle to survive the peak. With a queue and 2 workers (200 per second capacity), the backlog grows while arrivals exceed capacity, and shrinks only by the capacity left over once new arrivals are served:
 
-```formula
+This fixed-rate estimate assumes an initially empty queue, a burst faster than processing, and post-burst arrivals slower than processing. It ignores startup delays and variation between jobs.
+
+```formula reference
 B = (λ_burst − μ) × T_burst
-B = (2000/s − 200/s) × 30 s
-B = 1800/s × 30 s = 54000 msg
+T_drain = B / (μ − λ_after)
 where
 B: the backlog: messages waiting in the queue when the burst ends
-λ_burst: lambda, the arrival rate during the burst, here 2,000 messages per second
-μ: mu, the processing capacity of all workers together, here 2 workers × 100 = 200 messages per second
-T_burst: how long the burst lasts, here 30 seconds
-s: seconds; "/s" means per second
-msg: messages
-In words: during a burst the queue grows by the excess of arrivals over capacity, for every second the burst lasts.
+λ_burst: lambda, the arrival rate during the burst, in messages per second
+μ: mu, the processing capacity of all workers together, in messages per second
+T_burst: how long the burst lasts, in seconds
+T_drain: the time after the burst until the queue is empty again, in seconds
+λ_after: lambda, the arrival rate after the burst, in messages per second
+In words: during a burst the queue grows by the excess of arrivals over capacity for as long as the burst lasts; afterwards it drains only at the spare capacity, so new arrivals slow the recovery.
 ```
 
-After the burst, arrivals drop to 50 per second, so the workers eat into the backlog with whatever capacity is left over:
+In the thumbnail example the queue gains 1,800 messages a second for 30 seconds, leaving about 54,000 waiting. Afterwards the workers still have to serve 50 new uploads a second, so only 150 a second of their 200 is spare: the queue takes about 6 minutes to empty, not the 4.5 minutes you get by dividing the backlog by full capacity.
 
-```formula
-T_drain = B / (μ − λ_after)
-T_drain = 54000 msg / (200/s − 50/s)
-T_drain = 54000 msg / (150/s) = 360 s
-where
-T_drain: the time after the burst until the queue is empty again, in seconds (s); 360 s is 6 minutes
-B: the backlog at the end of the burst, here 54,000 messages
-μ: mu, the total processing capacity, here 200 messages per second
-λ_after: lambda, the arrival rate after the burst, here 50 messages per second
-msg: messages
-s: seconds; "/s" means per second
-In words: the backlog shrinks only by the spare capacity left after serving new arrivals, so it takes 6 minutes to clear, not 54,000 ÷ 200 = 4.5 minutes.
-```
+Those 4.5 minutes do mean something: in first-in, first-out (FIFO) order, the last message of the burst waits roughly as long as the workers take to clear the 54,000 ahead of it, about 270 seconds. The queue is empty only later, because new arrivals keep joining behind it.
 
-The message at the back of the burst waits roughly as long as it takes the workers to get through everything in front of it:
+So you trade **latency** (the longest wait is about 4.5 minutes, and the queue returns to empty after about 6) for **cost and stability** (10× fewer workers in this idealised fixed-rate model; consumer admission and downstream capacity still need protection). That trade is acceptable when the product permits the resulting delay, including an explicit pending-job experience.
 
-```formula
-W_max ≈ B / μ
-W_max ≈ 54000 msg / (200/s) = 270 s
-where
-W_max: the longest wait in first-in, first-out (FIFO) order: the wait of the last message of the burst, in seconds (s)
-B: the backlog at the end of the burst, 54,000 messages
-μ: mu, the total processing capacity, 200 messages per second
-≈: approximately equal to
-msg: messages
-s: seconds; "/s" means per second
-In words: the last message of the burst waits about 4.5 minutes, because 54,000 messages are ahead of it and the workers do 200 a second.
-```
-
-So you trade **latency** (the longest wait is about 270 seconds, while the queue returns to empty after 6 minutes) for **cost and stability** (10× fewer workers in this idealised fixed-rate model; consumer admission and downstream capacity still need protection). That trade is acceptable when the product permits the resulting delay, including an explicit pending-job experience.
+> [!analogy] Real-world analogy: a bath with the tap on and the plug half out
+> Turn the tap on full and the water level rises even though the plughole is draining. Turn the tap down to a trickle and the bath empties, but only as fast as the plughole beats the trickle. Leave the tap running faster than the plughole on average and the bath eventually overflows.
+>
+> **How it maps:** The tap is the arrival rate, the plughole is the workers' total capacity and the water level is the backlog. The level rises at the difference between them during the burst and falls only at the spare capacity afterwards, which is why recovery is slower than "backlog ÷ capacity".
+>
+> **Where it stops:** Water has no order, so the bath says nothing about how long the *last* message waits in FIFO order. Real worker capacity also varies with message size and downstream health. And a bath overflows visibly, whereas a queue can grow silently until retention deletes old messages, which is why you alarm on depth and oldest-message age.
 
 > [!warning] A queue is not infinite capacity
 > Load levelling only works if the **average** arrival rate is below the processing rate. If arrivals average 250 per second and you can do 200, the backlog grows forever. A queue hides overload; it does not fix it. Always alarm on queue depth and on the age of the oldest message.

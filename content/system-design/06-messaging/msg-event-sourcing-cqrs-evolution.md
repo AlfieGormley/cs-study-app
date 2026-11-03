@@ -21,17 +21,14 @@ stream: account-42
  4 Deposited    {50}
 ```
 
-The current state is whatever you get by applying every event in order, starting from nothing:
+Starting from an empty account, applying those deposits and withdrawal leaves £120. The event history is authoritative; the current balance may also be stored as a derived projection or snapshot. Rebuilding means applying the same events in order, not treating the derived balance as an independent source of truth.
 
-```formula
-balance = 0 + 100 − 30 + 50
-balance = 120
-where
-balance: the account's current balance, in pounds, derived by replaying its events
-0: the balance right after the Opened event
-100, 30, 50: the amounts in the Deposited, Withdrew and Deposited events, applied in stream order
-In words: the balance is not stored anywhere; it is recomputed by adding each deposit and subtracting each withdrawal in the order they happened.
-```
+> [!analogy] Real-world analogy: a bank statement and its closing balance
+> A statement lists deposits and withdrawals. Its closing balance can be checked by following those entries from the opening balance.
+>
+> **How it maps:** Recorded entries correspond to events; the calculated balance corresponds to derived state. A saved balance at an agreed entry is like a snapshot from which later entries can be applied.
+>
+> **Where it stops:** A statement can omit the wider system's activity. Event sourcing requires a deliberate complete event history for the aggregate, concurrency control and compatible replay logic; the comparison does not establish audit or legal compliance.
 
 Benefits:
 

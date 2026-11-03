@@ -16,26 +16,14 @@ This is the heart of the problem. You need billions of unique, short, ideally un
 Hash the URL with SHA-256 and map it approximately uniformly into the base62 code space. The collision arithmetic below assumes uniform codes; naively taking leading digits of a variable-width integer encoding can introduce bias.
 
 - **Pro**: stateless; any server can compute it.
-- **Con: collisions.** Truncating to 7 characters leaves a 3.5-trillion space. By the [birthday problem](https://en.wikipedia.org/wiki/Birthday_problem), the collision probability is about 39% by 1.9 million links and about 50% by 2.2 million (worked out below). With hundreds of billions of links you will collide constantly, so every write needs an atomic insert-if-absent and a retry on conflict (for example, appending a counter and rehashing).
-- **Con: same URL, same code.** Two users shortening the same URL get the same link, which breaks per-owner analytics and expiry. You can salt with the user ID, but then you lose the dedup that was the main appeal.
+- **Con: collisions.** Truncating to 7 characters leaves a 3.5-trillion space. The [birthday effect](https://en.wikipedia.org/wiki/Birthday_problem) makes at least one duplicate likely long before the space fills. With hundreds of billions of links you will collide constantly, so every write needs an atomic insert-if-absent and a retry on conflict (for example, appending a counter and rehashing).
+- **Con: same URL, same code.** Two users shortening the same URL get the same link, which breaks per-owner analytics and expiry. You can include the owner ID in the hashed input, but then cross-owner deduplication disappears. This is input disambiguation, not a password-salt security claim.
 
-Where does "about 1.9 million" come from? The birthday problem asks how many random values you can draw from a space before two of them are likely to match. The answer grows with the *square root* of the space, which is far smaller than the space itself:
+Distinguish two questions: whether any earlier allocations have collided, and whether the next allocation will hit an occupied value. Neither allows you to skip uniqueness enforcement:
 
-```formula
-n_50 ≈ 1.18√(N)
-√(N) = √(3.5 × 10^12) ≈ 1.9 × 10^6
-n_50 ≈ 1.18 × 1.9 × 10^6 ≈ 2.2 × 10^6
-where
-N: the number of possible codes, here 62^7 ≈ 3.5 × 10^12 (3.5 trillion)
-√: square root, the number that multiplied by itself gives the value inside
-n_50: how many random codes you can issue before there is a 50% chance that at least two are the same
-1.18: the constant √(2 × ln 2) ≈ 1.1774 from the standard birthday-problem approximation (ln is the natural logarithm)
-10^6, 10^12: a million and a trillion
-≈: approximately equal to (rounded)
-In words: in a space of 3.5 trillion codes, a repeat becomes a coin flip after only about 2 million random codes.
-```
+A large namespace does not guarantee collision-free draws. With uniform random choices, the first duplicate becomes likely long before most values are occupied. Atomic insertion must detect an existing code, and retry logic must choose a different candidate.
 
-At about 1.9 million uniformly random codes the chance of at least one collision is already about 39%. The approximation assumes codes are spread uniformly at random, which a good hash gives. A shortener issuing billions of links is a thousand times past this point, so collisions are routine, not rare.
+As occupancy rises, a fresh uniform candidate is more likely to collide. Hash output encoding must preserve the assumed distribution; uniqueness still comes from the store’s conditional insert, not from the hash alone.
 
 ### Option C: Snowflake-style IDs
 
@@ -48,41 +36,22 @@ At about 1.9 million uniformly random codes the chance of at least one collision
 
 Each field's size in bits fixes how many values it can hold:
 
-```formula
-seq = 2^12 = 4,096
-time = 2^41 ms ≈ 69.7 years
-where
-seq: distinct sequence numbers one worker can issue in one millisecond
-time: how long the 41-bit millisecond timestamp lasts before it wraps round
-2^12, 2^41: 12 or 41 copies of 2 multiplied together; a field of b bits holds 2^b different values
-ms: millisecond, a thousandth of a second
-years: calendar years
-≈: approximately equal to (rounded)
-In words: 12 bits of sequence allow 4,096 IDs per worker per millisecond, and 41 bits of milliseconds last about 70 years from the chosen start date.
-```
+In the original layout, a worker has 4,096 sequence values per millisecond and about 70 years of timestamp range from the chosen epoch. Those are field capacities, not measured generation throughput.
 
 Each worker has 4,096 sequence values per millisecond. Generation avoids per-ID coordination, but worker IDs must be assigned uniquely and restart/clock behavior must prevent reuse.
 
-- **Pro**: fully decentralised, roughly time-ordered.
+- **Pro**: no coordination for each ID, and roughly time-ordered when clocks behave as required.
 - **Con: length.** The original Snowflake layout has 63 usable bits. An ID above a quintillion (a 1 followed by 18 zeros) takes **11 base62 characters**, not 7 (see below). For a *short*ener, that's a real cost.
 - **Con: clocks.** If a machine's clock goes backwards (NTP correction), it can reissue IDs unless the generator refuses to run until the clock catches up.
 
 Why can it need 11 characters? Compare an assumed ID above a quintillion with the code capacities:
 
-```formula
-62^10 ≈ 8.4 × 10^17
-62^11 ≈ 5.2 × 10^19
-where
-62^10, 62^11: the number of values that 10 and 11 base62 characters can represent
-10^17, 10^19: 1 followed by 17 or 19 zeros
-≈: approximately equal to (rounded)
-In words: ten characters cover values up to about 8 × 10^17, but a Snowflake ID above a quintillion needs eleven.
-```
+The full original Snowflake value range can require eleven base62 characters, so directly encoding it does not meet a strict seven-character limit.
 
 ## Key takeaways
 
 - Uniform truncated hashes still need atomic code collision detection and retries.
-- The birthday threshold grows with the square root of the code space.
+- First collisions appear long before the code space is full.
 - Snowflake avoids per-ID coordination but needs unique workers, safe clocks and longer codes.
 
 ## Further reading

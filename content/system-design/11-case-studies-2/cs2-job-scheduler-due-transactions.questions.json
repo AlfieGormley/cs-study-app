@@ -7,7 +7,7 @@
     "options": [
       {
         "text": "`SKIP LOCKED`",
-        "explanation": "Correct. `FOR UPDATE SKIP LOCKED` returns only rows not locked by another transaction, so the three pollers naturally split the due jobs among themselves without blocking. It's the standard Postgres and MySQL 8 queue-claiming idiom."
+        "explanation": "Correct. It skips rows whose required row lock cannot be acquired immediately, allowing other pollers to select unlocked work. Table locks and other waits can still occur."
       },
       {
         "text": "`NOWAIT`",
@@ -19,11 +19,11 @@
       },
       {
         "text": "`SERIALIZABLE`",
-        "explanation": "Wrong. Raising the isolation level adds more conflict detection and serialisation failures. It makes contention worse, not better."
+        "explanation": "Wrong. SERIALIZABLE defines isolation, not a policy to skip row locks; transactions may also need retries after serialization failures."
       }
     ],
     "answer": 0,
-    "workedExample": "Without SKIP LOCKED:\n\n1. Poller 1 locks the first 500 due rows.\n2. Pollers 2 and 3 run the same query, reach row 1, and **block** until poller 1 commits.\n3. Effective parallelism is 1.\n\nWith `FOR UPDATE SKIP LOCKED LIMIT 500`:\n\n1. Poller 1 locks rows 1–500.\n2. Poller 2 skips them and locks 501–1,000.\n3. Poller 3 takes 1,001–1,500.\n\nAll three run in parallel. And because the claim, the run insert and the `next_run_at` advance happen in one transaction, a crash just releases the locks, and another poller picks up the rows on its next pass.",
+    "workedExample": "With one poller holding the earliest due rows, SKIP LOCKED lets another select other unlocked rows. It can return an inconsistent view, which suits this queue-claiming use rather than a general report. Before commit, a crash rolls back the claim; after commit, the durable outbox preserves dispatch work even though the schedule has advanced. Table-level locking can still block the query.",
     "link": {
       "title": "Explicit locking (PostgreSQL docs)",
       "url": "https://www.postgresql.org/docs/current/explicit-locking.html"
@@ -41,7 +41,7 @@
       },
       {
         "text": "Wrap both in a distributed two-phase commit across Postgres and Kafka",
-        "explanation": "Wrong in practice. Kafka doesn't take part in XA transactions with Postgres, and 2PC adds blocking failure modes. The outbox pattern gets the same effect using only a local transaction."
+        "explanation": "The shown Postgres/Kafka path has no shared XA commit. An outbox provides recoverable at-least-once publication through a local transaction; it does not provide the same atomic visibility as a distributed transaction."
       },
       {
         "text": "Send to Kafka first, then commit",

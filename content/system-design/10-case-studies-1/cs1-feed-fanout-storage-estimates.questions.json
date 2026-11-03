@@ -3,27 +3,27 @@
     "id": "cs1-news-feed-q2",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Your platform has **400 million posts/day** and the average post reaches **150 eligible follower timelines**. With pure fan-out on write, roughly how many timeline inserts per second must the fan-out fleet sustain on average?",
+    "prompt": "A platform’s posting rate stays constant, but posts now reach many more eligible follower timelines. What changes with fan-out on write?",
     "options": [
       {
-        "text": "About 4,600/s",
-        "explanation": "Wrong. That's the post rate (400M / 86,400). It forgets that each post is inserted into 150 timelines."
+        "text": "Only the canonical post write rate changes.",
+        "explanation": "The number of posts is unchanged; the extra work is inserting references into recipient timelines."
       },
       {
-        "text": "About 70,000/s",
-        "explanation": "Wrong. This is roughly 6B inserts/day, about 10x too low. Check the multiplication: 400M × 150 = 60B, not 6B."
+        "text": "No work changes because identifiers are smaller than post bodies.",
+        "explanation": "Small entries still require an operation for each eligible recipient."
       },
       {
-        "text": "About 60 million/s",
-        "explanation": "Wrong. 60 billion is the *daily* total; you still need to divide by the ~86,400 seconds in a day."
+        "text": "Every follower count can be replaced with the unweighted account average.",
+        "explanation": "Posting frequency and recipient eligibility affect which follower counts matter."
       },
       {
-        "text": "About 700,000/s",
-        "explanation": "Correct. 400M × 150 = 60B inserts/day; 60B / 86,400 ≈ 694,000/s. At a 3x peak, plan for about 2M/s."
+        "text": "Background timeline inserts increase, and concentrated large accounts can dominate backlog.",
+        "explanation": "Correct. Fan-out amplifies each post by its eligible recipients; averages hide concentrated work."
       }
     ],
     "answer": 3,
-    "workedExample": "Each post is inserted once per eligible follower, so multiply, then divide by the seconds in a day:\n\n```formula\ndaily = 400M × 150 = 6 × 10^10\nrate = (6 × 10^10) / (8.64 × 10^4 s)\nrate ≈ 694,000/s\npeak = 694,000/s × 3 ≈ 2.1M/s\nwhere\ndaily: timeline inserts per day (60 billion)\nrate: average inserts per second\n8.64 × 10^4: 86,400, the seconds in a day\npeak: inserts per second at an assumed 3x peak\nM: million\n10^10, 10^4: 1 followed by 10 or 4 zeros\ns: seconds; /s means per second\n≈: approximately equal to (rounded)\nIn words: 60 billion inserts a day is about 700,000 a second on average and about 2 million a second at peak.\n```\n\nIs that feasible? Use a representative pipelined-fan-out benchmark to determine per-shard capacity and memory; a generic Redis operation rate does not establish how many nodes absorb this workload. Note that the average hides the skewed distribution: the celebrity accounts in the tail are what break it.",
+    "workedExample": "Count the recipient timelines each actual post updates. Measure both aggregate insert demand and the largest bursts. Separate that work from canonical post storage and foreground hydration; reducing bytes per entry does not remove write amplification.",
     "link": {
       "title": "System Design Primer: design the Twitter timeline",
       "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/twitter/README.md"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "```formula\nd = 30B / (400M) = 75\nrate = 30B / (86,400 s) ≈ 350,000/s\nwhere\nd: timeline deliveries per post (tweet)\nrate: average deliveries per second\nB: billion\nM: million\ns: seconds; /s means per second\n≈: approximately equal to (rounded from 347,000)\nIn words: 30 billion deliveries from 400 million posts is 75 per post, about 350,000 a second.\n```\n\nTwo effects could explain a lower eligible-recipient mean in this hypothetical dataset:\n\n1. **Skewed distribution**: mean follower counts are pulled up by a few accounts with millions of followers, but most tweets come from ordinary accounts.\n2. **Activity**: timelines are kept only for active users, so dormant followers receive nothing.\n\nLesson for interviews: an unweighted account-average follower count is not a safe upper bound. Use the post-weighted eligible-recipient mean; prolific high-follower accounts can make it larger.",
+    "workedExample": "An account average gives equal weight to quiet and prolific authors. Fan-out instead weights each author by the posts they actually create and then filters recipient eligibility. Activity rules can reduce deliveries, while prolific high-follower authors can increase them. Measure eligible recipients per actual post; skew alone does not determine the direction.",
     "link": {
       "title": "High Scalability: the architecture Twitter uses to deal with 150M active users",
       "url": "https://highscalability.com/the-architecture-twitter-uses-to-deal-with-150m-active-users/"

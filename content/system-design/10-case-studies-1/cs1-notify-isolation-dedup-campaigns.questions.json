@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Diagnose: this is **head-of-line blocking**. With one FIFO queue, an OTP enqueued after 40M campaign messages waits until they're processed.\n\nQuantify: suppose the SMS provider allows 1,000 msg/s for your account. If 2M of the campaign messages are SMS:\n\n```formula\nwait = backlog / rate\nwait = 2,000,000 / (1,000/s)\nwait = 2,000 s ≈ 33 min\nwhere\nwait: how long the last queued message waits before it is sent\nbacklog: campaign SMS messages ahead in the queue, 2 million\nrate: messages per second the provider accepts, 1,000\ns: seconds; /s means per second\nmin: minutes (2,000 s / 60 ≈ 33)\n≈: approximately equal to\nIn words: two million texts drained at a thousand a second take about 33 minutes, and an OTP stuck behind them waits that long.\n```\n\nAny OTP behind that waits up to 33 minutes. Fix with three layers:\n\n1. `critical` topic + dedicated workers → OTP never queues behind campaigns.\n2. Reserve, say, 20% of provider throughput for critical.\n3. Campaign scheduler emits at a controlled rate so the low queue stays bounded.",
+    "workedExample": "A FIFO backlog can keep an OTP behind campaign work even when more workers are added. Isolate critical queues and worker pools, reserve usable provider capacity, and pace campaign expansion below its allocated downstream capacity. Monitor both queue age and shared resources; queue separation alone cannot prevent a common provider quota from blocking urgent sends.",
     "link": {
       "title": "Azure Architecture Center: priority queue pattern",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/priority-queue"
@@ -74,8 +74,8 @@
     "prompt": "A viral post gets **500 likes in two minutes**, and the author receives 500 separate \"X liked your photo\" pushes. Which changes fix the experience? Select all that apply.",
     "options": [
       {
-        "text": "Buffer low-priority social events for a short window keyed by user, event type and post, then send one aggregated push (\"Sam and 499 others liked your photo\").",
-        "explanation": "Correct. Content-level aggregation turns a burst into a single meaningful message and cuts volume dramatically."
+        "text": "Buffer low-priority social events by user, event type and post, then send one summary per aggregation window.",
+        "explanation": "Correct. Aggregation reduces a burst to a few summaries; how many depends on window size and boundaries. It does not guarantee one summary for a burst spanning multiple windows."
       },
       {
         "text": "Use APNs collapse identifiers or FCM collapse keys to coalesce eligible pushes, and platform display identifiers when visible-alert replacement is required.",

@@ -3,27 +3,27 @@
     "id": "cs1-url-shortener-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "You use range allocation: a coordinator hands each write server a block of **1,000,000** IDs. Peak write rate is **3,000 links/s** across 10 servers. Roughly how often does the coordinator receive a block request, and what happens if a server crashes mid-block?",
+    "prompt": "A server crashes halfway through its durably reserved ID range. Which recovery preserves uniqueness?",
     "options": [
       {
-        "text": "About 3,000 times per second; the crash corrupts the counter.",
-        "explanation": "Wrong. That would be the rate with no batching at all. With 1M-ID blocks the coordinator is consulted once per million IDs, and a crash cannot corrupt a counter that has already moved past the block."
+        "text": "Reassign the entire range because the server is no longer running.",
+        "explanation": "Its earlier IDs may already exist, and a delayed or restarted writer may still use them."
       },
       {
-        "text": "About once every 5–6 minutes in total; the unused IDs in the crashed server's block are simply skipped.",
-        "explanation": "Correct. 1M / 3,000 ≈ 333 s between block requests overall. Unused IDs are wasted, but with 3.5 trillion codes, losing a million per crash is negligible, and no ID is ever issued twice."
+        "text": "Treat the uncertain remainder as abandoned and allocate a fresh non-overlapping range.",
+        "explanation": "Correct. Never reissuing uncertain IDs avoids collisions, at the cost of namespace waste."
       },
       {
-        "text": "About once per day; the crashed block is reassigned to another server.",
-        "explanation": "Wrong on both counts. At 3,000/s you consume 1M IDs in ~5.5 minutes, not a day. Reassigning a partially used block is dangerous because you don't know which IDs were already issued."
+        "text": "Restart its in-memory counter from the start of the old range.",
+        "explanation": "That can reissue IDs already allocated before the crash."
       },
       {
-        "text": "Never; each server generates IDs from its own clock.",
-        "explanation": "Wrong. That describes Snowflake-style generation, which needs no coordinator, not range allocation."
+        "text": "Skip the coordinator and pick any unused-looking range.",
+        "explanation": "Another server may already own it; a local observation does not establish global ownership."
       }
     ],
     "answer": 1,
-    "workedExample": "The coordinator is asked once per block, so the time between requests is the block size divided by the write rate.\n\n```formula\nt = block / writes\nt = 1,000,000 / (3,000/s) ≈ 333 s\nt_server = 1,000,000 / (300/s) ≈ 3,333 s\nwhere\nt: time between block requests across the whole fleet, in seconds (s)\nblock: IDs per block, 1 million\nwrites: global peak write rate, 3,000 links per second\nt_server: time between requests from one server, which sees a tenth of the writes (300/s)\n/s: per second\n≈: approximately equal to (rounded)\nIn words: the fleet asks for a block about every 5.5 minutes, and each server about once an hour.\n```\n\nThat's why the coordinator isn't a bottleneck.\n\nOn a crash, the coordinator has already advanced past the block, so the remaining IDs are never handed out again. Waste per crash is at most 1 million IDs; even 1,000 crashes waste 1 billion, under 0.03% of the 3.5 trillion 7-character codes.",
+    "workedExample": "A durable reservation records which values belong to the server. Once a crash makes its exact allocation position uncertain, preserve the reservation and waste the remainder. Larger ranges reduce coordination frequency but can waste more values.",
     "link": {
       "title": "System Design Primer: design Bit.ly",
       "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/pastebin/README.md"
@@ -37,7 +37,7 @@
     "options": [
       {
         "text": "Switch to random 7-character codes and retry on collision.",
-        "explanation": "Partly works but reintroduces the collision problem: at 10% fill, one write in ten collides and needs a atomic insert-if-absent retry. You've traded a security problem for a correctness and latency one."
+        "explanation": "This can produce unique stored codes with atomic code collision detection and retries, but it is a different allocation method rather than the requested algebraic rearrangement of counters."
       },
       {
         "text": "Use Snowflake IDs instead.",
@@ -49,11 +49,11 @@
       },
       {
         "text": "Rate limit the redirect endpoint so enumeration takes longer.",
-        "explanation": "Wrong as the main fix. Rate limiting slows a single attacker, but distributed scrapers bypass it easily. It's a useful defence in depth, not a substitute for the collision-free seven-character mapping requested here."
+        "explanation": "Rate limiting can reduce probing opportunities, but it does not rearrange sequential codes or establish their uniqueness. Its effectiveness depends on the enforced scope and attacker resources."
       }
     ],
     "answer": 2,
-    "workedExample": "You want a one-to-one mapping over all seven-character values, preserving uniqueness while avoiding the raw sequential encoding. A simple multiplication has a recoverable pattern; use a vetted keyed permutation if hiding that relationship matters.\n\nSimplest version:\n\n```formula\nf(n) = (an) mod 62^7\nwhere\nf: the bijective shuffle function applied before base62 encoding\nn: the counter value, from 0 to 62^7 − 1\na: a constant that shares no factor with 62^7 (coprime with it): any odd number not divisible by 31, since 62 = 2 × 31\nmod: modulo, the remainder after division, which wraps the result back into the 7-character range\n62^7: the number of 7-character base62 codes, about 3.5 trillion\nIn words: multiply the counter by a fixed constant and keep the remainder; because the constant shares no factor with the space size, every counter value gets a different code.\n```\n\nThis is a bijection, though the difference between decoded codes for known consecutive counters reveals the multiplier. A custom four-round Feistel recipe is omitted because no reviewed cryptographic construction is supplied. For private links use authorization or a properly designed longer capability token; a dense seven-character namespace is not adequate secrecy.\n\nThese concrete outputs are computed from the simple coprime multiplication fixture below, rather than arbitrary example strings. The permutation remains predictable from observed relationships and is unsuitable as access control.\n\n```python\nalphabet = (\n    \"0123456789\"\n    \"abcdefghijklmnopqrstuvwxyz\"\n    \"ABCDEFGHIJKLMNOPQRSTUVWXYZ\"\n)\ndef base62(n):\n    if n == 0:\n        return alphabet[0]\n    chars = []\n    while n:\n        # Take the rightmost digit;\n        # move left by dividing by 62.\n        n, digit = divmod(n, 62)\n        chars.append(alphabet[digit])\n    return \"\".join(reversed(chars))\n\nfor counter in (1000001, 1000002):\n    # Coprime multiplication preserves\n    # uniqueness; it is not encryption.\n    shuffled = ((1000003 * counter)\n                % 62**7)\n    print(base62(shuffled).zfill(7))\n# hBy2Saf then hBy74jk: unique codes.\n```\n\nCodes remain unique and 7 characters, with no extra database reads.",
+    "workedExample": "A bijection rearranges a finite set one-to-one: every input still has exactly one distinct output in the same code space. Multiplication followed by remainder has that property when the multiplier and space size are coprime. It hides the raw sequence from casual inspection but leaves recoverable patterns; it is not encryption or authorisation. Keep private-link access controls separate and never reuse or wrap allocated counters.",
     "link": {
       "title": "URL shortening (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/URL_shortening"

@@ -22,7 +22,7 @@ Every op is appended to `doc_ops` with a monotonically increasing `rev`. On its 
 3. **History UI**: group consecutive ops by author and time gap into "edit sessions". The user sees "Alice, 10:42" rather than 4,000 keystrokes. To restore a version, rebuild its state, then commit a **new** op that sets the document to it (history is never rewritten).
 4. **Compaction**: after a retention window, coarser snapshots can replace fine-grained history only if the product accepts losing intermediate revisions. Retain required named versions under an explicit policy, and preserve deduplication/rebase metadata or define a protocol for very old clients.
 
-Durability rule: **ack only after the op is durably appended**. Clients keep unacknowledged ops and resend them (idempotent via the pair `(client_id, seq)`), so an owner crash loses nothing that was acknowledged.
+Durability rule: **ack only after the op is durably appended**. Clients keep unacknowledged ops and resend them (idempotent via the pair `(client_id, seq)`), so owner failure does not lose acknowledged edits within the selected storage durability contract.
 
 ## What a snapshot proves
 

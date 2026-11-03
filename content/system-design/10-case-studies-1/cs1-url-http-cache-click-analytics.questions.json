@@ -7,7 +7,7 @@
     "options": [
       {
         "text": "301 Moved Permanently, because it is the standard for URL redirects.",
-        "explanation": "Wrong as stated. Without cache headers, browsers may cache a 301 indefinitely, so repeat clicks never reach you and you can't reliably disable the link. Provider-wide header claims require current representative response captures, which are not supplied."
+        "explanation": "Wrong as stated. A 301 can be heuristically cached, allowing later navigation to bypass the service. An explicit freshness/control policy is required; choosing a status alone does not solve blocking or analytics."
       },
       {
         "text": "404 Not Found, then let the browser search for the URL.",
@@ -15,7 +15,7 @@
       },
       {
         "text": "200 OK with a page containing a JavaScript redirect.",
-        "explanation": "Wrong. It works, but adds a full page load, breaks non-browser clients (curl, bots, some email clients) and harms SEO. Use a proper HTTP redirect."
+        "explanation": "Wrong for this general redirect service. It requires a client to fetch and process the document and execute its script; clients that do not execute JavaScript will not follow it. An HTTP redirect supports ordinary HTTP clients directly."
       },
       {
         "text": "302 Found (or 307) with Cache-Control: no-store; enforce blocking on the redirect path and measure analytics delivery separately.",
@@ -37,7 +37,7 @@
     "options": [
       {
         "text": "Publish a click event to Kafka asynchronously and return the redirect without waiting for the acknowledgement.",
-        "explanation": "Correct. Decoupling analytics from the request path means the redirect's latency depends only on the lookup. If Kafka is slow, buffer or drop events rather than delay redirects."
+        "explanation": "Correct under the stated availability-first policy. Bounded asynchronous publication removes its acknowledgement from the redirect path but can lose events."
       },
       {
         "text": "Increment a `click_count` column in the links table on every redirect.",
@@ -45,7 +45,7 @@
       },
       {
         "text": "Read-through cache in Redis plus a short-lived negative cache for unknown codes.",
-        "explanation": "Correct. Most lookups hit memory, and negative caching stops bots probing random codes from falling through to the database."
+        "explanation": "Correct when repeated lookups reuse entries. Cache hits reduce store work, and short-lived negative entries reduce repeated misses for the same unknown code. Distinct random probes still miss; control admission and cache pollution separately."
       },
       {
         "text": "A small in-process LRU cache on each redirect server for the hottest links.",
@@ -61,7 +61,7 @@
       2,
       3
     ],
-    "workedExample": "Budget the 50 ms:\n\n| Step | Illustrative latency input, not a benchmark |\n|---|---|\n| In-process cache hit | < 0.1 ms |\n| Redis hit | ~0.5–1 ms |\n| KV store read | ~5–10 ms |\n| Sync DB write | +5–20 ms, worse under contention |\n\nKeep only reads on the critical path and push every write (analytics) off it. Layered caches handle hot keys; negative caching handles bots. Synchronous work can increase latency and contention; whether it violates 50 ms needs a representative load test.",
+    "workedExample": "Layered caches reduce database reads and protect hot keys. Negative cache entries need brief retention and creation/freshness handling. Moving click publication off the response path reduces waiting but accepts a crash window and bounded-buffer loss; durable accounting requires a recoverable capture design. Verify the p99 target with representative load rather than summing assumed component latencies.",
     "link": {
       "title": "System Design Primer",
       "url": "https://github.com/donnemartin/system-design-primer/blob/master/README.md"

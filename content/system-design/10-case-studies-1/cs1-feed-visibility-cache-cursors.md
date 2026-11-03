@@ -9,7 +9,7 @@ sourceLesson: cs1-news-feed
 
 ## Deep dive 3: Follows, unfollows, blocks and deletes
 
-Precomputed timelines are a cache of a *derived* view, so every change to the inputs has to reach them. Interviewers love probing this.
+Precomputed timelines are a cache of a *derived* view, so every change to the inputs has to reach them. The serving path must account for changes after fan-out.
 
 - **Follow**: the new followee's recent posts aren't in your timeline. Backfill asynchronously: fetch their last ~50 posts and merge them into your list. Until it completes, the timeline service can pull that account at read time.
 - **Unfollow**: their posts are still in your list. Rather than scanning and rewriting it, filter at hydration ("is the author still followed?"), using a cached copy of your following set, and let the old IDs age out of the capped list.
@@ -26,11 +26,18 @@ The timeline cache is a Redis cluster sharded by `user_id`. Replayed fan-out eve
 - Each timeline is a capped list (`LPUSH` then `LTRIM 0 799`) or a sorted set scored by an exactly representable timestamp, with the full post ID encoded as a fixed-width member for tie-breaking. Redis scores are double-precision floats, so do not put arbitrary 64-bit Snowflake IDs directly into the score.
 - Replicate for availability. Losing a shard isn't data loss, since timelines can be rebuilt from the posts store and social graph, but rebuilding millions at once would hammer the databases, so keep replicas.
 - **Cache miss** (new or returning user): build from a captured boundary while buffering or replaying concurrent fan-out, then merge/deduplicate before switching to live updates. A blind rebuild can overwrite concurrent inserts.
-- **Hydration** is a second cache layer: `post_id → post` in Memcached or Redis. A timeline of 50 posts becomes one multi-get. Hot posts (a viral tweet in millions of timelines) are served from cache; add a small in-process cache for the very hottest.
+- **Hydration** is a second cache layer: `post_id → post` in Memcached or Redis. Batch a page’s lookups where the store permits it; Redis Cluster MGET requires keys in one hash slot, so a client may need separate batches by shard. Hot posts (a viral tweet in millions of timelines) are served from cache; add a small in-process cache for the very hottest.
 - **Deletions**: fanning out a delete to 50M timelines is expensive. Instead, mark the post deleted and let hydration drop it. The dead ID ages out of the capped list naturally.
 - **Read-your-writes**: merge the author's acknowledged post into their own view while fan-out proceeds asynchronously. A server-side guarantee also needs fresh hydration and a fallback when a cache is lost or stale; optimistic client insertion improves that client's UI only.
 - **Scrolling past the cap**: the list holds only 800 IDs. A user who scrolls beyond it gets older pages built by pull (or from a slower, disk-backed store). Few users ever scroll that far, which is why the cap works.
 - **Cursor stability**: because the cursor is a post ID ("older than X"), new posts ahead of that immutable order do not cause offset shifts. Late-arriving older IDs can still be missed; ranked feeds need a cursor that points into a saved copy of the ranking rather than only a post ID.
+
+> [!analogy] Real-world analogy: A guest list checked at the door
+> Being printed on an invitation list does not override a later cancellation; admission staff check the current permission.
+>
+> **How it maps:** Precomputed timeline IDs nominate candidates, while hydration checks current visibility and deletion state.
+>
+> **Where it stops:** A stale permission cache can still make a wrong decision; the implementation needs an explicit freshness and enforcement policy.
 
 ## Key takeaways
 

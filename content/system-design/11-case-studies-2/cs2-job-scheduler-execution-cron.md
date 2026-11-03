@@ -19,7 +19,7 @@ QUEUED -> LEASED(worker, until)
 - A worker **leases** a run (like an SQS visibility timeout) and **heartbeats** to extend the lease for long jobs.
 - It **acks only after** the work completes. If it crashes, the lease expires and the run is redelivered.
 - Therefore a run may execute **more than once**: a worker can finish the work and then die before acking. Exactly-once *execution* is impossible in general under arbitrary crashes and ambiguous external responses. What you can achieve is **effectively-once effects** when the side-effect destination enforces deduplication or the effect and run record share one atomic transaction. A local pre-send flag can lose work, and a post-send flag leaves ambiguity.
-- Retries use exponential backoff with **random jitter** (a random extra delay), and go to a dead-letter queue after max attempts, with an alert to the owner.
+- Retries use exponential backoff with **random jitter** (randomising retry timing within the policy’s window), and go to a dead-letter queue after max attempts, with an alert to the owner.
 
 ## Deep dive 4: cron semantics that bite
 

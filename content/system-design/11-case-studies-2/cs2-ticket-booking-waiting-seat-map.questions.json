@@ -3,27 +3,27 @@
     "id": "cs2-ticket-booking-q2",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Admitted shoppers spend about 5 minutes from entry to payment. Your booking tier and payment provider comfortably sustain 30,000 concurrent shoppers. At what rate should the waiting room admit users?",
+    "prompt": "Payment slows down, so admitted shoppers remain inside longer while the waiting room keeps admitting at its old rate. What should the controller do?",
     "options": [
       {
-        "text": "30,000 users per minute",
-        "explanation": "Wrong. Admitting 30,000 a minute while each stays 5 minutes builds up to 150,000 concurrent shoppers, five times the safe capacity."
+        "text": "Increase admissions because shoppers are completing less often",
+        "explanation": "Wrong. That adds work while existing shoppers already occupy capacity longer."
       },
       {
-        "text": "6,000 users per minute",
-        "explanation": "Correct. Five minutes per shopper and thirty thousand concurrent shoppers permit six thousand admissions a minute in the steady-state model. The worked example defines the quantities and shows the calculation."
+        "text": "Reduce admission using observed concurrency and downstream latency/error signals",
+        "explanation": "Correct. Longer residence at the same arrival rate builds a larger active population."
       },
       {
-        "text": "150,000 users per minute",
-        "explanation": "Wrong. This multiplies capacity by time instead of dividing. It would overwhelm the system 25x."
+        "text": "Use last week’s average without checking live conditions",
+        "explanation": "Wrong. The dependency and residence-time assumptions have changed."
       },
       {
-        "text": "Admit everyone at once and let autoscaling handle it",
-        "explanation": "Wrong. The constraint is the **contended inventory rows** and the payment provider's rate limits, neither of which autoscale. Stateless API servers scaling up doesn't help a hot database partition."
+        "text": "Scale only stateless API servers and ignore the provider limit",
+        "explanation": "Wrong. More API instances do not remove provider quotas or inventory contention."
       }
     ],
     "answer": 1,
-    "workedExample": "Little's law says that in a steady system the average number inside equals the arrival rate times the time each one stays. Rearrange it to find the arrival (admission) rate:\n\n```formula\nL = λ × W\nλ = L / W\nλ = 30,000 users / 5 min\nλ = 6,000 users/min = 100 users/s\nwhere\nL: shoppers inside the booking system at once; the safe concurrency is 30,000\nλ: the admission rate, in users per minute\nW: average time each shopper spends from entry to payment, in minutes (min); here 5\nusers: admitted shoppers\nmin: minutes\ns: seconds\nIn words: if each shopper stays 5 minutes and you can hold 30,000 at once, admit 6,000 a minute.\n```\n\nIn practice:\n1. Start below this (say 4,000 a minute) because the first minutes are the most contended.\n2. Run a feedback loop: if p99 hold latency or error rate rises, cut the admission rate. If they're healthy, raise it.\n3. Also factor in **abandonment**. If 30% of admitted users leave within a minute, the average time in the system falls and you can admit faster.\n\nThe waiting time for the back of the queue is the queue length divided by the admission rate:\n\n```formula\nT = Q / λ\nT = 2,000,000 / 6,000 per min ≈ 333 min\nwhere\nT: how long the last person in line waits, in minutes (min)\nQ: people waiting; here 2 million\nλ: the admission rate; 6,000 users per minute\nmin: minutes\n≈: approximately equal to\nIn words: admitting 6,000 a minute takes about 333 minutes (over 5 hours) to reach the last of 2 million fans.\n```\n\nSo you'd show 'sold out' long before then, once inventory is gone.",
+    "workedExample": "Longer checkouts keep existing shoppers active. The old admission rate can therefore exceed the concurrency budget. Cut admissions, observe recovery and keep headroom for bursts and uncertain payments. A long-run average is a planning aid, not a hard real-time bound.",
     "link": {
       "title": "Cloudflare Waiting Room (developer docs)",
       "url": "https://developers.cloudflare.com/waiting-room/"
@@ -79,7 +79,7 @@
       },
       {
         "text": "Switch from conditional updates to `SELECT ... FOR UPDATE`",
-        "explanation": "Wrong. Pessimistic locks make losers *wait* before failing instead of failing fast. The contention, and the 409s, stay the same."
+        "explanation": "Changing lock style does not change that many shoppers want the same seats. Conditional updates can also wait on row locks; neither option makes contention disappear."
       },
       {
         "text": "Offer 'best available': the fan chooses a price tier and quantity, and the server allocates contiguous seats from a pre-computed list",
@@ -91,7 +91,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Look at why the 409s happen. It's not the database being slow. It's many fans asking for **the same rows**:\n\n```\nfans clicking row A: 3,000\nseats in row A:        40\n=> at most 40 succeed\n```\n\nWith best available, the allocator walks a list of seats ordered by quality and assigns each request the next contiguous block in its tier. Each request targets *different* rows, so the conditional update almost always succeeds.\n\nThe same idea applies anywhere many clients want 'one of these': let the server choose, instead of having every client race for the best item.",
+    "workedExample": "Many shoppers target the same scarce rows. A best-available allocator can choose among eligible blocks and spread claims, but it must coordinate allocation atomically. Multiple allocators reading the same precomputed list can still collide. Keep conflict handling and admission limits; changing the UI does not guarantee every conditional update succeeds.",
     "link": {
       "title": "Ticketmaster system design breakdown (Hello Interview)",
       "url": "https://www.hellointerview.com/learn/system-design/problem-breakdowns/ticketmaster"

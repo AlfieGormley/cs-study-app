@@ -51,21 +51,11 @@ A naive lookup walks to the prefix node, one step per character, then searches t
 
 ### Precompute top-k at every node
 
-Store the top-k completions **at each node**. Lookup becomes "walk to the node, return its list". Big-O notation describes how the work grows:
+Store the top-k completions **at each node**. Lookup becomes "walk to the node, return its list". The change moves ranking work out of each request:
 
-```formula
-naive = O(p + S)
-precomputed = O(p + k)
-where
-O(...): Big-O, "grows at most in proportion to" the expression inside, ignoring constant factors
-p: the length of the typed prefix, in characters
-S: the number of nodes in the subtree below the prefix, which can be millions for a one-letter prefix
-k: the number of suggestions returned, here 10
-naive, precomputed: the lookup cost without and with a top-k list stored at each node
-In words: storing the answer at each node turns a search of a possibly huge subtree into a walk of a few characters plus reading k items.
-```
+With a stored candidate list, lookup follows the prefix and reads the selected results instead of searching the entire subtree. The trade-off is extra memory and work when rebuilding the lists.
 
-That is, plus output-string bytes, with no subtree search.
+The response still costs time to copy and transmit its strings.
 
 ```
 node "how t" -> [how to tie a tie (98k),
@@ -78,7 +68,7 @@ The cost is memory (k entries per node) and rebuild work, but we do that offline
 ### Alternatives
 
 - **Flattened trie in a KV store**: store `prefix → top-k list` directly in Redis or Cassandra. Easy to shard and update; memory relative to a trie depends on key duplication and representation. Good if the index outgrows one machine.
-- **Finite-state transducers**: Lucene and Elasticsearch's completion suggester use FSTs, a compressed trie that shares suffixes as well as prefixes, often several times smaller.
+- **Finite-state transducers**: Lucene and Elasticsearch's completion suggester use compact finite-state representations. Equivalent suffix paths can be shared as well as common prefixes; size savings depend on the indexed data and representation.
 - **Radix trees** collapse chains of single-child nodes into one edge, saving memory for long unique tails.
 
 ## Step 5: High-level design
@@ -112,6 +102,13 @@ Two separate paths:
 - **Data path** (bottom half): logs → counts → ranked lists → a new trie snapshot every hour or day.
 
 They meet only at the snapshot. The suggest service never writes anything.
+
+> [!analogy] Real-world analogy: An index with recommendations already attached
+> A library’s subject index can include a short recommended-reading list, so a visitor need not inspect every book on that subject.
+>
+> **How it maps:** The prefix path locates a precomputed candidate list; expensive selection happens when building the index.
+>
+> **Where it stops:** The list can become stale or omit newly relevant items; personalisation and urgent removal require additional mechanisms.
 
 ## Key takeaways
 

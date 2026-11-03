@@ -23,64 +23,27 @@ The interview centres on one decision, **Operational Transformation (OT) or CRDT
 ### Non-functional
 - **Local echo with no wait**. Your own typing must never wait for the network (optimistic local apply).
 - **Convergence**. All replicas reach an identical state once they've seen the same operations.
-- **Intention preservation**. My insertion goes where I meant it to, even after concurrent edits.
-- **Durability**. An acknowledged edit is never lost.
+- **Intention preservation**. Preserve the intended targets under defined edit semantics; no merge algorithm can guarantee every competing human intention.
+- **Durability**. An acknowledged edit survives the storage contract’s specified failures.
 - High availability, with tolerance for flaky connections.
 
-## Back-of-the-envelope
+## Budget edits and recipients separately
 
-Assume 50 M DAU (daily active users: distinct people who use the product on a given day) and 2 M editors with a document open at the peak. Only some of those are typing at any instant, say 10%. Clients don't send every keystroke separately; they batch keystrokes and send one message about every 200 ms (milliseconds), which is 5 messages a second while someone types:
+An illustrative workload has two million open editors at peak, with one tenth actively typing. If a typist sends five batched edit messages per second, the incoming stream is about one million messages per second. A batch can contain several character operations: distinguish protocol messages from the logical edits inside them.
 
-```formula
-T = E × f = 2,000,000 × 0.1 = 200,000
-m = 1 msg / (200 ms) = 5 msgs/s
-O = T × m = 200,000 × 5/s = 1 M ops/s
-where
-T: editors typing at the same moment
-E: editors with a document open at peak; 2 million
-f: fraction typing at any instant; assumed 10% = 0.1
-m: messages per second from one typing client
-ms: milliseconds, thousandths of a second; 1,000 ms = 1 s
-msgs: messages sent to the server
-msg: one message
-O: operations (edits) arriving at the servers per second
-M: million
-ops: operations, the edit messages
-s: seconds
-In words: 200,000 people typing, each sending 5 batched messages a second, is about a million operations a second.
-```
+Each batch must reach the other collaborators on its document. More recipients increase outbound fan-out even when incoming edit traffic is unchanged. Presence, acknowledgements and reconnect synchronization add separate streams; do not hide them inside a single “operations per second” number.
 
-Each operation must reach the other people in the same document. With about 3 collaborators per document, each op goes to about 2 others. With about 100 bytes per op:
+## The busiest document matters
 
-```formula
-F = O × (c − 1) = 1 M/s × 2 = 2 M msgs/s
-I = O × b = 1,000,000/s × 100 B = 100 MB/s
-D = 100 MB/s × 86,400 s ≈ 8.6 TB/day
-where
-F: messages per second sent out to other collaborators (fan-out)
-O: operations arriving per second; 1 million
-c: average people editing one document; about 3
-I: incoming data per second
-b: bytes per operation (B); about 100
-D: data per day, if the peak rate lasted all day
-M: million
-msgs: messages
-s: seconds; a day has 86,400 s
-B: bytes
-MB: megabytes, 1,000,000 bytes
-TB: terabytes, 10^12 bytes
-day: one day
-≈: approximately equal to
-In words: a million ops a second fans out to about 2 million messages a second, about 100 MB a second coming in, or up to about 8.6 TB a day.
-```
+Sharding by document spreads independent documents, but all edits to one document still require its integration and durability work. A fleet average can hide a large shared document with hundreds of participants, large snapshots or a burst of offline edits.
 
-The 8.6 TB/day figure is an upper bound: real traffic falls well below peak for most of the day.
+Bound the workload with product limits and test their effects. A viewer relay can distribute broadcasts without adding writable owners. Splitting a document into independently owned sections changes cross-section editing and snapshot semantics, so it needs an explicit contract.
 
-What matters:
+## Keep local response and saved state distinct
 
-- **Per-document load is tiny** (a few to a few hundred ops a second), but there are **millions of documents**. Shard by document, and benchmark how many active documents each server can host under its actual fan-out and document sizes.
-- The op log grows fast. You need **snapshots plus compaction**, or storage and load time grow without limit.
-- Google Docs limits how many people can work in one file at the same time (its help pages put it at around 100), and beyond that further users get a reduced, mostly view-only experience. A cap like that bounds the worst case for any one document.
+Optimistic local echo makes typing visible immediately. A saved indicator must wait for the configured durable acknowledgement. Clients retain unacknowledged edits and retry with stable identities after reconnecting.
+
+The operation log grows with retained edits; its physical size includes synchronization metadata, indexes and copies. Snapshots shorten replay, while compaction trades history detail for storage only when the product permits it. Extending the peak rate over a whole day is a stress model, not a prediction of daily traffic. Measure active editors, document fan-out, batch sizes and the actual daily distribution independently.
 
 ## Key takeaways
 - Local echo gives immediate typing while durable acknowledgements arrive later.

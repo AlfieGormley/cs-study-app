@@ -14,8 +14,8 @@
         "explanation": "Correct. These limits defend against brute-force attacks. Briefly rejecting some logins is less harmful than letting attackers try unlimited passwords while the limiter is down."
       },
       {
-        "text": "Fall back to per-gateway in-memory buckets sized at roughly limit ÷ number of gateways.",
-        "explanation": "Correct. Local approximate limiting keeps some protection in place. It's inaccurate if load balancing is uneven, but far better than no limit at all."
+        "text": "Use local buckets with explicitly reserved gateway shares and accounted transitions and resets.",
+        "explanation": "Correct. Fixed shares can bound total allowance only while ownership, membership and reset rules preserve those reservations. Uneven routing can strand allowance."
       },
       {
         "text": "Retry each timed-out Redis call up to 5 times before deciding.",
@@ -31,7 +31,7 @@
       1,
       2
     ],
-    "workedExample": "Ask, for each limit: **what's worse, over-admitting or rejecting?**\n\n| Limit | Worse outcome | Policy |\n|---|---|---|\n| API quota | Rejecting paying users | Fail open |\n| Login attempts | Brute force | Fail closed |\n\nThen layer a degraded mode: local buckets give partial protection with no network dependency. Avoid retry storms: a 5 ms timeout with zero retries targets a bounded network wait; scheduling, queueing and the fallback also contribute to measured tail latency while Redis recovers.",
+    "workedExample": "Ask, for each limit: **what's worse, over-admitting or rejecting?**\n\n| Limit | Worse outcome | Policy |\n|---|---|---|\n| API quota | Rejecting paying users | Fail open |\n| Login attempts | Brute force | Fail closed |\n\nThen layer a degraded mode: local buckets give protection without a network call only within their accounted allocation and reset policy. Avoid retry storms: a 5 ms timeout with zero retries targets a bounded network wait; scheduling, queueing and the fallback also contribute to measured tail latency while Redis recovers.",
     "link": {
       "title": "Stripe: scaling your API with rate limiters",
       "url": "https://stripe.com/blog/rate-limiters"
@@ -61,10 +61,10 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Quantify the overshoot of the async option. With a 1-second sync interval, the overshoot is roughly what the other region admits before the next sync:\n\n```formula\nrate = 10,000 / (60 s) ≈ 167/s\nover ≈ rate × t_sync = 167/s × 1 s = 167\nshare = over / limit\nshare = 167 / 10,000 ≈ 1.7%\nwhere\nrate: the customer's limit as a per-second rate\nover: extra requests admitted beyond the limit before the regions next exchange counts\nt_sync: the sync interval, 1 second\nshare: the overshoot as a fraction of the per-minute limit\nlimit: the global limit, 10,000 requests per minute\ns: seconds; /s means per second\n≈: approximately equal to\nIn words: a client sending at its limit can slip about one second of extra traffic through, roughly 2% of its per-minute limit.\n```\n\nIf both regions admit a second's worth, the overshoot is up to about 333, around 3%. So for a client sending at about its limit the overshoot is roughly 167–333 requests, or 2–3% of the limit.\n\nA client blasting both regions far above its limit can overshoot by more within that second, which is why the async scheme is usually paired with a per-region per-second cap.\n\nCompare that with adding 90 ms to every EU request. Acceptable overshoot is a policy choice; gossip alone gives no small bound during an extended partition. The static-split variant (e.g. US 6,000, EU 4,000) is simpler still but unfair when traffic shifts between regions.",
+    "workedExample": "Reserve disjoint regional shares whose combined allowances stay within the global limit. Each region can then decide locally, but spare quota may remain in a quiet region. Rebalancing must transfer ownership without permitting both regions to spend the same allowance. Giving every region the full quota and exchanging counts later is a different contract: delayed communication and partitions can cause substantial overshoot.",
     "link": {
-      "title": "Google Cloud: rate-limiting strategies and techniques",
-      "url": "https://cloud.google.com/architecture/rate-limiting-strategies-techniques"
+      "title": "Stripe: rate limiters",
+      "url": "https://stripe.com/blog/rate-limiters"
     }
   },
   {
@@ -91,7 +91,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Compare lease capacity with the limit:\n\n```formula\nleased = G × lease = 200 × 10 = 2,000\nserved = limit / lease = 100 / 10 = 10\nwhere\nleased: tokens needed to give every gateway one lease\nG: the number of gateways, 200\nlease: tokens per lease, 10\nlimit: tokens the customer has this window, 100\nserved: how many gateways can get a lease before the tokens run out\nIn words: one lease for every gateway would need 2,000 tokens, but the customer's 100 tokens cover only 10 gateways.\n```\n\nBefore any further refill or window reset, only 10 of the 200 gateways can obtain a lease. With traffic spread evenly, 190 / 200 = 95% of requests hit a gateway with no tokens.\n\nFixes:\n- Lease only for keys whose limit is much larger than the gateway count times the lease size (e.g. limits above ~100k/min).\n- Scale the lease size with the limit (e.g. 1% of it).\n- Use direct Redis checks for small keys, which are low-traffic anyway.",
+    "workedExample": "The central bucket still limits how many tokens exist. The problem is where they are held: gateways that reserved batches may be idle while other gateways have requests but no allowance. Use direct checks for small quotas, reduce lease sizes, or route work to its reserved capacity. Never reissue unused-looking leased tokens without a protocol that stops the old holder spending them.",
     "link": {
       "title": "Stripe: scaling your API with rate limiters",
       "url": "https://stripe.com/blog/rate-limiters"

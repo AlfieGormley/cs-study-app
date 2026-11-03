@@ -18,31 +18,15 @@ Classify every provider response:
 | Invalid token / number | Don't retry; clean up |
 | Unsubscribed / blocked | Don't retry; update prefs |
 
-- **Exponential backoff with jitter**: wait ~1 s, 2 s, 4 s, 8 s... each randomised, so thousands of failed messages don't retry in lockstep and hammer a recovering provider (formula below).
+- **Exponential backoff with jitter**: wait ~1 s, 2 s, 4 s, 8 s... each randomised, so thousands of failed messages don't retry in lockstep and hammer a recovering provider .
 - **Respect the TTL**: if the notification's `ttlSeconds` has passed, drop it instead of retrying. A late OTP is worse than none.
 - **Dead-letter queue**: after a fixed number of attempts (say 5), move the message to a DLQ for inspection rather than retrying forever.
 - **Token hygiene**: APNs tells you when a device token is no longer valid (HTTP 410 for an unregistered device), and FCM returns an `UNREGISTERED` error. Deactivate the affected registration; for APNs, compare its invalidation timestamp with the latest registration so an old response cannot invalidate a newer registration. Apply FCM token-lifecycle guidance separately.
-- **Circuit breakers and failover**: if one SMS provider's error rate spikes, open a circuit breaker and route to a secondary provider. Email can similarly fail over between configured providers. Secondary routes need approved senders, capacity and appropriate consent; ambiguous primary outcomes can cause duplicates across providers. Push can't fail over (only Apple can deliver to iPhones), so you queue and retry.
+- **Circuit breakers and failover**: if one SMS provider's error rate spikes, open a circuit breaker and route to a secondary provider. Email can similarly fail over between configured providers. Secondary routes need approved senders, capacity and appropriate consent; ambiguous primary outcomes can cause duplicates across providers. Remote notifications to native Apple apps use APNs; switching an intermediary provider does not bypass an APNs outage. Queue eligible work within its TTL and recover through the app's own sync path.
 
-The backoff schedule, with "full jitter" as described on the [AWS Architecture Blog](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/):
+With "full jitter" as described on the [AWS Architecture Blog](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/), the retry ceiling grows after repeated retryable failures, up to a maximum. Independently choose a delay within that ceiling, respect any provider minimum wait, and stop when the attempt or time budget is exhausted.
 
-```formula
-cap_n = min(c, b × 2^n)
-wait_n = U(0, cap_n)
-where
-n: the retry number, starting at 0 for the first retry
-b: the base delay, here 1 second
-2^n: n copies of 2 multiplied together (1, 2, 4, 8...), so the ceiling doubles on each retry
-c: a maximum delay, so waits stop growing (say 60 seconds)
-min: "the smaller of"
-cap_n: the longest wait allowed before retry n
-U(0, cap_n): a random time chosen evenly between 0 and cap_n
-U: uniform random choice
-wait_n: how long to actually wait before retry n
-In words: double the ceiling on each retry, up to a cap, and wait a random time below it, so failed messages spread out instead of retrying together.
-```
-
-So ceilings run 1 s, 2 s, 4 s, 8 s and so on, and two messages that failed at the same moment almost never retry at the same moment.
+Jitter reduces synchronisation in expectation. It does not guarantee uniformly spaced retries or eventual success.
 
 ## Key takeaways
 

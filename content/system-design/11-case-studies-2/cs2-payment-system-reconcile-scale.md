@@ -22,7 +22,7 @@ Reconciliation checks agreement with the external records available at a point i
 
 ## Bottlenecks and trade-offs
 
-- **Synchronous vs asynchronous capture**: auth-and-capture in one call is simpler. Separate capture (capture at fulfilment, like a ride ending) reduces refunds but adds a state and an expiry. Online card authorisations typically lapse after about 7 days, and sooner for some networks and in-person payments (Stripe lists 2–5 days for several cases), so a delayed capture needs a deadline and an alert.
+- **Synchronous vs asynchronous capture**: auth-and-capture in one call is simpler. Separate capture (capture at fulfilment, like a ride ending) reduces refunds but adds a state and an expiry. Authorisation windows depend on network, transaction type and provider rules. For Stripe card charges, inspect `payment_method_details.card.capture_before` rather than hard-coding a seven-day lifetime; delayed capture needs a deadline and an alert.
 - **Strong consistency** requires a protocol that orders conflicting operations; one home write region per account is one design, not a requirement. Cross-region consensus is another, with latency and availability trade-offs.
 - **Hot accounts** need splitting or batching, as above.
 - **Retention vs cost**: keep years of entries online but tiered (hot recent partitions, cold older ones), and archive to immutable object storage.
@@ -53,3 +53,4 @@ Individual pending transfers need monitoring: opposite in-flight clearing balanc
 - [The Payment Intents API (Stripe docs)](https://docs.stripe.com/payments/payment-intents)
 - [Accounting for developers, part I (Modern Treasury)](https://www.moderntreasury.com/journal/accounting-for-developers-part-i)
 - [Two Generals' Problem (Wikipedia)](https://en.wikipedia.org/wiki/Two_Generals%27_Problem)
+- [Stripe capture expiry](https://docs.stripe.com/payments/place-a-hold-on-a-payment-method)

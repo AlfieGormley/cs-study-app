@@ -14,7 +14,7 @@
         "explanation": "Wrong. Fan-out on read can order posts perfectly with a k-way merge by timestamp. The issue is cost and latency, not ordering."
       },
       {
-        "text": "Because reads vastly outnumber writes, so moving the merging work to the (asynchronous) write path makes the hot read path a single cache lookup.",
+        "text": "Because repeated reads can reuse a precomputed candidate list, moving collection work to asynchronous fan-out while retaining hydration and visibility checks.",
         "explanation": "Correct. You pay the fan-out cost once per post, off the user's critical path, instead of on every one of the many timeline loads."
       },
       {
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Compare the work per day with 500M posts, 3B timeline reads, 200 average followers and users following ~200 accounts:\n\n```formula\npush = 500M × 200 = 100B/day\npull = 3B × 200 = 600B/day\npull / push = 6\nwhere\npush: timeline appends per day with fan-out on write (posts × followers), done by background workers\npull: lookups per day with fan-out on read (timeline loads × accounts followed), done while the user waits\nM: million\nB: billion\nday: one day; /day means per day\nIn words: pushing costs 100 billion background appends a day; pulling costs 600 billion lookups a day on the hot path, six times as many.\n```\n\nPull performs 6x as many enumerated operations in this simplified model; lookups and appends do not have identical cost, all of it while a user is waiting. Push's work happens in background workers, so the timeline load is one Redis read plus hydration.",
+    "workedExample": "Push pays background insertion work when a post is created so repeated readers can reuse a candidate list. Pull avoids those inserts but gathers and merges source timelines during each read. In this read-heavy scenario, precomputation may be worthwhile; compare posting rates, active followers, cache reuse and hydration rather than treating all operations as equally costly.",
     "link": {
       "title": "InfoQ: Timelines at Scale",
       "url": "https://www.infoq.com/presentations/Twitter-Timeline-Scalability/"
@@ -37,7 +37,7 @@
     "options": [
       {
         "text": "Don't fan out this account's posts; at read time, fetch this account's recent posts from its (heavily cached) user timeline and merge them into each follower's precomputed timeline.",
-        "explanation": "Correct. This is the hybrid model. Each follower pays a single extra lookup for each celebrity they follow, and that celebrity's timeline is so frequently read it's always cached."
+        "explanation": "Correct for the stated capacity trade-off. Pull avoids the mass insertion and adds a source lookup and merge for each followed large account. High reuse can help caching, but eviction, cold starts and failures mean it is not always cached."
       },
       {
         "text": "Fan out on write like everyone else, but add more fan-out workers.",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Cost of pushing:\n\n```formula\nt = 50M / (1M/s) = 50 s\ndaily = 20 × 50M = 1B\nwhere\nt: whole-fleet time to fan out one post\ndaily: inserts per day from this one account (20 posts a day)\nM: million\nB: billion\ns: seconds; /s means per second\nIn words: each post ties up the entire fan-out fleet for 50 seconds, and the account generates a billion inserts a day on its own.\n```\n\nCost of pulling instead:\n\n- Each follower's timeline load adds one cached lookup (the celebrity's last ~20 posts) and a merge of a few items into a sorted list.\n- The celebrity's user timeline is requested millions of times, so it stays hot in cache.\n\nSo set a threshold (e.g. > 1M followers) above which accounts are pulled, not pushed.",
+    "workedExample": "Pushing a high-follower account expands one post into many background inserts and can delay unrelated fan-out. Pulling its recent posts when a follower reads avoids that mass insertion, at the cost of an extra source lookup and merge. Cache and replicate the hot source as needed; choose the threshold from measured write and read costs, and deduplicate during classification changes.",
     "link": {
       "title": "High Scalability: the architecture Twitter uses to deal with 150M active users",
       "url": "https://highscalability.com/the-architecture-twitter-uses-to-deal-with-150m-active-users/"
@@ -70,7 +70,7 @@
         "explanation": "Wrong. Cross-post dependencies in the fan-out pipeline would be complex and fragile, and would delay replies by minutes."
       },
       {
-        "text": "Use the hybrid model: don't fan out the celebrity's posts; merge them in at read time from their cached user timeline, so everyone sees the original as soon as it exists.",
+        "text": "Pull huge accounts at read time to remove bulk fan-out delay, with parent fetching or deferral if a reply requires a parent that is not visible yet.",
         "explanation": "Correct. With pull for huge accounts, pull avoids the bulk fan-out delay, but stale source/cache reads and partial failures can still hide the parent. If causal presentation is required, fetch or defer replies whose parent is unavailable."
       },
       {
@@ -79,7 +79,7 @@
       },
       {
         "text": "Add more fan-out workers so the celebrity's fan-out completes in under 5 seconds.",
-        "explanation": "Wrong as the main fix. 40M inserts in 5 s means 8M inserts/s just for one post, many times a normal fleet's capacity, and the race returns as soon as several celebrities post together."
+        "explanation": "Wrong as the structural fix. More workers can reduce backlog, but demand can grow again and capacity alone does not enforce parent-before-reply visibility."
       }
     ],
     "answer": 1,

@@ -29,22 +29,18 @@ Store a timestamp for every request (a Redis sorted set). On each request, drop 
 
 Keep fixed-window counts for the current and previous window. A true rolling window ending now still overlaps the tail end of the previous window, so count the previous window in proportion to that overlap:
 
-```formula
-est = prev × (1 − t / w) + curr
-est = 80 × (1 − 15 s / (60 s)) + 30
-est = 80 × 0.75 + 30 = 90
+```formula reference
+E = P(1 − t / w) + C
 where
-est: the estimated number of requests in the last full window
-prev: requests counted in the previous fixed window
-curr: requests counted so far in the current window
-t: time elapsed since the current window started, in seconds (s)
-w: the window length, in seconds; here one minute = 60 s
-t / w: the fraction of the current window that has passed, so 1 − t / w is the share of the previous window still inside the rolling window
-s: seconds
-In words: count the current window fully and the previous one only for the part that still falls inside the last minute; 25% into the minute, that is three quarters of the previous count.
+E: estimated requests in the trailing window
+P: requests counted in the previous aligned window
+C: requests counted so far in the current aligned window
+t: elapsed time in the current window, in seconds, from zero up to but excluding w
+w: window duration in seconds
+In words: count all current-window requests and estimate the still-overlapping part of the previous window; this assumes the previous requests were spread evenly.
 ```
 
-So if the previous minute had 80 requests, the current has 30, and we're 25% through it, the estimate is 90. Under a limit of 100, allow.
+Halfway through a window, the estimate keeps half the previous count and all of the current count. If earlier requests were concentrated near the boundary, that proportional estimate can be wrong.
 
 - **Pro**: two integers per key, smooths boundary bursts.
 - **Con**: approximate; it assumes requests in the previous window were evenly spread. Cloudflare reported around 0.003% incorrect decisions in its published workload. That historical empirical result is not a worst-case error bound; concentrated traffic can produce large errors.

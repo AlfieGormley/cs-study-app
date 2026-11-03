@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Weigh the outcomes:\n\n| Choice | If SMS was sent | If it wasn't |\n|---|---|---|\n| Don't retry | Fine | User locked out |\n| Retry | Duplicate OTP | Fine |\n\nUnder the explicitly duplicate-tolerant policy, a repeated copy of the same OTP is acceptable. Retry carefully, reconcile provider status where possible, and stop new attempts at expiry; already queued SMS can still arrive:\n\n```\nretry 1: wait ~1 s (rand 0.5-1.5 s)\nretry 2: wait ~2 s\nretry 3: wait ~4 s, secondary provider\n...\n```\n\nThe wait roughly doubles each time, and new attempts stop at the TTL:\n\n```formula\nwait_n ≈ b × 2^{n − 1}\nt_stop = t_0 + 300 s\nwhere\nwait_n: the approximate wait before retry n, before random jitter is applied\nb: the base delay, 1 second\nn: the retry number, 1 for the first retry\n2^{n − 1}: n − 1 copies of 2 multiplied together (1, 2, 4...)\nt_0: when the notification was created (created_at)\nt_stop: the time after which no new attempts are made\n300 s: the 5-minute TTL, in seconds\nIn words: wait about 1, 2, 4 seconds and so on between retries, randomised, and give up once five minutes have passed since the code was created.\n```\n\nJitter spreads thousands of concurrent retries so they don't hit the recovering provider at the same instant.",
+    "workedExample": "A timeout leaves acceptance unknown. Prefer the provider’s idempotency or status-reconciliation mechanism. Under the explicitly duplicate-tolerant policy, retry the same OTP with backoff and independent jitter within its remaining TTL and attempt budget. A secondary route needs suitable registration and capacity and can duplicate an already accepted primary send. Stop new attempts at expiry; a provider-queued SMS may still arrive later, so the server must reject an expired code.",
     "link": {
       "title": "AWS Builders' Library: timeouts, retries and backoff with jitter",
       "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
@@ -49,11 +49,11 @@
       },
       {
         "text": "Open a circuit breaker on the primary once the error rate exceeds a threshold, route traffic to a secondary SMS provider, and probe the primary periodically to close the breaker when it recovers.",
-        "explanation": "Correct. The circuit breaker stops wasting time and capacity on a failing dependency, failover keeps OTPs flowing, and half-open probes restore the primary automatically."
+        "explanation": "Correct when a configured secondary route has capacity, sender registration and permission. Half-open probes test recovery; ambiguous primary outcomes can still produce duplicates."
       }
     ],
     "answer": 3,
-    "workedExample": "The circuit breaker has three states:\n\n```\nCLOSED    normal; track error rate\n  | error rate > 20% over 30 s\n  v\nOPEN      send everything to secondary\n  | after 60 s\n  v\nHALF-OPEN send 1% to primary as a probe\n  | probes succeed -> CLOSED\n  | probes fail    -> OPEN\n```\n\nSMS is a channel where failover is possible (Twilio, Vonage, Sinch and others can all reach the same phone numbers). Push isn't: only APNs delivers to iPhones, so for push you queue and retry with backoff instead.",
+    "workedExample": "A circuit breaker normally permits calls while closed, stops or reroutes them while open, and permits a limited trial while half-open. Thresholds, waiting time and the number of successful probes are chosen from the dependency and workload. SMS failover requires a usable secondary route; not every provider supports every destination or sender. Switching a push intermediary cannot bypass an APNs outage for native Apple remote notifications.",
     "link": {
       "title": "Azure Architecture Center: circuit breaker pattern",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker"
@@ -75,7 +75,7 @@
       },
       {
         "text": "Fail over push traffic to a secondary push provider.",
-        "explanation": "Wrong. Only Apple can deliver to iPhones; there is no secondary APNs. And the errors aren't an outage, they're your own stale data."
+        "explanation": "Switching a push intermediary does not bypass APNs for these native Apple remote notifications. In this scenario the410response identifies a token/topic registration problem."
       },
       {
         "text": "Fall back to SMS for every 410.",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Record provider acceptance separately from device delivery. For APNs 410, use the returned timestamp: stop sending until the app registers with a later timestamp. Do not let a delayed error remove that newer registration. At 850M requests/day, 25% is 212.5M wasted requests. Use FCM-specific lifecycle rules rather than assuming identical invalidation semantics.",
+    "workedExample": "Record provider acceptance separately from device delivery. For APNs 410, use the returned timestamp: stop sending until the app registers with a later timestamp. Do not let a delayed error remove that newer registration. Use FCM-specific lifecycle rules rather than assuming identical invalidation semantics.",
     "link": {
       "title": "Apple: sending notification requests to APNs",
       "url": "https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns"
@@ -97,7 +97,7 @@
     "options": [
       {
         "text": "HTTP 429 Too Many Requests from the SMS provider.",
-        "explanation": "Correct. You're being throttled; it's transient. Back off (respect `Retry-After` if sent) and try again."
+        "explanation": "Correct within the policy. Throttling may clear, but can persist; respect Retry-After and quota policy within the remaining budget."
       },
       {
         "text": "A connection timeout with no response.",
@@ -105,7 +105,7 @@
       },
       {
         "text": "HTTP 503 Service Unavailable.",
-        "explanation": "Correct. A temporary server-side failure. Retry, and if the error rate stays high, open a circuit breaker and fail over."
+        "explanation": "Correct for eligible requests within budget. A 503 can persist; monitor health and use an appropriate circuit/failover policy."
       },
       {
         "text": "\"Invalid phone number\" or an email hard bounce (mailbox doesn't exist).",
@@ -121,7 +121,7 @@
       1,
       2
     ],
-    "workedExample": "Ask: **will the same request succeed later?**\n\n- 429, 5xx, timeouts: plausibly yes, so retry with exponential backoff and jitter.\n- Invalid destination, hard bounce: no, so clean up the data.\n- Unsubscribe/STOP: no, and legally you mustn't, so update preferences.\n\nAlways cap retries by the notification's TTL and an attempt count, then dead-letter.",
+    "workedExample": "Classify failures by whether retry or reconciliation can usefully resolve them, not by a promise of eventual success. Respect provider instructions, TTL and attempt limits. Invalid destinations need correction; opt-outs need suppression. A timeout can hide provider acceptance, so reconcile or use provider idempotency where available before accepting duplicate risk.",
     "link": {
       "title": "AWS Builders' Library: timeouts, retries and backoff with jitter",
       "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"

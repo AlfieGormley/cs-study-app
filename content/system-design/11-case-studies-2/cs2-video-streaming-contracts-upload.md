@@ -7,6 +7,8 @@ summary: Keep control requests small while uploading video directly to durable s
 sourceLesson: cs2-video-streaming
 ---
 
+This case study uses an illustrative large upload-and-playback service; its capacity and timing targets are design assumptions, not measured company internals.
+
 Video streaming is the classic "bandwidth is the system" design. The metadata service is a fairly ordinary CRUD app. What makes it hard is the **bytes**: petabytes arriving every day that must be transcoded, and hundreds of petabytes leaving every day that must reach phones on flaky 4G without stalling.
 
 A strong answer spends little time on the metadata tables and most of its time on three pipelines: **upload → transcode → deliver**.
@@ -26,7 +28,7 @@ A strong answer spends little time on the metadata tables and most of its time o
 - Read-heavy: views outnumber uploads by many orders of magnitude.
 - Cost matters a lot. Egress and transcoding compute are the main bills.
 
-Clarify scope early. YouTube-style means a huge long tail of user uploads. Netflix-style means a small, curated catalogue (tens of thousands of titles) watched by a huge audience. The CDN strategy is very different for each.
+Clarify scope early. YouTube-style means a huge long tail of user uploads. A curated catalogue can support predictable placement, while a huge upload catalogue has a longer demand tail. These workload differences influence caching policy; either service can combine prefetch and demand-driven caching.
 
 ## API design
 
@@ -107,7 +109,7 @@ Follow the arrows as data paths; the drawing is not a deployment specification.
 
 ### Resumable upload
 
-A 4 GB upload from a phone *will* get interrupted. Use a resumable protocol (Google's resumable upload API, tus, or S3 multipart). Offset-based protocols such as tus/GCS resumable upload report committed offsets. S3 multipart instead tracks an upload ID, numbered parts and their returned ETags/checksums; parts can arrive out of order and retry individually. A generic presigned S3 PUT does not implement a Content-Range resumable session.
+A 4 GB upload from a phone may be interrupted. Use a resumable protocol (Google's resumable upload API, tus, or S3 multipart). Offset-based protocols such as tus/GCS resumable upload report committed offsets. S3 multipart instead tracks an upload ID, numbered parts and their returned ETags/checksums; parts can arrive out of order and retry individually. A generic presigned S3 PUT does not implement a Content-Range resumable session.
 
 When the upload completes, the storage service fires an event ("object created") onto a queue. Don't have the client call the transcoder directly. The queue makes the pipeline durable and lets you absorb upload spikes.
 
@@ -122,3 +124,4 @@ When the upload completes, the storage service fires an event ("object created")
 - [The System Design Primer](https://github.com/donnemartin/system-design-primer)
 - [GCS resumable uploads](https://cloud.google.com/storage/docs/performing-resumable-uploads)
 - [S3 multipart upload](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html)
+- [Vitess overview](https://vitess.io/docs/overview/whatisvitess/)

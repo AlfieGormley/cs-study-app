@@ -33,38 +33,16 @@ Assume an API fleet handling **1 million requests/s** at peak, with **10 million
 
 Every request needs one limiter check, which is one Redis call (a single Lua script). The number of Redis shards follows from dividing the check rate by what one shard handles:
 
-```formula
-shards = checks / cap
-shards = 1,000,000/s / (50,000/s) = 20
-where
-shards: Redis shards (separate servers each holding part of the keys) needed, before adding replicas
-checks: limiter checks per second, one per API request: 1 million at peak
-cap: checks per second one shard handles at the target tail latency, here an assumed 50,000 (50k)
-/s: per second
-In words: a million checks a second at an assumed 50,000 per shard needs about 20 shards, plus replicas for failover.
-```
+The check rate sets throughput demand. Benchmark the actual script at the required tail latency, then allow for uneven keys, replication and failover rather than running every shard at its maximum.
 
-Memory is keys times rules per key times bytes per counter:
+Count the state retained by the limiter:
 
-```formula
-memory = keys × rules × size
-memory = 10M × 2 × 100 B ≈ 2 GB
-where
-memory: RAM needed for all counters
-keys: active client keys per day, 10 million (10M)
-rules: rules applied to each key, here 2 (a burst limit and a daily quota)
-size: bytes per stored counter, an assumed 100 bytes (B)
-M: million
-B: bytes
-GB: gigabyte, 10^9 bytes
-≈: approximately equal to
-In words: 10 million keys with two 100-byte counters each is about 2 GB of memory.
-```
+Memory depends on concurrently retained keys, rules per key and the actual stored representation. Daily unique clients are not automatically the number of counters resident at once.
 
-These are illustrative sizing inputs, not measured Redis capacity or memory bounds. Actual key strings, objects, allocator overhead, scripts, replication and network tails must be measured. A single atomic call reduces both race windows and network hops.
+These are illustrative workload inputs, not measured Redis capacity or memory bounds. Actual key strings, objects, allocator overhead, scripts, replication and network tails must be measured. A single atomic call reduces both race windows and network hops.
 
 > [!note] Content gap: deployment benchmarks
-> No reproducible deployment benchmark is supplied for the stated 1–2 ms target or per-shard throughput/footprint. Universal capacity and latency estimates are omitted; the calculation above uses explicit assumptions.
+> No reproducible deployment benchmark is supplied for the stated 1–2 ms target or per-shard throughput/footprint. Universal capacity and latency estimates are omitted; the workload and target above use explicit assumptions.
 
 ## Key takeaways
 

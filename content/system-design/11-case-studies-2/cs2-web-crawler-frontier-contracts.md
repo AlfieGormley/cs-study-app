@@ -74,7 +74,7 @@ Follow the arrows as data paths; the drawing is not a deployment specification.
 
 ## Deep dive 1: the URL frontier
 
-The frontier answers one question: **which URL should a fetcher take next?** It has to balance **priority** (fetch important pages first) and **politeness** (never hit one host too fast). The two-stage design below is documented in the information-retrieval textbook. The 1999 Mercator paper describes host-based FIFO subqueues and an alternative dynamic host-to-thread mapping; it does not describe this exact priority-front-queue/min-heap construction.
+The frontier answers one question: **which URL should a fetcher take next?** It has to balance **priority** (fetch important pages first) and **politeness** (never hit one host too fast). The two-stage design below is an illustrative way to combine those requirements. The 1999 Mercator paper provides primary context for host-based FIFO subqueues and bounded memory; it does not establish this exact priority-front-queue/min-heap construction.
 
 ### Front queues: priority
 - Score each URL by things like PageRank or host authority, how often the page changes, depth from the seed, and freshness need.
@@ -101,23 +101,19 @@ back queues (one host each)
     fetchers
 ```
 
-The textbook describes a common heuristic that sets the delay to **about 10× the time the last fetch took**:
+For example, a policy might wait ten times the last fetch duration, so a 200 ms fetch leads to a two-second wait. This is an illustrative heuristic; also enforce configured minimum delays, robots policy and shared-IP budgets.
 
-```formula
-d = 10 × f
-d = 10 × 200 ms = 2,000 ms = 2 s
-where
-d: the wait before the next request to the same host, in milliseconds (ms)
-f: how long the last fetch from that host took, in milliseconds (ms)
-ms: milliseconds, thousandths of a second
-s: seconds
-In words: wait ten times as long as the last fetch took; a 200 ms fetch means a 2 second pause.
-```
-
-So if a page took 200 ms, wait 2 s before the next request to that host. A slow, struggling server automatically gets more breathing room.
+A slower response increases this heuristic delay, but response time alone cannot reveal the host’s safe capacity.
 
 ### Persistence
-The frontier holds billions of URLs, so it can't all live in memory. Keep the head of each queue in RAM and spill the rest to disk (RocksDB or append-only segment files). Persist accepted discoveries and queue transitions in a write-ahead log/transaction before acknowledging them; checkpoints alone lose discoveries since the last checkpoint. Reclaim abandoned fetch leases after crashes.
+A frontier with billions of URLs can make an all-memory design expensive. Keep the head of each queue in RAM and spill the rest to disk (RocksDB or append-only segment files). Persist accepted discoveries and queue transitions in a write-ahead log/transaction before acknowledging them; checkpoints alone lose discoveries since the last checkpoint. Reclaim abandoned fetch leases after crashes.
+
+> [!analogy] Real-world analogy: Appointments at separate desks
+> A receptionist chooses important appointments, but each desk accepts visitors only when its next slot is free.
+>
+> **How it maps:** URL priority selects useful work; each host’s eligibility time and reservation enforce the configured request-spacing policy.
+>
+> **Where it stops:** Different hostnames may share one IP, and crashed or duplicated crawler owners need coordinated limits beyond one receptionist’s diary.
 
 ## Key takeaways
 - Weighted priority service needs explicit fairness if a maximum wait is required.
@@ -128,5 +124,4 @@ The frontier holds billions of URLs, so it can't all live in memory. Keep the he
 - [The anatomy of a large-scale hypertextual web search engine (Brin and Page)](https://research.google/pubs/the-anatomy-of-a-large-scale-hypertextual-web-search-engine/)
 - [Web crawler (Wikipedia)](https://en.wikipedia.org/wiki/Web_crawler)
 - [Common Crawl](https://commoncrawl.org/)
-- [URL frontier priority and politeness (IR textbook)](https://nlp.stanford.edu/IR-book/html/htmledition/the-url-frontier-1.html)
 - [Original Mercator paper (1999)](https://marc.najork.org/papers/wwwmerc.pdf)

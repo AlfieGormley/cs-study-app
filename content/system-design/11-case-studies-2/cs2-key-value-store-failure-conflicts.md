@@ -26,26 +26,12 @@ Each version carries a vector of `(node, counter)` pairs.
 
 - If one vector is at least the other in every component and strictly larger in at least one, it **descends** from it, and the older version can be discarded:
 
-```formula
-a_x ≥ b_x  ∀ x
-a_x > b_x  ∃ x
-where
-a: one version's vector clock
-b: the other version's vector clock
-a_x: the counter for node x in clock a (0 if x is missing)
-b_x: the counter for node x in clock b (0 if x is missing)
-x: a node name that appears in either clock
-≥: is greater than or equal to
->: is strictly greater than
-∀: "for every": the line must hold for all nodes x
-∃: "for at least one": the line must hold for some node x
-In words: version a descends from version b when every node's counter in a is at least as big as in b, and at least one is bigger.
-```
+Compare every counter, treating a missing counter as zero. One version descends from another only when it is at least as large in every counter and strictly larger in at least one. Being ahead on one node and behind on another means neither dominates.
 
 For example, the vector with A at 3 and B at 1 descends from the vector with A at 2 and B at 1. The A counter increased while B remained unchanged.
 - If neither dominates, the writes were **concurrent**. Both versions (siblings) are kept and returned to the client on read, and the **application merges** them, then writes the result with the merged context.
 
-Amazon's shopping basket merged siblings by **union**. Nothing added is ever lost, but a deleted item can occasionally reappear, which the paper accepts as the business trade-off. To stop vector clocks growing without limit, Dynamo truncated the oldest entries beyond about 10, accepting possible loss of causal precision; the paper gives 10 as an example threshold, not a universal setting.
+Amazon's shopping basket merged siblings by **union**. The union preserves additions represented in the versions being merged, but a deleted item can occasionally reappear, which the paper accepts as the business trade-off. To stop vector clocks growing without limit, Dynamo truncated the oldest entries beyond about 10, accepting possible loss of causal precision; the paper gives 10 as an example threshold, not a universal setting.
 
 ### Last-write-wins (Cassandra)
 Each *cell* (column value) carries a write timestamp, and the highest timestamp wins. It's simple, needs no siblings and makes reads cheap. But **concurrent writes are silently lost**, and **clock skew** can make an older write win. If node clocks drift by 200 ms, a write made 100 ms later can lose. Run NTP carefully, model data to avoid concurrent read-modify-write cycles (use per-element columns, counters or collections), or use lightweight transactions.
@@ -62,3 +48,4 @@ Riak added CRDT data types (counters, sets, maps) that converge under their spec
 - [Dynamo: Amazon's highly available key-value store (SOSP 2007)](https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf)
 - [Dynamo architecture (Apache Cassandra docs)](https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html)
 - [Vector clock (Wikipedia)](https://en.wikipedia.org/wiki/Vector_clock)
+- [Cassandra hints](https://cassandra.apache.org/doc/latest/cassandra/managing/operating/hints.html)

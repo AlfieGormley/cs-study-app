@@ -9,13 +9,13 @@ sourceLesson: cs1-interview-framework
 
 A system design interview is not a test of whether you know the "right" architecture for Twitter. There isn't one. It is a test of whether you can take a vague problem, turn it into a concrete one, and reason your way to a design that works, while explaining your trade-offs out loud.
 
-That means *process* matters as much as knowledge. Candidates with encyclopaedic knowledge still fail because they jump straight to drawing Kafka boxes. Candidates with modest knowledge pass because they ask good questions, size the problem, and make each decision for a stated reason.
+That means *process* matters as much as knowledge. A useful practice habit is to ask questions, size the problem and explain each decision before naming technologies.
 
 This lesson proposes a practice framework, not a universal hiring rubric. Timings, seniority signals and suggested answers vary by employer and interviewer; use the actual interview brief. This lesson gives you a method. Every case study in this module follows it, so you can see it applied six times.
 
 ## The shape of the interview
 
-For practice, assume a design round of 45 to 60 minutes. Take off five minutes of introductions and five of your questions at the end and you have about 35 to 45 minutes of actual design. That is not long. The single biggest failure mode is running out of time with half a design on the board.
+For practice, assume a design round of 45 to 60 minutes. Take off five minutes of introductions and five of your questions at the end and you have about 35 to 50 minutes of actual design. That is not long. One avoidable problem is running out of time with half a design on the board.
 
 A reasonable budget for a 45-minute slot:
 
@@ -49,7 +49,7 @@ The prompt is deliberately vague: "Design a URL shortener." Your first job is to
 - Availability vs consistency: is it worse to be down or to be briefly stale?
 - Durability: can we ever lose a link? (No.)
 
-Write them on the board. Then explicitly scope out what you won't do: "I'll skip user accounts and billing unless you want them." Interviewers like this; it shows you can prioritise.
+Write them on the board. Then explicitly scope out what you won't do: "I'll skip user accounts and billing unless you want them." This makes the proposed scope explicit so the interviewer can correct it.
 
 > [!tip] Ask, then propose
 > Don't interrogate the interviewer with twenty questions. Ask the three or four that change the design ("Is this read-heavy?", "Global or one region?"), then *propose* sensible defaults for the rest and ask if they're OK.

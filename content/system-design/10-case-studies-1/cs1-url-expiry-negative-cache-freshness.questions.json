@@ -7,7 +7,7 @@
     "options": [
       {
         "text": "The ID allocator is issuing duplicate codes; switch to Snowflake IDs.",
-        "explanation": "Wrong. Duplicates would cause wrong redirects that never heal, not a 404 that fixes itself after a minute."
+        "explanation": "The reported delay is explained directly by replication lag and the negative-cache lifetime; the prompt supplies no evidence of duplicate allocation."
       },
       {
         "text": "A click arrives before the replica has the new row, the 404 is negatively cached for 60 s, so the link looks broken until that entry expires. Write the mapping into the cache on create (clearing any negative entry), and check the primary before caching a 'not found'.",
@@ -18,8 +18,8 @@
         "explanation": "Wrong. The link is new, so no browser can have a cached redirect for it. The 404 comes from your own service."
       },
       {
-        "text": "Turn off negative caching altogether.",
-        "explanation": "Partly works but overcorrects. Bots probing random codes would then all fall through to the database. Keep negative caching, but stop it caching false negatives for fresh links."
+        "text": "Extend the negative-cache TTL to an hour.",
+        "explanation": "This preserves the stale result longer and worsens the reported symptom. Removing negative caching can be a valid freshness trade-off, but increasing its lifetime does not fix the race."
       }
     ],
     "answer": 1,
@@ -44,8 +44,8 @@
         "explanation": "Wrong for this case. Each viewer clicks once, so browser caching saves little, and you'd lose control of the link. Most of the 200k/s are different people."
       },
       {
-        "text": "Serve the redirect from the CDN edge or an in-process cache on every redirect server with a short TTL, and emit click events from there in batches.",
-        "explanation": "Correct. Spreading the read across hundreds of edge locations or app servers takes it off the single shard, and a short TTL (seconds) bounds cache staleness and keeps control. Batched click logs preserve analytics."
+        "text": "Serve from edge or application-local copies with an explicit freshness policy, and capture click events using the required delivery guarantee.",
+        "explanation": "Correct. Replicating read-serving copies relieves the single hot partition. Analytics preservation depends on durable capture and duplicate handling, not batching alone."
       },
       {
         "text": "Rate limit the link to 100k clicks/s.",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "The bottleneck is one key on one shard, so the fix must **replicate the read**, not partition it further.\n\n```formula\nload = clicks / copies\nload = 200,000/s / 300 ≈ 700/s\nwhere\nload: requests per second each cached copy serves\nclicks: total clicks per second, 200,000\ncopies: edge locations or app servers holding the mapping, assumed about 300 (\"hundreds\")\n/s: per second\n≈: approximately equal to (rounded from 667)\nIn words: spreading 200,000 clicks a second over about 300 copies leaves each one only about 700 a second.\n```\n\nWith a 5-second TTL, each copy is at most about 5 seconds stale.\n\nAnalytics can survive if batches are durably buffered/retried and duplicates handled; best-effort buffering can still lose events. In this design, edge workers or app servers log each click locally and ship counts in batches, rather than writing per click. The same idea (replicate hot keys, batch writes) applies to every hot-key question in this module.",
+    "workedExample": "A single hot key remains on one partition when you merely add shards. Replicate its read-serving copies across application servers or edge locations, and measure whether that distribution handles the observed skew. A short TTL bounds cache age only under the stated refresh and upstream-freshness rules; abuse blocking may need an independent check. Batched analytics need durable buffering, retries and deduplication if loss is unacceptable.",
     "link": {
       "title": "Hello Interview: design a URL shortener like Bit.ly",
       "url": "https://www.hellointerview.com/learn/system-design/problem-breakdowns/bitly"

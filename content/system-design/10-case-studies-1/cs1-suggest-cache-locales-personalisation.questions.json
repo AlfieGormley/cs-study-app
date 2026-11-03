@@ -7,11 +7,11 @@
     "options": [
       {
         "text": "Include the user ID in the cache key so each user's results are cached at the edge.",
-        "explanation": "Wrong. Per-user cache keys destroy hit rates: each user's prefixes are requested only a few times, so almost every request misses and goes to the origin."
+        "explanation": "Wrong as the best way to preserve shared offload. Per-user keys separate private results safely but reduce reuse across users; actual hit rate needs measurement."
       },
       {
         "text": "Disable the CDN; personalisation requires every request to reach the origin.",
-        "explanation": "Wrong. It would roughly 2.5x the origin's load (from 40% to 100% of traffic). Personalisation doesn't require giving up shared caching if you split the work."
+        "explanation": "Wrong. Shared candidate generation can remain cached while personalised results are computed separately."
       },
       {
         "text": "Keep caching the global top-N per prefix at the edge, and apply personal re-ranking or blending on the client (or a thin per-user service) on top of those candidates.",
@@ -19,11 +19,11 @@
       },
       {
         "text": "Precompute a personalised trie per user.",
-        "explanation": "Wrong. With hundreds of millions of users, a 40 GB trie per user is absurd. Even small per-user tries would be a massive storage and rebuild cost for little benefit."
+        "explanation": "Wrong as the default. Duplicating a full global index per user adds substantial storage and rebuild work; a small personal-history overlay is different."
       }
     ],
     "answer": 2,
-    "workedExample": "Split the response into **shared** and **personal** parts:\n\n| Part | Varies by | Cacheable at edge? |\n|---|---|---|\n| Global top-50 for prefix | prefix, locale | Yes |\n| Recent searches, re-rank | user | Not shared across users |\n\nThe client fetches the global list (CDN hit), then merges in the user's recent searches it stores locally and applies a lightweight re-ranker. The origin still sees ~40% of traffic, as before. This is the general pattern: cache what's common, compute what's personal as late and as close to the user as possible.",
+    "workedExample": "Cache the shared candidate list by prefix, locale and relevant version. Apply personal ranking or history blending separately, ensuring final private responses cannot leak through a shared cache. This preserves an opportunity for shared offload, but the old 60% hit rate is a measurement to re-check, not a guarantee.",
     "link": {
       "title": "Content delivery network (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Content_delivery_network"

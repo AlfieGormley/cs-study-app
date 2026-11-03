@@ -13,29 +13,17 @@ Without a queue, 2 M people hammer the booking API. The database melts, everyone
 
 ### How it works
 1. Before the sale, fans land on a **static waiting page** served from the CDN.
-2. At on-sale time, everyone already waiting gets a **random position**, like a lottery. This removes the incentive to refresh at exactly 10:00:00.000. Later arrivals join the back in arrival order.
+2. Under this illustrative fairness policy, everyone already waiting receives a **random position** at on-sale time. This removes the incentive to refresh at exactly 10:00:00.000. Later arrivals join the back in arrival order.
 3. An **admission controller** releases users at a rate matched to downstream capacity, for example 2,000 per minute, adjusted from live booking latency and error rates.
 4. An admitted user receives a **signed, short-lived access token** (a JWT carrying user id, event id and expiry). The booking API and the edge verify it statelessly, with issuer, audience, event, expiry and user/session binding checked. Restrict direct-origin access too; a signature alone does not prevent token sharing or replay.
 5. Queue status polling ("you are number 48,213, about 24 min") is answered at the edge from a periodically published counter, not by origin per user.
 
 Cloudflare Waiting Room and Queue-it are commercial versions of this pattern.
 
-### Sizing the admission rate
-Little's law says that, in a steady system, the average number of people inside equals the rate they arrive times how long each one stays. Rearranged, it tells you how fast to admit people so the number shopping at once stays at what the core can handle:
+### Adjusting the admission rate
+Little’s law links long-run average occupancy, arrival rate and residence time. Use it to understand the direction of load changes, then enforce measured capacity and live feedback.
 
-```formula
-L = λW
-λ = L / W
-λ = 50,000 users / 5 min
-λ = 10,000 users/min
-where
-L: shoppers inside the booking system at once (concurrency); here the core comfortably handles 50,000
-λ: the admission rate, in users per minute
-W: average time an admitted user spends shopping and paying, in minutes (min); about 5
-users: admitted fans
-min: minutes
-In words: if each shopper stays about 5 minutes and the core can hold 50,000 at once, admit about 10,000 a minute.
-```
+If shoppers remain inside longer, the same admission rate builds a larger active population. Reduce admissions when checkout slows; use observed concurrency and downstream health rather than treating a long-run average as a hard capacity bound.
 
 Little's law gives a long-run average; keep a safety margin and adapt the rate to bursts and to live latency and error rates.
 
@@ -47,9 +35,9 @@ Little's law gives a long-run average; keep a safety margin and adapt the rate t
 
 ## Deep dive 3: the seat map
 
-The seat map is read 10–100× more than it's written. Serve it from a cache (Redis, or a per-section document) refreshed every 1–2 s from the inventory database or its change stream. It *will* sometimes show a seat as available that was just taken. That's fine, because the hold's conditional update is the real check, and the UI handles the 409 gracefully ("someone just grabbed that one").
+In a read-heavy ticketing workload, seat-map reads can greatly outnumber inventory writes. Serve it from a cache (Redis, or a per-section document) refreshed every 1–2 s from the inventory database or its change stream. It *will* sometimes show a seat as available that was just taken. That's fine, because the hold's conditional update is the real check, and the UI handles the 409 gracefully ("someone just grabbed that one").
 
-For huge on-sales, offer **"best available"** instead of free picking. The server chooses contiguous seats from a pre-computed list, which cuts contention, because users stop fighting over the same front-row seats.
+For huge on-sales, offer **"best available"** instead of free picking. The server chooses contiguous seats from a pre-computed list, which can reduce contention when a coordinated allocator spreads requests among distinct eligible blocks. The list alone does not prevent concurrent allocators choosing the same block.
 
 ## Key takeaways
 - Serve waiting pages and queue status at the edge.

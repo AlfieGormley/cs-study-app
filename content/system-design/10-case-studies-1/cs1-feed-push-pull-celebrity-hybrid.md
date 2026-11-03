@@ -34,19 +34,9 @@ Reads outnumber writes heavily, and most accounts have modest follower counts, s
 
 Pure push breaks for accounts with enormous followings. An account with **50 million followers** turns one post into 50 million Redis inserts:
 
-```formula
-t = followers / rate
-t = 50M / (1M/s) = 50 s
-where
-t: time to finish fanning out one post, in seconds (s)
-followers: timelines to insert into, 50 million
-rate: the fan-out fleet's total insert rate, 1 million per second
-M: million
-/s: per second
-In words: even with the whole fleet working on nothing else, one celebrity post takes about 50 seconds to reach every follower.
-```
+One very large account can occupy much of the fan-out fleet for a single post. Concurrent high-follower posts compete with ordinary work and can increase delivery lag.
 
-...and that's if the entire fan-out fleet does nothing else. Several celebrities posting at once (a sports final, an election) would back up everyone's feeds for minutes. Slow fan-out can also cause visible arrival inversions: a reply from a follower who received the post early could be fanned out *before* the original reached followers further down the list.
+Several high-follower accounts posting together can increase the backlog; measure the delay under the fleet's actual capacity. Slow fan-out can also cause visible arrival inversions: a reply from a follower who received the post early could be fanned out *before* the original reached followers further down the list.
 
 ### The hybrid
 
@@ -54,10 +44,7 @@ In words: even with the whole fleet working on nothing else, one celebrity post 
 2. **Push for everyone else.** Normal accounts keep fan-out on write.
 3. **Pull celebrities at read time.** When building a timeline, the timeline service reads the precomputed list *and* fetches recent posts from the (few) celebrities this user follows, then merges them.
 
-The pull side is cheap because:
-
-- A user follows only a handful of celebrities, so it's a few extra lookups, not 1,000.
-- Celebrity user timelines are read by millions of users, so they're always hot in cache.
+The pull side is affordable when each reader follows relatively few such accounts and their timelines have high cache reuse. Measure both assumptions; some readers follow many large accounts and caches can be cold or unavailable.
 
 ### Other refinements
 

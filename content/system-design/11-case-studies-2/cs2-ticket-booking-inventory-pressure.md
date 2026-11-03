@@ -15,23 +15,10 @@ For standing tickets there are no seat ids, just a count. A single `remaining` c
 - **Hot partition**: one event lives on one shard by design, so everything hits that shard during its on-sale. Sub-partitioning by section can spread load, but cross-section orders then require a cross-shard protocol or a product restriction. Keep admissions within measured capacity.
 - **Hold duration**: long holds feel kind but lock up inventory, causing "sold out" followed by seats reappearing later. An illustrative range is 5–10 minutes. Little's law sizes the cost: if 600 four-seat holds per minute are destined to be abandoned and each remains allocated for its entire eight-minute lifetime, then on average in steady state:
 
-```formula
-L = λW
-λ = 600 holds/min × 4 seats
-λ = 2,400 seats/min
-L = 2,400 seats/min × 8 min = 19,200 seats
-where
-L: seats tied up in abandoned holds at any moment
-λ: the rate seats enter abandoned holds, in seats per minute
-W: how long each abandoned hold keeps its seats, in minutes (min); here the full 8-minute hold
-holds: hold attempts
-seats: tickets
-min: minutes
-In words: 2,400 seats a minute, each stuck for 8 minutes, keeps 19,200 seats unavailable on average.
-```
+In this illustrative steady-state model, those abandoned holds occupy about 19,200 seats on average over their full eight-minute lifetimes. Shortening the lifetime reduces that occupancy if the arrival pattern is unchanged. Counting only the time after a shopper abandons requires their remaining hold lifetime instead.
 
-That is nearly a third of a 60,000-seat stadium. If counting only time after abandonment, use the remaining lifetime instead. A short initial hold, extended when checkout starts, keeps that down.
-- **Strict queue fairness vs throughput**: admitting in a strict global order needs an agreed ordering authority (which can be replicated). Batched admission (top 2,000 every minute) is nearly as fair and far simpler.
+That is nearly a third of an illustrative 60,000-seat stadium. A short initial hold, extended when checkout starts, keeps that down.
+- **Strict queue fairness vs throughput**: admitting in a strict global order needs an agreed ordering authority (which can be replicated). Batched admission trades fine-grained ordering for simpler release decisions; define and evaluate fairness for the selected policy.
 - **Payment provider limits**: the PSP may cap your authorisations per second. The admission rate must respect the *slowest* downstream dependency.
 
 ## Evolving at 10x

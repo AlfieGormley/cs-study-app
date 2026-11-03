@@ -26,70 +26,23 @@ A distributed scheduler is really three systems. A **durable store of what shoul
 - **Scalable**: to hundreds of millions of schedules and tens of thousands of firings a second.
 - **Multi-tenant**: one noisy tenant can't starve others.
 
-## Back-of-the-envelope
+## The schedule distribution is the workload
 
-Assume 100 M (100 million) schedules, mostly recurring, and that on average each one runs about once every 3 hours (10,800 seconds). The average firing rate is the number of schedules divided by how often each fires:
+An illustrative fleet has 100 million schedules, each running once every three hours on average. That averages roughly 9,300 occurrences per second. The same average can describe evenly staggered jobs or millions due at exactly the same instant; those require very different dispatch capacity.
 
-```formula
-r = J / p
-r = 100,000,000 / 10,800 s ≈ 9,300 runs/s
-where
-r: average job runs started per second, across all schedules
-J: schedules stored; here 100 million
-p: average gap between one schedule's runs, in seconds (s); 3 hours = 10,800 s
-s: seconds
-runs: job executions
-≈: approximately equal to
-In words: 100 million jobs that each run every three hours start about 9,300 runs a second on average.
-```
+Cron expressions often align work at minute or hour boundaries. Inspect the actual next-run distribution rather than multiplying an average by an arbitrary safety factor. A target to start jobs within two seconds requires enough dispatch and execution capacity for the allowed burst, including recovered work after an outage.
 
-Averages hide the real load. Cron schedules cluster on round times: the hourly expression `0 * * * *` means "minute 0 of every hour". Say 10 M schedules are hourly and 20% of those fire exactly at the top of the hour (hh:00:00):
+## Read-ahead and jitter solve different problems
 
-```formula
-B = H × f
-B = 10,000,000 × 0.2 = 2,000,000 runs
-m = B / (r × 1 s)
-m ≈ 2,000,000 / 9,300 ≈ 215
-B / 60 s ≈ 33,000 runs/s
-where
-B: runs due in the same second at the top of the hour
-H: hourly schedules; here 10 million
-f: fraction of them that fire exactly at :00; here 20% = 0.2
-m: how many times bigger that burst is than one second's average load
-r: the average rate, about 9,300 runs per second
-60 s: one minute, if the burst may be spread across it
-s: seconds
-runs: job executions
-≈: approximately equal to
-In words: 2 million runs land in the same second, more than 200 times an average second; even spread over a minute that is about 33,000 a second.
-```
+Read-ahead prepares due work before its start time, reducing polling jitter. It cannot make millions of simultaneous side effects cheap. Buffering the burst delays some jobs; that delay needs an explicit lateness policy.
 
-Storage, assuming about 1 KB (kilobyte) per job record and about 500 bytes per run-history row:
+Tenant-approved jitter changes the permitted start times. A job that allows any time in the first five minutes can receive a stable offset within that window. A job that explicitly requires midnight cannot silently be shifted five minutes to make the graph look smoother.
 
-```formula
-D_jobs = 100,000,000 × 1 KB = 100 GB
-D_runs = 500 B × 9,300/s × 86,400 s
-D_runs ≈ 400 GB/day
-D_30 = 400 GB/day × 30 days = 12 TB
-where
-D_jobs: storage for all job definitions
-D_runs: run history written per day
-D_30: run history kept with a 30-day TTL (time to live: rows are deleted after 30 days)
-B: bytes
-KB: kilobytes, 1,000 bytes
-GB: gigabytes, 1,000,000,000 bytes
-TB: terabytes, 1,000 GB
-s: seconds; a day has 86,400 s
-day: one day
-days: days
-≈: approximately equal to
-In words: the job table is about 100 GB, but run history grows by about 400 GB a day, so 30 days of it is about 12 TB.
-```
+## History grows independently of definitions
 
-What matters:
+The schedule table stores what should run. Run history records repeated occurrences, attempts and outcomes. A small recurring definition may produce thousands of history rows, so history retention can dominate definition storage.
 
-- Average throughput is a workload to benchmark, not a guarantee about an arbitrary sharded database. The **top-of-minute and top-of-hour spikes** are the real design load. Two million runs due in the same second can't all fire within the 1–2 s target unless execution/dispatch capacity can absorb the burst. Read-ahead can pre-stage work but does not remove simultaneous execution demand; allowed jitter changes the timing contract.
-- Run history dwarfs job definitions. Put it in a store with TTLs, or in time-partitioned tables you can drop.
+Choose retention, time partitioning and archival retrieval deliberately. Keep pending and unresolved runs discoverable even if ordinary completed history expires. Track scheduled-to-start delay, retry backlog and missed/dead-lettered outcomes alongside storage growth. Neither a modest definition table nor a low average rate proves that the midnight burst is safe.
 
 ## Key takeaways
 - Average firing rate hides simultaneous cron demand.

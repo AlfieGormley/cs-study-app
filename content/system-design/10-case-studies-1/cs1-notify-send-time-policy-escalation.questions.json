@@ -3,7 +3,7 @@
     "id": "cs1-notification-system-q6",
     "level": "advanced",
     "type": "single",
-    "prompt": "A user schedules a weekly digest email. On Tuesday they unsubscribe from marketing. The weekly digest, enqueued on Monday for Wednesday delivery, still arrives. Where is the design flaw?",
+    "prompt": "A user schedules a weekly marketing digest email. On Tuesday they unsubscribe from marketing. The weekly digest, enqueued on Monday for Wednesday delivery, still arrives. Where is the design flaw?",
     "options": [
       {
         "text": "Preferences were checked when the notification was accepted, not when it was sent.",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Timeline:\n\n```\nMon  accept digest, prefs OK,\n     scheduled for Wed\nTue  user unsubscribes,\n     prefs updated\nWed  digest sent, no prefs check!\n```\n\nFix:\n\n1. Move the preference check into the processing step that runs at `sendAt`.\n2. Make unsubscribe publish an event that invalidates the user's cached preferences immediately.\n3. As a last line of defence, the email sender checks a suppression list just before calling the provider.\n\nThis matters legally as well as for user trust: continuing to send marketing after consent is withdrawn can breach GDPR and the UK's PECR, and the US CAN-SPAM Act sets a hard deadline (10 business days) for honouring opt-outs.",
+    "workedExample": "Check current preferences and suppression state when delayed work executes, just before the provider attempt. Use a freshness mechanism for cached preferences and account for sends already in flight. Propagate opt-outs promptly across channels and configured providers; legal obligations depend on message type, jurisdiction and the applicable rules.",
     "link": {
       "title": "RFC 8058: one-click unsubscribe",
       "url": "https://www.rfc-editor.org/rfc/rfc8058"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Expansion time is recipients divided by the expansion rate:\n\n```formula\nt = N / rate\nt_all = 24,000,000 / (20,000/s)\nt_all = 1,200 s\nt_wave = 3,000,000 / (20,000/s) = 150 s\nwhere\nt: time to expand a group of recipients into messages\nN: recipients in the group\nrate: messages the scheduler expands per second, 20,000\nt_all: time for all 24 million (20 minutes of total work, spread over the day)\nt_wave: time for one 3-million-user time-zone wave (2.5 minutes)\ns: seconds; /s means per second\nIn words: each time-zone wave takes a couple of minutes to expand, so the whole campaign is 20 minutes of work spread across the day as each time zone reaches 9 am.\n```\n\nCalculate each wave using IANA zone rules for its scheduled date. This is an expansion budget, not a delivery guarantee; re-check suppression immediately before sending and account for provider capacity.",
+    "workedExample": "Group recipients by IANA time-zone identifier and calculate the scheduled local time for the actual date. Release each group gradually within its allocated downstream capacity, retaining a recoverable expansion cursor. Re-check preferences, cancellation and TTL at send time. Beginning a wave at 9 am does not guarantee that every recipient receives it then.",
     "link": {
       "title": "Azure Architecture Center: priority queue pattern",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/priority-queue"

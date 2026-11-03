@@ -34,19 +34,9 @@ Three rules:
 
 - **Amounts are integers in minor units** (2,350 pence represents £23.50) with an explicit currency. A minor unit is the currency's smallest subdivision, such as the penny for pounds sterling:
 
-```formula
-A_major = A_minor / 10^d
-£23.50 = 2,350 / 10^2
-where
-A_major: the amount in the main currency unit, such as pounds (£)
-A_minor: the stored whole number of minor units, such as pence
-d: the number of decimal places the currency uses; 2 for GBP (pounds), 0 for JPY (yen), 3 for BHD (Bahraini dinar)
-10^d: d copies of 10 multiplied together; 10^2 = 100
-£: pounds sterling
-In words: store whole pence and divide by 100 only when displaying pounds, so the stored value is always exact.
-```
+Store 2,350 whole pence for £23.50. The currency identifies what a minor unit means; display conversion must not silently assume that every currency has two decimal places.
 
-The currency's number of decimal places is defined by the ISO 4217 currency standard, so look it up rather than assuming 2. Avoid binary floating-point for exact money amounts: many decimal fractions are not exactly representable. Exact decimal types are also valid when precision and rounding are specified; IEEE 754 includes decimal formats.
+Consult the currency standard and the deployed provider’s amount rules rather than assuming two decimal places. A provider can impose special charge or payout conventions that differ from a simple currency-exponent conversion. Avoid binary floating-point for exact money amounts: many decimal fractions are not exactly representable. Exact decimal types are also valid when precision and rounding are specified; IEEE 754 includes decimal formats.
 - **`payment_method_token`, never a card number.** The card is collected by the PSP's hosted fields or SDK and swapped for a token, which reduces PCI DSS scope; the merchant still has compliance obligations that depend on the integration.
 - **Every mutating call takes an idempotency key.**
 
@@ -118,7 +108,7 @@ A mobile client sends `POST /payments`, the response is lost to a timeout, and t
 3. On completion, store the response and mark the key completed. Do this in the same transaction as the business state change wherever possible.
 4. Expire keys after a window. For Stripe API v1, a key may be pruned once it is at least 24 hours old; reusing a pruned key makes a new request. API v1 replays the first executed status/body, including server errors, while API v2 has different retry semantics. Check the deployed endpoint contract.
 
-The 409 versus 422 split above matches the IETF's Internet-Draft for an `Idempotency-Key` HTTP header. That draft has expired without becoming an RFC, but its status codes are a sensible convention for your own API.
+The 409 versus 422 split above matches the IETF's Internet-Draft for an `Idempotency-Key` HTTP header. As checked on 3 November 2026, revision 08 is an active Internet-Draft published on 22 October 2026; it is not an RFC. These status codes remain a convention to document for your own API.
 
 Idempotency has to go **all the way down**. When your orchestrator calls the PSP, pass a deterministic idempotency key derived from your payment id, for example `pay_123:authorise`. If your own retry of the PSP call happens after a crash, the PSP can deduplicate it within its documented endpoint, parameter and retention contract. After key expiry, reconcile rather than blindly resubmitting an unresolved payment. Use a distinct stable operation ID for each capture/refund, including multiple partial refunds.
 
@@ -132,3 +122,5 @@ Idempotency has to go **all the way down**. When your orchestrator calls the PSP
 - [Idempotent requests (Stripe API docs)](https://docs.stripe.com/api/idempotent_requests)
 - [The Payment Intents API (Stripe docs)](https://docs.stripe.com/payments/payment-intents)
 - [Stripe currency amount rules](https://docs.stripe.com/currencies)
+- [Payment integration security](https://docs.stripe.com/security/guide)
+- [Current Idempotency-Key draft status](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/)

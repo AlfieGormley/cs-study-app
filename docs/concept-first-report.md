@@ -1,6 +1,6 @@
 # Concept-first library review
 
-Status: **in progress**. 58/60 modules and 1760/1845 active lessons have current independent editorial reviews.
+Status: **independent content review complete**. 60/60 modules and 1845/1845 active lessons have current independent editorial reviews.
 
 This report counts only active lesson IDs from module.json. Retired subjects (os, architecture, theory, languages; see `content/retired-subjects.json`) are excluded. Pending modules have not been certified by keyword scans or by renderer tests.
 
@@ -72,8 +72,8 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | [system-design / API Design](../content/system-design/07-api-design/verification.json) | Reviewed | 38 | 96 | 29 → 11 | 0 / 11 | 40 → 0 | 383 | 528 | 32 |
 | [system-design / Architecture & Scaling Patterns](../content/system-design/08-architecture/verification.json) | Reviewed | 41 | 108 | 30 → 7 | 0 / 7 | 54 → 0 | 262 | 495 | 26 |
 | [system-design / Reliability, Operations & Security](../content/system-design/09-reliability/verification.json) | Reviewed | 38 | 97 | 44 → 10 | 2 / 8 | 61 → 0 | 207 | 342 | 15 |
-| system-design / Case Studies I | Pending review | 43 | — | — | — | — | — | — | — |
-| system-design / Case Studies II | Pending review | 42 | — | — | — | — | — | — | — |
+| [system-design / Case Studies I](../content/system-design/10-case-studies-1/verification.json) | Reviewed | 43 | 85 | 54 → 9 | 0 / 9 | 49 → 0 | 183 | 773 | 66 |
+| [system-design / Case Studies II](../content/system-design/11-case-studies-2/verification.json) | Reviewed | 42 | 101 | 47 → 6 | 2 / 4 | 58 → 0 | 238 | 381 | 77 |
 
 The report certifies editorial provenance only. Build, migration, rendering, offline and deployed-version evidence must be checked separately before publication.
 
@@ -1511,7 +1511,7 @@ None recorded in this editorial review.
 
 ## security / Applied Cryptography & PKI
 
-18 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+20 question objects changed. Every changed question has a specific independent-review reason in the linked record.
 
 **Corrections in this review:**
 
@@ -3339,4 +3339,272 @@ None recorded in this editorial review.
 - medium confidence, rel-trace-context-tail-collection: Tail-sampling collector completeness and migration behavior Native propagation executed and primary collector docs read; no deployed multi-collector experiment, late-span/buffer limits explicit.
 - medium confidence, rel-regional-failover-fencing-lag: Recovery timing and cloud deployment behavior Mechanisms primary-source checked; illustrative timings are not deployment benchmarks, and no actual regional failover was run.
 - medium confidence, rel-chaos-hypotheses-game-days: Historical chaos accounts Original 2011/2015 posts read via web tool after direct HTTP 403; treated as historical described experiments, not confirmation of current private systems.
+
+
+## system-design / Case Studies I
+
+72 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- {"lesson":"cs1-interview-scope-time","reason":"Correct subtraction of ten minutes from the45–60minute scenario."}
+- {"lesson":"cs1-interview-contract-access-patterns","question":"cs1-interview-framework-q6","reason":"Remove unsupported universal interviewer penalty claim."}
+- {"lesson":"cs1-interview-depth-evolution-review","question":"cs1-interview-framework-q12","reason":"Align feedback with the explicitly non-universal practice framework."}
+- {"lesson":"cs1-url-contract-mapping-aliases","reason":"Allow the longer custom aliases explicitly supported by the API."}
+- {"lesson":"cs1-url-contract-mapping-aliases","reason":"Expose reserved paths and atomic create enforcement required by the quiz."}
+- {"lesson":"cs1-url-contract-mapping-aliases","question":"cs1-url-shortener-q10","reason":"Remove the false claim that separate stores necessarily require two lookups."}
+- {"lesson":"cs1-url-range-allocation-permutation","question":"cs1-url-shortener-q5","reason":"Distinguish valid retry-based allocation from bijection, and qualify probing controls."}
+- {"lesson":"cs1-url-expiry-negative-cache-freshness","reason":"Negative caching only reuses repeated misses, not unique random probes."}
+- {"lesson":"cs1-url-http-cache-click-analytics","question":"cs1-url-shortener-q6","reason":"Correct negative-cache protection limits."}
+- {"lesson":"cs1-url-expiry-negative-cache-freshness","question":"cs1-url-shortener-q9","reason":"Remove a defensibly correct alternative and avoid overstating unique-probe protection."}
+- {"lesson":"cs1-limiter-contract-identity-routing","reason":"Teach the trusted-proxy and security fallback facts needed by the local quiz."}
+- {"lesson":"cs1-limiter-contract-identity-routing","question":"cs1-rate-limiter-q8","reason":"Point the hash-tag question to the normative implementation documentation."}
+- {"lesson":"cs1-limiter-bucket-atomic-refill","question":"cs1-rate-limiter-q4","reason":"Do not imply an arbitrary distributed lock automatically fixes paused-holder races."}
+- {"lesson":"cs1-limiter-fallback-leases-regions","question":"cs1-rate-limiter-q6","reason":"Keep the correct fallback option within the lesson’s quota-conservation conditions."}
+- {"lesson":"cs1-limiter-concurrency-fleet-load","reason":"Replace unconditional accuracy/safety labels with actual accounting trade-offs."}
+- {"lesson":"cs1-limiter-concurrency-fleet-load","reason":"A rate ceiling alone does not imply the arrival rate or average occupancy."}
+- {"lesson":"cs1-limiter-concurrency-fleet-load","reason":"Avoid conflating leases with periodically synchronised full quotas."}
+- {"lesson":"cs1-suggest-workload-snapshot-memory","reason":"Keep the introduction consistent with the necessary online filtering and overlay stages."}
+- {"lesson":"cs1-suggest-decay-privacy-freshness","reason":"Expose the anti-manipulation reasoning tested in this lesson’s questions."}
+- {"lesson":"cs1-suggest-snapshot-rollout-growth","reason":"Final personalised responses can be separated from shared cached candidates."}
+- {"lesson":"cs1-notify-accept-outbox-pipeline","question":"cs1-notification-system-q1","reason":"Keep the recovery contract and primary202source consistent through feedback."}
+- {"lesson":"cs1-notify-isolation-dedup-campaigns","question":"cs1-notification-system-q12","reason":"Resolve the one-summary versus two-window inconsistency."}
+- {"lesson":"cs1-notify-retry-token-failover","question":"cs1-notification-system-q8","reason":"Remove an undeclared workload calculation and narrow the Apple delivery claim."}
+- {"lesson":"cs1-notify-send-time-policy-escalation","question":"cs1-notification-system-q6","reason":"Make the category match the withdrawal specified in the scenario."}
+- {"lesson":"cs1-feed-push-pull-celebrity-hybrid","question":"cs1-news-feed-q3","reason":"Remove the unsupported always-cached guarantee."}
+- {"lesson":"cs1-feed-visibility-cache-cursors","reason":"Make the cluster restriction explicit rather than promising one cross-shard command."}
+- {"lesson":"cs1-feed-visibility-cache-cursors","question":"cs1-news-feed-q4","reason":"Remove unsupported16byte footprint and one-object counter assumption."}
+- {"lesson":"cs1-chat-session-epochs-reconnect","reason":"Bound inbox recovery and guard delayed initial registrations."}
+- {"lesson":"cs1-chat-session-epochs-reconnect","question":"cs1-chat-system-q12","reason":"Keep routing recovery bounded by retention and storage rather than unconditional losslessness."}
+- {"lesson":"cs1-chat-device-acks-offline-sync","question":"cs1-chat-system-q3","reason":"Remove unconditional durable-ack promise."}
+- {"lesson":"cs1-chat-device-acks-offline-sync","question":"cs1-chat-system-q7","reason":"Qualify the final delivery claim consistently with the lesson."}
+- {"lesson":"cs1-chat-groups-hot-history-presence","reason":"Make the no-persistence choice specific to this design."}
+- {"lesson":"cs1-chat-groups-hot-history-presence","question":"cs1-chat-system-q5","reason":"Remove a defensibly correct small-group log/cursor alternative from the distractors."}
+- {"lesson":"cs1-chat-encryption-regional-growth","reason":"Tie content handling to the selected design instead of universal interview claims."}
+- {"lesson":"cs1-chat-encryption-regional-growth","reason":"Warning behaviour is an application policy, not a universal protocol action."}
+- {"lesson":"cs1-chat-encryption-regional-growth","reason":"Remove orphaned scale figures whose preceding baseline was removed."}
+- {"lessonCorrections":["JavaScript redirect feedback describes script processing rather than mandatory full-page rendering/SEO claims","E2EE shifts responsibilities rather than guarantees simpler servers"],"glossaryCorrections":["Geohash cell boundary limitation","US dollar example explicitly assumed per-segment price","GCRA describes primary-source implementation without unsupported ATM equivalence detail"]}
+- {"changed":["cgnat","levenshtein-automaton","instagram","protected-account"],"rationale":"Narrow unsupported carrier count/interview generalisations; mark protected-account contract as scenario policy; remove generic fuzzy-matching alias from specific edit automaton."}
+- {"files":["content/system-design/10-case-studies-1/cs1-url-hash-snowflake-tradeoffs.questions.json","content/system-design/10-case-studies-1/cs1-url-range-allocation-permutation.questions.json","content/system-design/10-case-studies-1/cs1-url-http-cache-click-analytics.questions.json","content/system-design/10-case-studies-1/cs1-suggest-workload-snapshot-memory.md"],"reason":"Avoid cross-subject Ethernet collision detection, certificate short lifetimes and SQL depth cap fallbacks; retain intended code-collision and prefix/retention meanings."}
+- {"glossaryCorrections":{"system-design-interview":"Do not present one duration or rubric as universal.","diurnal-traffic":"Daily variation does not establish a several-fold peak.","eventually-consistent":"Convergence needs communication and is not necessarily brief.","http-410":"HTTP410 means likely permanent; APNs cleanup is registration/timestamp scoped.","access-pattern":"Time-bucketed history can cross partitions.","clustering-key":"Cassandra can have multiple clustering columns; DynamoDB is analogous.","data-skew-cs1":"Use an illustrative distribution rather than an unsourced English-query statistic.","snowflake-id":"Distinguish field capacity from measured generation throughput.","birthday-problem":"State uniform independent sampling and birthday simplifications.","permutation":"Avoid a wrong-sense data-processing shuffle link.","capability-token":"Private links can instead use authentication; token strength depends on threat model.","key-generation-service":"Require atomic candidate rejection and durable non-overlapping assignments.","referrer":"Referer may be absent or reduced and does not identify every origin.","javascript-redirect":"Script execution need not wait for a full page load.","gcra":"Use the maintained implementation original and distinguish metering from queue shaping.","otp":"OTP can be generated locally; expiry and timing are scheme-specific.","campaign":"Bulk sends may be deliberately paced rather than simultaneous.","pecr":"Align example with the consent-or-exception definition.","tcpa":"Use current primary correction and qualify message/technology-specific applicability.","can-spam":"Sending after unsubscribe is not by itself proof the legal deadline was violated.","one-click-unsubscribe":"List-Unsubscribe alone is notRFC8058 one-click.","sender-reputation":"Use supported email-specific example instead of unsourced SMS attribution.","escalation":"Absent open signal is not proof of unread delivery; permission and expiry still apply.","notification-provider":"Provider submission does not guarantee end delivery or establish the usual bottleneck.","vonage":"Sinch and Vonage are different providers, not aliases.","user-timeline":"High reuse does not guarantee cache residency.","celebrity-problem":"Declare fleet-capacity assumption and qualify the design choice.","hydration":"Batch calls may fan out across shards.","multi-get":"RedisCluster MGET requires one hash slot.","erlang":"Date the WhatsApp implementation claim.","elixir":"Tie implementation statement to a published account rather than current internals.","read-receipt":"Avoid unverified universal product tick mapping.","multi-device":"Per-device inbox/key arrangement belongs to the selected architecture.","whatsapp":"Avoid unsupported present-tense server-runtime description.","hot-path-cs1":"Hot code need not execute on every request.","stop-keyword":"Provider blocking scope and re-opt-in differ; avoid unqualified universal rule.","bitly":"TinyURL is a separate service, not a Bitly alias.","serving-path":"Serving paths may include heavy inference, not universally offline."},"additionalGlossaryCorrections":["Geohash cell boundary limitation","US dollar example explicitly assumed per-segment price","GCRA describes primary-source implementation without unsupported ATM equivalence detail"],"changedGlossaryIdsAgainstBaseline":["system-design-interview","diurnal-traffic","eventually-consistent","http-410","access-pattern","clustering-key","data-skew-cs1","namespace","snowflake-id","range-allocation","hash-collision","birthday-problem","salt","permutation","capability-token","key-generation-service","referrer","javascript-redirect","gcra","cgnat","brute-force-attack","concurrency-limiter","top-k","levenshtein-automaton","instagram","otp","campaign","pecr","tcpa","can-spam","one-click-unsubscribe","half-open","sender-reputation","escalation","notification-provider","vonage","state-machine-cs1","consent","user-timeline","celebrity-problem","hydration","multi-get","protected-account","erlang","elixir","typing-indicator","read-receipt","read-cursor","message-inbox","multi-device","whatsapp","slack","telegram","geohash","hot-path-cs1","stop-keyword","bitly","serving-path","two-tier-limiting","us-dollar"]}
+
+**Scope gaps and exclusions:**
+
+- No deployed production/cloud/load/fault benchmark: shard/core capacities, trie memory, hit rates, raw byte sizes, GPU-equivalent work and costs remain explicit inputs. The native fixtures verify local operations, not production throughput or availability.
+- No live provider redirect-header captures or current SMS price quote. Historical WhatsApp/Discord/Meta/X reports describe their dated systems and do not certify current capacity or this proposed architecture.
+- Secure private-link capability construction, vetted format-preserving cryptography, global alias authority, quota rebalancing, permission-cache freshness and E2EE history/key transfer remain design contracts rather than complete implementations.
+- Marketing compliance and provider requirements vary by jurisdiction and version. Selected current official guidance was checked, but full jurisdictional legal implementation and future provider policy are outside this module.
+- Independent semantic review covers every active lesson and question field. Primary sources corroborate standards, provider behaviour and disputed claims; the review does not claim that each sentence or hypothetical architectural outcome was experimentally proven.
+- {"scope":"Source access","detail":"Some glossary further-reading Wikipedia URLs returned429 in the author scan; FTC direct download and live FCC guide returned403. FTC official text was read through the web tool; current FCC2025 correction PDF and ICO original were read. No unavailable source is claimed freshly fetched."}
+- {"scope":"Provider settings","detail":"No reproducible current Bitly/TinyURL response capture; exact provider redirect headers are not asserted. Apple JS pages were supplemented with current DocC JSON. Google off-topic legacy quota redirect is not evidence."}
+- {"scope":"Runtime","detail":"Executed snippets and mathematical boundaries, not a production deployment, race/failover test or performance benchmark. Root owns whole-library browser/offline release QA."}
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, cs1-interview-scope-time: Practice, performance and deployment-specific details Explicit coaching framework, hypothetical sizing and practice timings; not an employer-wide hiring rubric or capacity benchmark.
+- medium confidence, cs1-interview-daily-rates-units: Practice, performance and deployment-specific details Explicit coaching framework, hypothetical sizing and practice timings; not an employer-wide hiring rubric or capacity benchmark.
+- medium confidence, cs1-interview-workload-implications: Practice, performance and deployment-specific details Explicit coaching framework, hypothetical sizing and practice timings; not an employer-wide hiring rubric or capacity benchmark.
+- medium confidence, cs1-interview-cache-failover-capacity: Practice, performance and deployment-specific details Explicit coaching framework, hypothetical sizing and practice timings; not an employer-wide hiring rubric or capacity benchmark.
+- medium confidence, cs1-interview-contract-access-patterns: Practice, performance and deployment-specific details Explicit coaching framework, hypothetical sizing and practice timings; not an employer-wide hiring rubric or capacity benchmark.
+- medium confidence, cs1-interview-depth-evolution-review: Practice, performance and deployment-specific details Explicit coaching framework, hypothetical sizing and practice timings; not an employer-wide hiring rubric or capacity benchmark.
+- medium confidence, cs1-url-redirect-load-cache: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-url-namespace-retention: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-url-contract-mapping-aliases: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-url-hash-snowflake-tradeoffs: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-url-range-allocation-permutation: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-url-http-cache-click-analytics: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-url-expiry-negative-cache-freshness: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-url-growth-regional-uniqueness: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-limiter-targets-capacity: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-limiter-contract-identity-routing: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-limiter-fixed-sliding-estimates: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-limiter-bucket-atomic-refill: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-limiter-fallback-leases-regions: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-limiter-concurrency-fleet-load: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-suggest-workload-snapshot-memory: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-suggest-prefix-lookup-client-contract: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-suggest-decay-privacy-freshness: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-suggest-cache-locales-personalisation: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-suggest-snapshot-rollout-growth: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-notify-volume-channel-cost: Practice, performance and deployment-specific details Explicit workload/cost inputs and current provider guidance; bounded retries, ambiguous external effects and jurisdictional policy remain qualified.
+- medium confidence, cs1-notify-accept-outbox-pipeline: Practice, performance and deployment-specific details Explicit workload/cost inputs and current provider guidance; bounded retries, ambiguous external effects and jurisdictional policy remain qualified.
+- medium confidence, cs1-notify-isolation-dedup-campaigns: Practice, performance and deployment-specific details Explicit workload/cost inputs and current provider guidance; bounded retries, ambiguous external effects and jurisdictional policy remain qualified.
+- medium confidence, cs1-notify-retry-token-failover: Practice, performance and deployment-specific details Explicit workload/cost inputs and current provider guidance; bounded retries, ambiguous external effects and jurisdictional policy remain qualified.
+- medium confidence, cs1-notify-send-time-policy-escalation: Practice, performance and deployment-specific details Explicit workload/cost inputs and current provider guidance; bounded retries, ambiguous external effects and jurisdictional policy remain qualified.
+- medium confidence, cs1-feed-contract-graph-hydration: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-feed-fanout-storage-estimates: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-feed-push-pull-celebrity-hybrid: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-feed-visibility-cache-cursors: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-feed-ranking-capacity-stages: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-feed-backlog-tiered-growth: Practice, performance and deployment-specific details Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- medium confidence, cs1-chat-connections-storage-budgets: Practice, performance and deployment-specific details Dated provider reports and conditional durability/retention/ownership contracts; local fixtures do not certify a deployed multi-region chat service.
+- medium confidence, cs1-chat-contract-partitions-path: Practice, performance and deployment-specific details Dated provider reports and conditional durability/retention/ownership contracts; local fixtures do not certify a deployed multi-region chat service.
+- medium confidence, cs1-chat-session-epochs-reconnect: Practice, performance and deployment-specific details Dated provider reports and conditional durability/retention/ownership contracts; local fixtures do not certify a deployed multi-region chat service.
+- medium confidence, cs1-chat-device-acks-offline-sync: Practice, performance and deployment-specific details Dated provider reports and conditional durability/retention/ownership contracts; local fixtures do not certify a deployed multi-region chat service.
+- medium confidence, cs1-chat-sequence-fenced-ownership: Practice, performance and deployment-specific details Dated provider reports and conditional durability/retention/ownership contracts; local fixtures do not certify a deployed multi-region chat service.
+- medium confidence, cs1-chat-groups-hot-history-presence: Practice, performance and deployment-specific details Dated provider reports and conditional durability/retention/ownership contracts; local fixtures do not certify a deployed multi-region chat service.
+- medium confidence, cs1-chat-encryption-regional-growth: Practice, performance and deployment-specific details Dated provider reports and conditional durability/retention/ownership contracts; local fixtures do not certify a deployed multi-region chat service.
+- medium confidence, glossary: glossary term http-410 Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- medium confidence, glossary: glossary term snowflake-id Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- medium confidence, glossary: glossary term push-notification Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- medium confidence, glossary: glossary term apns Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- medium confidence, glossary: glossary term fcm Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- medium confidence, glossary: glossary term device-token Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- medium confidence, glossary: glossary term collapse-key Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- medium confidence, glossary: glossary term quiet-hours Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- medium confidence, glossary: glossary term telegram Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- medium confidence, glossary: glossary term keystroke-debouncing Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- medium confidence, glossary: glossary term two-tier-limiting Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- medium confidence, glossary: glossary term push-service Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- medium confidence, glossary: glossary term cs1-web-risk Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- medium confidence, glossary: glossary term cs1-fcm-unregistered Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- {"scope":"Hypothetical design sizing","confidence":"medium","reason":"Capacity, prices, latency goals, retention and thresholds are scenario assumptions; actual hardware/provider/workload measurements are required."}
+- {"scope":"Legal and provider semantics","confidence":"medium","reason":"PECR/TCPA/CAN-SPAM definitions deliberately limited to jurisdiction-qualified concepts. Old FCC one-to-one rule was vacated;2025correction controls. Provider behaviour may evolve."}
+
+
+## system-design / Case Studies II
+
+67 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- {"lesson":"cs2-payment-system-operation-contracts","reason":"Correct obsolete expired-draft claim using current IETF record."}
+- {"lesson":"cs2-payment-system-operation-contracts","reason":"Attach primary current draft status."}
+- {"lesson":"cs2-video-streaming-cdn-placement","reason":"Avoid universal off-peak price claim."}
+- {"lesson":"cs2-video-streaming-cdn-placement","reason":"Scope encryption to the chosen design rather than every paid service."}
+- {"lesson":"cs2-video-streaming-cdn-placement","reason":"Qualify workload-dependent cost dominance."}
+- {"lesson":"cs2-ride-sharing-geo-candidates","reason":"Remove unsupported historical attribution and unconditional small-range promise."}
+- {"lesson":"cs2-ride-sharing-geo-candidates","reason":"Do not dismiss local projection or pentagon effects."}
+- {"lesson":"cs2-web-crawler-fetch-budget","reason":"Separate crawler policy from guaranteed host safety."}
+- {"lesson":"cs2-web-crawler-content-identity","reason":"Carry Bloom maintenance assumptions into the standalone lesson."}
+- {"lesson":"cs2-web-crawler-freshness-traps","reason":"Avoid fixed discovered-to-fetched multiplier."}
+- {"lesson":"cs2-web-crawler-freshness-traps","reason":"State storage trade-off without universal superiority."}
+- {"lesson":"cs2-ticket-booking-authoritative-holds","reason":"Distinguish one deadlock cause from a general safety proof."}
+- {"lesson":"cs2-ticket-booking-waiting-seat-map","reason":"Align best-available prose with atomic allocation requirements."}
+- {"lesson":"cs2-job-scheduler-due-transactions","reason":"Do not present indexing as an unconditional cheap scan."}
+- {"lesson":"cs2-job-scheduler-timers-ownership","reason":"Scope fencing requirement to distributed lease failure model."}
+- {"lesson":"cs2-job-scheduler-execution-cron","reason":"Include full-jitter and other policies rather than only additive jitter."}
+- {"lesson":"cs2-job-scheduler-tenant-retry-scaling","reason":"Separate fair dispatch from complete resource isolation."}
+- {"lesson":"cs2-payment-system-balanced-ledger","reason":"Do not trade away atomic postings when batching a hot balance."}
+- {"lesson":"cs2-collaborative-editor-crdt-offline","reason":"Distinguish unique CRDT identity from algorithmic sequence order."}
+- {"lesson":"cs2-collaborative-editor-crdt-offline","reason":"Do not imply Yjs and every listed algorithm are a one-anchor RGA."}
+- {"lesson":"cs2-key-value-store-repair-storage","reason":"Clarify deletion-marker lifetime versus literal replica storage."}
+- {"lesson":"cs2-ride-sharing-location-contracts","reason":"Align normal freshness requirement with degraded-mode cutoff."}
+- {"lesson":"cs2-ride-sharing-matching-quotes","reason":"Batching is not a measured city-wide pickup guarantee."}
+- {"lesson":"cs2-web-crawler-frontier-contracts","reason":"Analogy enforces the configured spacing policy without promising that one-at-a-time requests cannot overload a host."}
+- {"lesson":"cs2-collaborative-editor-crdt-offline","reason":"Separate Fugue from the stronger maximal non-interleaving guarantee proved for FugueMax."}
+- {"question":"cs2-web-crawler-q5","reason":"A content change does not deterministically alter every hash."}
+- {"question":"cs2-web-crawler-q12","reason":"Canonical links are hints rather than proof of fetch equivalence."}
+- {"question":"cs2-web-crawler-q6","reason":"Heuristics mitigate traps but do not guarantee prevention."}
+- {"question":"cs2-web-crawler-q10","reason":"A shared IP is not necessarily one machine."}
+- {"question":"cs2-ticket-booking-q5","reason":"PostgreSQL maps READ UNCOMMITTED to READ COMMITTED; removing check violates requirement without legal claim."}
+- {"question":"cs2-ticket-booking-q7","reason":"Table locks do not universally remove deadlocks."}
+- {"question":"cs2-job-scheduler-q4","reason":"SKIP LOCKED skips conflicting row locks, not every possible wait; committed outbox survives crashes."}
+- {"question":"cs2-job-scheduler-q5","reason":"UTC identity alone does not choose a DST fold."}
+- {"question":"cs2-job-scheduler-q11","reason":"Backoff mitigates overload rather than guaranteeing recovery."}
+- {"question":"cs2-payment-system-q9","reason":"Permit exact decimal types and do not claim binary floats describe every float representation."}
+- {"question":"cs2-payment-system-q10","reason":"An outbox needs progress and cancellation handling; avoid unconditional exactly-once completion."}
+- {"question":"cs2-key-value-store-q4","reason":"Tombstone purge is conditional, not automatic at grace expiry."}
+- {"question":"cs2-key-value-store-q5","reason":"LCS can benefit reads; compare workload trade-offs without denying all benefits."}
+- {"question":"cs2-key-value-store-q11","reason":"Specify reconciled read to make the LWW answer unique."}
+- {"question":"cs2-key-value-store-q12","reason":"Cache benefit requires coalescing and miss behavior; new placement need not remain identical."}
+- {"question":"cs2-ride-sharing-q3","reason":"One active atomic reservation does not guarantee exactly-once offer delivery."}
+- {"question":"cs2-ride-sharing-q4","reason":"Keep graph neighbourhood and area benefits conditional."}
+- {"question":"cs2-ride-sharing-q5","reason":"A cheaper distance metric does not solve joint assignment; avoid universal worse-ranking claim."}
+- {"question":"cs2-ride-sharing-q9","reason":"Staleness is not always slight, and payment deduplication remains a separate safeguard."}
+- {"question":"cs2-ride-sharing-q10","reason":"Replace repetitive call-count arithmetic with shortlist cost versus recall."}
+- {"question":"cs2-ride-sharing-q12","reason":"Ask about conditional strategies, not guaranteed overload fixes."}
+- {"question":"cs2-ride-sharing-q7","reason":"Recovery snapshots are not categorically pointless."}
+- {"question":"cs2-ride-sharing-q11","reason":"Make key claim atomic with trip creation."}
+- {"question":"cs2-video-streaming-q5","reason":"Removing an intermediate rendition does not add controller stability."}
+- {"question":"cs2-video-streaming-q7","reason":"JIT packaging need not cache two formats, but is not free."}
+- {"question":"cs2-video-streaming-q10","reason":"Redis can persist; a log alone does not establish deduplication or fraud accuracy."}
+- {"question":"cs2-video-streaming-q11","reason":"Buffering-in-segments is a prompt assumption, not a universal player rule."}
+- {"question":"cs2-video-streaming-q4","reason":"Off-peak capacity does not imply universally cheap transfer."}
+- {"question":"cs2-video-streaming-q12","reason":"Coalescing and prefetch benefits depend on residence, routing and failures."}
+- {"glossary":"ingest","reason":"Supply the missing per-second unit in the ingest example."}
+- {"glossary":"multi-region","reason":"Deployment geography is not an outage-survival guarantee."}
+- {"glossary":"nvme","reason":"NVMe is not restricted to directly attached PCIe or a universal performance promise."}
+- {"glossary":"ixp","reason":"Avoid implying all IXP exchange is free."}
+- {"glossary":"proactive-cache-fill","reason":"Off-peak bandwidth is not universally cheaper."}
+- {"glossary":"hilbert-curve","reason":"Remove universal few-ranges guarantee."}
+- {"glossary":"eta","reason":"ETA is a general predicted time, not inherently a road-network computation."}
+- {"glossary":"recall-metric","reason":"Low recall does not necessarily exclude the single best result."}
+- {"glossary":"seed-url","reason":"Not every discovered URL is reached through seed hyperlinks."}
+- {"glossary":"outlink","reason":"Remove universal dozens-of-links and faster-growth claim."}
+- {"glossary":"url-normalisation","reason":"Scope normalisation to proven equivalences and avoid capturing generic canonicalisation."}
+- {"glossary":"ip-address-shared","reason":"Shared IP and shared hosting do not imply a single physical server."}
+- {"glossary":"seat-hold","reason":"Do not teach blind expiry of PAYMENT_PENDING inventory."}
+- {"glossary":"sweeper","reason":"Scope independence from sweeper timing to the taught allocation design."}
+- {"glossary":"settlement","reason":"Do not conflate settlement with provider payout."}
+- {"glossary":"tokenisation","reason":"Tokenisation alone does not prove the merchant never handles credentials."}
+- {"glossary":"3d-secure","reason":"3-D Secure does not always require a visible cardholder challenge."}
+- {"glossary":"velocity-check","reason":"Explain broader fraud-scoring aliases rather than equating all scoring with velocity."}
+- {"glossary":"audit-trail","reason":"An audit trail is not inherently complete or tamper-resistant."}
+- {"glossary":"intention-preservation","reason":"Distinguish formal edit semantics from all human intentions."}
+- {"glossary":"token-aware-driver","reason":"A token-aware driver does not always route directly to an owner."}
+- {"glossary":"cassandra-reaper","reason":"Segmented repair does not guarantee no overload."}
+- {"glossary":"pre-filter","reason":"A pre-filter need not reject most candidates."}
+
+**Scope gaps and exclusions:**
+
+- No original walkthrough topic intentionally removed; split sections retain the source caveats, examples and archival records.
+- No reproducible production codec/CDN/dispatch/crawler/payment/editor/store capacity benchmark: these capacities, bitrates, pricing, latencies and retention examples are declared inputs.
+- No end-to-end cloud upload or PSP call/failover implementation; SQL fixtures bind documented parameters and test selected guards, not a complete surrounding lease/application/durability protocol.
+- The 224 selected OT insert/delete cases do not prove every TP1/TP2 law, rich-text transformation or CRDT reclamation rule. No live H3 engine or production CRDT fleet was benchmarked.
+- Jurisdiction-complete accounting, legal and PCI compliance is outside this module. The UK record-retention example is specifically sourced rather than a worldwide rule.
+- Original archive formula-finder debt remains byte-identical and excluded from active routes; all six active hits are genuine Rule 6 exceptions.
+- The root coordinator must run the fresh whole-app build, compiled dictionary probes, mobile, offline/update and release checks before publication.
+- No production benchmark or comprehensive payment/compliance implementation is supplied; workload and performance numbers are illustrative.
+- Finite code/protocol examples and 187 assertions do not prove complete OT/CRDT, distributed transaction or failure-recovery implementations.
+- Bulk glossary source retrieval was interrupted after 621.7 seconds awaiting approval. All 238 definitions/aliases were semantically read, but supplementary names, units and product facts without independently inspected primary support are medium confidence; per-term review identifies them.
+- Root owns full-library rendered mobile, optional-disclosure and offline validation; this pass is scoped source verification.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, cs2-video-streaming-contracts-upload: Production policies, version-dependent details and deployment performance Codec/device/CDN/platform details change, and hypothetical encode/traffic/egress inputs are not production benchmarks.
+- medium confidence, cs2-video-streaming-storage-budget: Production policies, version-dependent details and deployment performance Codec/device/CDN/platform details change, and hypothetical encode/traffic/egress inputs are not production benchmarks.
+- medium confidence, cs2-video-streaming-egress-budget: Production policies, version-dependent details and deployment performance Codec/device/CDN/platform details change, and hypothetical encode/traffic/egress inputs are not production benchmarks.
+- medium confidence, cs2-video-streaming-transcode-publication: Production policies, version-dependent details and deployment performance Codec/device/CDN/platform details change, and hypothetical encode/traffic/egress inputs are not production benchmarks.
+- medium confidence, cs2-video-streaming-codec-economics: Production policies, version-dependent details and deployment performance Codec/device/CDN/platform details change, and hypothetical encode/traffic/egress inputs are not production benchmarks.
+- medium confidence, cs2-video-streaming-abr-progress: Production policies, version-dependent details and deployment performance Codec/device/CDN/platform details change, and hypothetical encode/traffic/egress inputs are not production benchmarks.
+- medium confidence, cs2-video-streaming-cdn-placement: Production policies, version-dependent details and deployment performance Codec/device/CDN/platform details change, and hypothetical encode/traffic/egress inputs are not production benchmarks.
+- medium confidence, cs2-ride-sharing-location-budget: Production policies, version-dependent details and deployment performance Location intervals, batch windows and surge response are scenario policies; historical Uber figures/technology are dated and exact failover capacity is unmeasured.
+- medium confidence, cs2-ride-sharing-location-contracts: Production policies, version-dependent details and deployment performance Location intervals, batch windows and surge response are scenario policies; historical Uber figures/technology are dated and exact failover capacity is unmeasured.
+- medium confidence, cs2-ride-sharing-geo-candidates: Production policies, version-dependent details and deployment performance Location intervals, batch windows and surge response are scenario policies; historical Uber figures/technology are dated and exact failover capacity is unmeasured.
+- medium confidence, cs2-ride-sharing-matching-quotes: Production policies, version-dependent details and deployment performance Location intervals, batch windows and surge response are scenario policies; historical Uber figures/technology are dated and exact failover capacity is unmeasured.
+- medium confidence, cs2-web-crawler-fetch-budget: Production policies, version-dependent details and deployment performance Host policies, duplicate thresholds, latency and workload models need corpus-specific validation; original Mercator and later textbook constructions are distinguished.
+- medium confidence, cs2-web-crawler-seen-content: Production policies, version-dependent details and deployment performance Host policies, duplicate thresholds, latency and workload models need corpus-specific validation; original Mercator and later textbook constructions are distinguished.
+- medium confidence, cs2-web-crawler-content-identity: Production policies, version-dependent details and deployment performance Host policies, duplicate thresholds, latency and workload models need corpus-specific validation; original Mercator and later textbook constructions are distinguished.
+- medium confidence, cs2-web-crawler-frontier-contracts: Production policies, version-dependent details and deployment performance Host policies, duplicate thresholds, latency and workload models need corpus-specific validation; original Mercator and later textbook constructions are distinguished.
+- medium confidence, cs2-web-crawler-robots-ownership: Production policies, version-dependent details and deployment performance Host policies, duplicate thresholds, latency and workload models need corpus-specific validation; original Mercator and later textbook constructions are distinguished.
+- medium confidence, cs2-web-crawler-freshness-traps: Production policies, version-dependent details and deployment performance Host policies, duplicate thresholds, latency and workload models need corpus-specific validation; original Mercator and later textbook constructions are distinguished.
+- medium confidence, cs2-ticket-booking-crowd-budget: Production policies, version-dependent details and deployment performance Admission/hold capacity and payment recovery are explicit protocol contracts rather than a deployed end-to-end ticketing implementation.
+- medium confidence, cs2-ticket-booking-authoritative-holds: Production policies, version-dependent details and deployment performance Admission/hold capacity and payment recovery are explicit protocol contracts rather than a deployed end-to-end ticketing implementation.
+- medium confidence, cs2-ticket-booking-payment-recovery: Production policies, version-dependent details and deployment performance Admission/hold capacity and payment recovery are explicit protocol contracts rather than a deployed end-to-end ticketing implementation.
+- medium confidence, cs2-ticket-booking-waiting-seat-map: Production policies, version-dependent details and deployment performance Admission/hold capacity and payment recovery are explicit protocol contracts rather than a deployed end-to-end ticketing implementation.
+- medium confidence, cs2-ticket-booking-inventory-pressure: Production policies, version-dependent details and deployment performance Admission/hold capacity and payment recovery are explicit protocol contracts rather than a deployed end-to-end ticketing implementation.
+- medium confidence, cs2-job-scheduler-schedule-budget: Production policies, version-dependent details and deployment performance Scheduling lateness, lease/epoch installation and endpoint effects require a deployed failure model; product cron/delay semantics are version-dependent.
+- medium confidence, cs2-job-scheduler-due-transactions: Production policies, version-dependent details and deployment performance Scheduling lateness, lease/epoch installation and endpoint effects require a deployed failure model; product cron/delay semantics are version-dependent.
+- medium confidence, cs2-job-scheduler-timers-ownership: Production policies, version-dependent details and deployment performance Scheduling lateness, lease/epoch installation and endpoint effects require a deployed failure model; product cron/delay semantics are version-dependent.
+- medium confidence, cs2-job-scheduler-execution-cron: Production policies, version-dependent details and deployment performance Scheduling lateness, lease/epoch installation and endpoint effects require a deployed failure model; product cron/delay semantics are version-dependent.
+- medium confidence, cs2-job-scheduler-tenant-retry-scaling: Production policies, version-dependent details and deployment performance Scheduling lateness, lease/epoch installation and endpoint effects require a deployed failure model; product cron/delay semantics are version-dependent.
+- medium confidence, cs2-payment-system-money-workload: Production policies, version-dependent details and deployment performance Provider retention/auth/capture and accounting policies vary by endpoint/rail/jurisdiction; fixtures do not certify financial compliance or a live PSP workflow.
+- medium confidence, cs2-payment-system-operation-contracts: Production policies, version-dependent details and deployment performance Provider retention/auth/capture and accounting policies vary by endpoint/rail/jurisdiction; fixtures do not certify financial compliance or a live PSP workflow.
+- medium confidence, cs2-payment-system-unknown-webhooks: Production policies, version-dependent details and deployment performance Provider retention/auth/capture and accounting policies vary by endpoint/rail/jurisdiction; fixtures do not certify financial compliance or a live PSP workflow.
+- medium confidence, cs2-payment-system-balanced-ledger: Production policies, version-dependent details and deployment performance Provider retention/auth/capture and accounting policies vary by endpoint/rail/jurisdiction; fixtures do not certify financial compliance or a live PSP workflow.
+- medium confidence, cs2-payment-system-reconcile-scale: Production policies, version-dependent details and deployment performance Provider retention/auth/capture and accounting policies vary by endpoint/rail/jurisdiction; fixtures do not certify financial compliance or a live PSP workflow.
+- medium confidence, cs2-collaborative-editor-edit-budget: Production policies, version-dependent details and deployment performance Selected transformation cases and fetched library/paper contracts are verified, but no complete rich-text convergence proof or fleet benchmark is supplied.
+- medium confidence, cs2-collaborative-editor-document-owner: Production policies, version-dependent details and deployment performance Selected transformation cases and fetched library/paper contracts are verified, but no complete rich-text convergence proof or fleet benchmark is supplied.
+- medium confidence, cs2-collaborative-editor-ot-transform: Production policies, version-dependent details and deployment performance Selected transformation cases and fetched library/paper contracts are verified, but no complete rich-text convergence proof or fleet benchmark is supplied.
+- medium confidence, cs2-collaborative-editor-crdt-offline: Production policies, version-dependent details and deployment performance Selected transformation cases and fetched library/paper contracts are verified, but no complete rich-text convergence proof or fleet benchmark is supplied.
+- medium confidence, cs2-collaborative-editor-snapshots-presence: Production policies, version-dependent details and deployment performance Selected transformation cases and fetched library/paper contracts are verified, but no complete rich-text convergence proof or fleet benchmark is supplied.
+- medium confidence, cs2-key-value-store-replica-budget: Production policies, version-dependent details and deployment performance Product defaults are the fetched Cassandra 5.0 YAML/docs and historical Dynamo papers; quorum intersection is not linearisability and capacity remains hypothetical.
+- medium confidence, cs2-key-value-store-ring-quorums: Production policies, version-dependent details and deployment performance Product defaults are the fetched Cassandra 5.0 YAML/docs and historical Dynamo papers; quorum intersection is not linearisability and capacity remains hypothetical.
+- medium confidence, cs2-key-value-store-failure-conflicts: Production policies, version-dependent details and deployment performance Product defaults are the fetched Cassandra 5.0 YAML/docs and historical Dynamo papers; quorum intersection is not linearisability and capacity remains hypothetical.
+- medium confidence, cs2-key-value-store-repair-storage: Production policies, version-dependent details and deployment performance Product defaults are the fetched Cassandra 5.0 YAML/docs and historical Dynamo papers; quorum intersection is not linearisability and capacity remains hypothetical.
+- medium confidence, cs2-key-value-store-hotkeys-evolution: Production policies, version-dependent details and deployment performance Product defaults are the fetched Cassandra 5.0 YAML/docs and historical Dynamo papers; quorum intersection is not linearisability and capacity remains hypothetical.
+- medium confidence, module: Unbenchmarked workload/cost scenarios and deployment-specific performance Numbers are explicitly illustrative and cannot establish production throughput or costs.
+- medium confidence, cs2-collaborative-editor-ot-transform: General TP1/TP2 protocol characterization Historical Google account and independently executed selected transformations support the example; no comprehensive rich-text OT proof was checked.
+- medium confidence, glossary: exabyte, kibibyte-systems, mbps, percentile-latency, core-hour, ingest, hotspot, rack, cncf, rfc-2119-keywords, vp9, av1, gop, media-container, mpeg-ts, mezzanine-file, mpd, rebuffering, playback-buffer, vitess, drm, widevine, fairplay, playready, licence-server, redo-log, rtmp, srt-protocol, vmaf, per-title-encoding, cold-storage, airplay, xml-systems, mobile-4g, copyright-matching, latitude-longitude, base-32, edge-problem, quadtree, icosahedron, z-order-curve, eta, road-network-routing, ephemeral-data, ringpop, tls-handshake, greedy-matching, batched-matching, assignment-problem, hungarian-algorithm, min-cost-flow, vehicle-routing-problem, surge-pricing, price-quote, recall-metric, seed-url, outlink, crawl-politeness, octet, warc, common-crawl, internet-archive, pagerank, content-fingerprint, minhash, hamming-distance, pigeonhole-principle, spider-trap, async-io, epoll, ip-address-shared, sitemap, indexnow, headless-rendering, registered-domain, web-scheme-authority, ip-address-rate-limit, ticketmaster, on-sale, coffman-conditions, redis-nx-px, general-admission, inventory-bucketing, proof-of-work, device-fingerprint, lmax, actor-model, time-zone, dst, gmt, british-summer-time, utc, one-off-job, job-scheduler, read-ahead, composite-primary-key, eventbridge-scheduler, weighted-fair-queuing, psp, braintree, refund, chargeback, payout, account-types, minor-units, iso-4217, gbp, eur, jpy, bhd, ieee-754, reconciliation-break, payment-rails, saga-pattern, tigerbeetle, materialised-balance, audit-trail, convergence, local-echo, revision-number, session-server, central-sequencer, causal-delivery, rga, interleaving-anomaly, local-first, p2p, acl, rebase, suggestion-mode, murmur3, counter-column, seed-node, amplification, bootstrap-node, partition-cassandra, network-topology-strategy, deterministic-jitter, redis-geosearch, redis-zrangebyscore, crontab, yata, http-keep-alive, cdn-signed-url, run-id, h3-cell-id, seen-url-set, per-host-budget, change-rate, pre-filter, all-or-nothing, cloudflare-waiting-room, queue-it, cs2-utm-parameter Supplementary glossary concepts reviewed semantically but fresh primary-source coverage is incomplete; see glossary-review.json for per-entry evidence boundary.
 

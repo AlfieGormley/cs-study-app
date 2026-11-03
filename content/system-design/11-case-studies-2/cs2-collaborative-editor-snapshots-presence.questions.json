@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Load time is roughly the number of operations replayed times the cost of each. Assume 10 microseconds (µs, millionths of a second) per operation:\n\n```formula\nt = n × c\nt = 4,000,000 × 10 µs = 40 s\nt = 500 × 10 µs = 5,000 µs = 5 ms\nwhere\nt: time to rebuild the document by replay\nn: operations replayed; 4 million with no snapshot, at most about 500 after a recent snapshot\nc: replay cost per operation; an assumed 10 µs\nµs: microseconds, millionths of a second\nms: milliseconds, thousandths of a second\ns: seconds\nIn words: replaying 4 million ops takes 40 seconds, but replaying only the 500 since the last snapshot takes 5 milliseconds.\n```\n\nThis excludes snapshot fetch and parse time. Publish snapshots durably and monitor snapshot lag. To reconstruct an old revision, load a snapshot at or before it and retain all necessary intervening operations. Hourly snapshots alone cannot reproduce every intermediate edit. Restoring creates a new authorised change under the current concurrency protocol.",
+    "workedExample": "Publish a durable snapshot at a known revision. Current loads fetch that state and replay only the later operations. The useful replay bound depends on the latest successfully published snapshot, including its fetch and parse cost. Full revision history still needs enough retained snapshots and operations to rebuild each promised state; coarse snapshots alone lose intermediate history.",
     "link": {
       "title": "How Figma's multiplayer technology works (Figma blog)",
       "url": "https://www.figma.com/blog/how-figmas-multiplayer-technology-works/"
@@ -63,27 +63,27 @@
     "id": "cs2-collaborative-editor-q10",
     "level": "intermediate",
     "type": "single",
-    "prompt": "200,000 users are actively typing at peak, and each document has about 3 collaborators, so each update goes to about 2 others. Cursor presence is throttled to 10 updates a second per user. Roughly how many presence messages a second does the fan-out tier deliver, and what does it suggest?",
+    "prompt": "Cursor presence traffic exceeds durable edit traffic. Which design preserves useful presence without turning every cursor move into history?",
     "options": [
       {
-        "text": "About 400,000 a second. Presence is negligible next to ops",
-        "explanation": "Wrong. This forgets the fan-out of 2 recipients and the 10 updates per user. 200,000 × 10 × 2 is ten times larger."
+        "text": "Persist every raw mouse event in the edit log",
+        "explanation": "Wrong. That adds high-frequency ephemeral state to durable history without fixing cursor semantics."
       },
       {
-        "text": "About 4 M a second, more than the ~2 M op messages, so presence must be cheap: ephemeral, throttled, coalesced and kept out of the op log",
-        "explanation": "Correct. Presence can be the largest message stream in the system. That's why it never touches durable storage and why throttling matters."
+        "text": "Throttle and coalesce presence, distribute it ephemerally, and expire stale sessions",
+        "explanation": "Correct. Latest positions matter; intermediate cursor movements usually need not survive recovery."
       },
       {
-        "text": "About 40 M a second, so presence should be dropped entirely",
-        "explanation": "Wrong. That's 10x too high (it multiplies by 20 recipients), and live cursors are a core feature. The answer is to make them cheap, not remove them."
+        "text": "Remove cursor anchoring because updates are frequent",
+        "explanation": "Wrong. Raw offsets still become wrong after concurrent edits."
       },
       {
-        "text": "About 4 M a second, so presence should be written to the op log to keep it ordered with edits",
-        "explanation": "Right number, wrong conclusion. Writing 4 M presence updates a second durably would dwarf the real op log for no benefit. A stale cursor only matters for a fraction of a second."
+        "text": "Assume presence cannot overload a fan-out tier",
+        "explanation": "Wrong. Sender frequency and recipient count can make it a large stream."
       }
     ],
     "answer": 1,
-    "workedExample": "Multiply it out: users sending presence, times updates each sends per second, times recipients for each update.\n\n```formula\nP = U × r × k\nP = 200,000 × 10/s × 2\nP = 4,000,000 messages/s\nwhere\nP: presence messages the fan-out tier delivers per second\nU: users actively typing at peak; 200,000\nr: presence updates per user per second; throttled to 10\nk: other collaborators who receive each update; about 2\ns: seconds\nmessages: delivered presence messages\nIn words: 200,000 users sending 10 cursor updates a second to 2 others each is 4 million messages a second.\n```\n\nCompare ops: 1 M ops/s in, about 2 M/s fanned out. Presence is **twice** the op fan-out.\n\n```formula\nP = U r k\nP = 200,000 × 60/s × 2\nP = 24,000,000 messages/s\nwhere\nP: delivered presence messages per second\nU: sending users; here 200,000\nr: assumed raw event rate per user, 60 per second\nk: recipients per update; here 2\ns: seconds\nmessages: delivered presence updates\nIn words: Unthrottled sixty-per-second updates would deliver twenty-four million messages each second.\n```\n\nHence the rules:\n\n- throttle (10/s) and coalesce (send only the latest position)\n- ephemeral pub/sub, no durable writes\n- heartbeat TTL (~30 s) to drop ghosts",
+    "workedExample": "Keep the latest cursor state per session and send at a bounded frequency. Attach positions to transformed offsets or stable CRDT structure, and use heartbeats to remove stale presence. Persist actual edits under their stronger durability contract.",
     "link": {
       "title": "How Figma's multiplayer technology works (Figma blog)",
       "url": "https://www.figma.com/blog/how-figmas-multiplayer-technology-works/"

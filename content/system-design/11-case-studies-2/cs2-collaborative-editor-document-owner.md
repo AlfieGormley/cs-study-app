@@ -29,7 +29,7 @@ GET /v1/docs/{id}/revisions?before=..
 POST /v1/docs/{id}/restore {rev}
 ```
 
-the pair `(client_id, seq)` makes op submission **idempotent**. A resend after a reconnect is recognised and acknowledged, not applied twice.
+The server atomically records and validates the document-scoped pair `(client_id, seq)` with the edit, making retried submission **idempotent**. A resend after a reconnect is recognised and acknowledged, not applied twice.
 
 ## Data model
 

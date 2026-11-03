@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Match settlement references and investigate the missing refund through provider records. If confirmed, post a unique balanced refund transaction under the agreed allocation policy. For an unpaid driver with an 80/20 split and no fee refund:\n\n```formula\nd = 0.8 × 4,500 = 3,600\nr = 0.2 × 4,500 = 900\nΣ a_i = −4,500 + 3,600 + 900 = 0\nwhere\nd: the reduction in what the driver is owed, in pence (a debit, so positive)\nr: the reduction in platform revenue, in pence (a debit, so positive)\n4,500: the £45 refund in pence, leaving PSP clearing (a credit, so negative)\nΣ: sigma, \"add up all of\"\na_i: the signed amount of entry i, in pence\ni: counts through the three entries\nIn words: the £45 leaving the PSP is split 80/20 between the driver's share and the platform's, and the three entries cancel.\n```\n\nSo the signed entries are: PSP clearing minus 4,500 pence, driver payable plus 3,600 pence and revenue plus 900 pence. If the seller was already paid, a receivable or recovery process may be required instead. Dashboard provenance may require audit logs rather than a refund API field.",
+    "workedExample": "Treat the missing refund as a reconciliation break. Confirm it using available provider transaction evidence and, where needed, audit logs. Then append the missing balanced refund once under its unique reference and agreed allocation policy. If the seller was already paid, recovery may require a receivable instead of reducing an unpaid liability.",
     "link": {
       "title": "Double-entry bookkeeping (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Double-entry_bookkeeping"
@@ -45,7 +45,7 @@
       },
       {
         "text": "Split the hot account into N sub-accounts (`platform_revenue_00` to `_31`), pick one per transaction, and sum them for reporting. Or don't materialise its balance, and derive it from entries plus periodic snapshots",
-        "explanation": "Correct. Both remove the single-row hotspot while keeping every transaction balanced and every balance derivable from immutable entries. Contention per row drops about N times."
+        "explanation": "Correct. Both preserve immutable postings and derivable balances while reducing one-row contention. Shared limits, uneven placement and reporting consistency determine the actual benefit."
       },
       {
         "text": "Lower the isolation level to READ UNCOMMITTED",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Why it melts: if each transaction holds the `platform_revenue` row lock for a fixed time, the row can handle at most one update per lock time:\n\n```formula\nC = 1 / t\nC = 1 / 0.002 s = 500 updates/s\nwhere\nC: the most updates per second one row can take\nt: how long each transaction holds the row lock, in seconds (s); about 2 ms (milliseconds) = 0.002 s\ns: seconds\nupdates: balance-row updates\nIn words: a lock held for 2 ms allows at most 500 updates a second, well below the 1,200 needed.\n```\n\nFix 1, **sharded sub-accounts**: spread the updates over N rows.\n\n```formula\nu = p / N\nu = 1,200/s / 32 ≈ 38/s\nwhere\nu: updates per second each sub-account row receives\np: payments per second; 1,200\nN: number of sub-accounts; here 32\ns: seconds\n≈: approximately equal to\nIn words: 32 sub-accounts each take about 38 updates a second, far below the 500 a second ceiling.\n```\n\n- Reporting: `SUM(balance) WHERE parent='platform_revenue'`.\n\nFix 2, **no materialised balance for this account**:\n- The balance is the snapshot balance plus the sum of the later signed entries.\n- Snapshot every minute or hour with a background job.\n\nBoth keep the core invariants: entries are immutable, every transaction sums to zero, and any balance can be recomputed from entries. Purpose-built ledgers (TigerBeetle, for example) are designed around exactly this contention pattern.",
+    "workedExample": "Every transaction updating one revenue balance row competes for its lock. Splitting posting destinations can distribute contention while preserving balanced transactions and a derivable total. Alternatively, retain entries and compute the balance from a consistent snapshot plus its suffix. Snapshot boundaries, duplicate handling and reporting consistency remain explicit requirements; the number of rows is not a guaranteed speedup.",
     "link": {
       "title": "Accounting for developers, part I (Modern Treasury)",
       "url": "https://www.moderntreasury.com/journal/accounting-for-developers-part-i"
@@ -67,10 +67,10 @@
     "options": [
       {
         "text": "Nothing. Without two-phase commit, money is lost whenever a crash happens between the steps",
-        "explanation": "Wrong. Money isn't lost: it's sitting visibly in the clearing account. What you need is a guarantee that step 2 eventually runs exactly once."
+        "explanation": "Wrong. Durable balanced clearing entries expose a pending transfer. Recoverable delivery, unique destination references and a coordinated cancellation policy can complete or cancel it without a distributed atomic commit."
       },
       {
-        "text": "Shard A's transaction also writes an outbox row. A relay retries step 2 on shard B until it succeeds, and a UNIQUE ref_id on B makes repeats no-ops. A non-zero clearing balance shows money in flight",
+        "text": "Persist transfer intent with shard A’s posting, retry idempotently on B, and track each transfer until completion or fenced cancellation",
         "explanation": "The durable outbox and unique destination reference make retry recoverable and duplicate-resistant. They do not alone guarantee eventual success or safe compensation; destination cancellation/fencing must prevent a late forward step after reversal."
       },
       {

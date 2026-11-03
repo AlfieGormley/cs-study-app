@@ -24,15 +24,7 @@ The `context` is the version information the client read (a vector clock). Passi
 
 ## Partitioning: consistent hashing with virtual nodes
 
-Hash each key (Cassandra uses Murmur3) onto the 64-bit token space. Its size is:
-
-```formula
-H = 2^64 ≈ 1.84 × 10^19
-where
-H: number of possible 64-bit hash positions, a count
-≈: approximately equal after rounding
-In words: A 64-bit hash space contains about eighteen quintillion possible positions.
-```
+Hash each key (Cassandra uses Murmur3) onto the 64-bit token space. A 64-bit token space has many possible positions. Its size does not determine the number of stored keys or make placement perfectly even.
 
  Each node owns positions on the ring, and a key belongs to the first node clockwise from its hash.
 
@@ -60,15 +52,14 @@ Each key is stored on **N** replicas (typically 3). Any node can act as **coordi
 
 The rule establishing replica-set overlap is a simple counting argument. If a read asks R replicas and a write was confirmed by W replicas, and together they add up to more than the N replicas that exist, the two groups must share at least one replica:
 
-```formula
+```formula essential
 R + W > N
-2 + 2 > 3
 where
-R: replicas that must answer a read
-W: replicas that must acknowledge a write
-N: replicas that hold the key (the replication factor); typically 3
+R: number of distinct home replicas required to answer a read
+W: number of distinct home replicas required to acknowledge a write
+N: number of replicas in the same fixed home replica set
 >: is greater than
-In words: if read and write groups together are bigger than the number of copies, they must overlap in at least one replica.
+In words: when read and write groups together exceed the fixed replica count, they must share a replica; this intersection alone does not guarantee linearizability.
 ```
 
 With three replicas and two required acknowledgements for each read and write, every selected read pair includes at least one member of every confirmed write pair. Returning the latest real-time write additionally depends on version ordering and concurrency handling; overlap alone is not linearizability.
@@ -86,6 +77,13 @@ Cassandra names these levels `ONE`, `QUORUM` and `ALL`, plus `LOCAL_QUORUM` for 
 
 > [!warning] Quorums aren't linearisability
 > Even with overlapping read and write groups, edge cases exist: a write that fails at the coordinator but succeeded on some replicas, concurrent reads during a write, sloppy quorums, and last-write-wins clock skew. Quorum overlap alone is insufficient for linearizability; suitably designed quorum protocols can provide it. The basic Dynamo/LWW operations described here do not automatically do so. Cassandra offers lightweight transactions (Paxos) for compare-and-set when you really need it, at the cost of several extra round trips.
+
+> [!analogy] Real-world analogy: Overlapping three-person committees
+> Choose two people from a group of three for each of two committees. The committees must share someone.
+>
+> **How it maps:** The people represent the same fixed replica set, and the shared member demonstrates read/write group intersection.
+>
+> **Where it stops:** A shared person says nothing about which answer is newest. Version ordering, incomplete writes and concurrent operations still need a protocol.
 
 ## Key takeaways
 - Virtual tokens spread ranges among physical nodes and reduce skew statistically.

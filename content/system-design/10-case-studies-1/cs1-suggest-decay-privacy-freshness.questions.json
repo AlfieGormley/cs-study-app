@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "This is the lambda-architecture pattern: a large, slow, accurate batch view plus a small, fast speed layer.\n\n1. Stream job (Flink) counts queries in 1-minute tumbling windows.\n2. Flag a query as trending when its recent count far exceeds its usual level, and distinct users exceed a threshold (to resist manipulation):\n\n```formula\nc_10 > 20 × base\nwhere\nc_10: searches for the query in the last 10 minutes\nbase: its usual (baseline) count for a 10-minute period\n>: is greater than\nIn words: a query is trending when it is being searched more than 20 times as often as normal.\n```\n\n3. Publish the trending set (a few thousand entries) to the suggest service every minute.\n4. At request time, take the trie's top-10 for the prefix, merge any trending queries matching that prefix with a boosted score, and return the top 10.\n\nKeep an explicit candidate budget and a prefix index; benchmark merging and filter checks against the serving latency target. A small overlay does not by itself prove negligible latency.",
+    "workedExample": "Keep the large stable index on its normal rebuild cadence. A stream pipeline compares recent activity with an explicit baseline and publishes a bounded, prefix-indexed trending overlay. Apply the same abuse, privacy and removal rules to both sources before merging. Measure merge latency and rollout delay; a small overlay does not guarantee either is negligible.",
     "link": {
       "title": "Count–min sketch (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Count%E2%80%93min_sketch"
@@ -63,27 +63,27 @@
     "id": "cs1-typeahead-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Ranking uses a time-decayed score:\n\n```formula\nscore = Σ(count_d × 0.9^{age_d})\nwhere\nscore: a query's ranking score\nΣ: sigma, \"add up over every day d\"\nd: one day in the history being summed\ncount_d: searches for the query on day d\nage_d: how many days ago day d was (0 for today)\n0.9^{age_d}: age_d copies of 0.9 multiplied together\nIn words: every day of age multiplies a day's searches by 0.9.\n```\n\nQuery A had **10,000** searches exactly **14 days ago** and none since. Query B has **2,000** searches **today** and none before. Which ranks higher today?",
+    "prompt": "A ranking system multiplies every existing contribution by the same daily decay factor. Queries A and B receive no new searches. If A currently scores above B, what happens solely because another day passes?",
     "options": [
       {
-        "text": "B, because recent searches always outrank older ones.",
-        "explanation": "Wrong. Decay reduces old counts gradually; it doesn't zero them. Whether recent beats old depends on the numbers."
+        "text": "B automatically overtakes A because it was originally searched more recently.",
+        "explanation": "Both existing scores receive the same new factor, so recency alone does not reverse their current order."
       },
       {
-        "text": "A, with a score of about 2,290 versus B's 2,000.",
-        "explanation": "Correct. Fourteen days of the stated daily decay leave about 23%, so A keeps about 23% of its 10,000. That's still more than B's undecayed 2,000, under the given one-day histories. At age 16 days, A falls below a fixed 2,000-point benchmark. If both queries receive no new traffic, B also decays: their score ratio stays constant, so B does not overtake A merely as time passes."
+        "text": "Both scores shrink by the same proportion, so their relative order stays the same.",
+        "explanation": "Correct under the stated common factor and no new activity; new contributions or another ranking rule can change it."
       },
       {
-        "text": "A, with a score of 10,000, because decay only applies after 30 days.",
-        "explanation": "Wrong. The formula decays every day's count by its age; nothing in it waits 30 days."
+        "text": "A stays unchanged until a fixed thirty-day expiry.",
+        "explanation": "Exponential decay applies continuously by the chosen time step; it is not a hard expiry rule."
       },
       {
-        "text": "They tie, because 0.9 × 14 ≈ 12.6 and 10,000 / 12.6 ≈ 800.",
-        "explanation": "Wrong. The decay is exponential (0.9 raised to the 14th power), not multiplied by the age."
+        "text": "The higher score always loses more proportionally until they tie.",
+        "explanation": "The absolute loss is larger, but the proportional change is the same."
       }
     ],
     "answer": 1,
-    "workedExample": "Apply the decay factor. Squaring the 7-day factor gives the 14-day one:\n\n```formula\n0.9^7 ≈ 0.478\n0.9^{14} = (0.9^7)^2 ≈ 0.229\nA = 10,000 × 0.229 ≈ 2,290\nB = 2,000 × 0.9^0 = 2,000 × 1 = 2,000\nwhere\n0.9^7: 7 copies of 0.9 multiplied together\n0.9^0: anything to the power 0 is 1, so today's searches count in full\nA, B: the two queries' scores today\n≈: approximately equal to (rounded)\nIn words: after 14 days A keeps about 23% of its 10,000 searches, about 2,290, which still beats B's 2,000.\n```\n\nA factor of 0.9/day means a half-life (the time for a weight to halve) of about 6.6 days. If you want trending queries to win faster, lower the factor (e.g. 0.7/day gives a half-life of ~2 days) or add the trending overlay, which is designed for minutes-scale freshness.",
+    "workedExample": "Each contribution becomes one day older, so the same daily multiplier applies to every contribution and therefore to both totals. A different factor changes how strongly the system favours new activity, but elapsed time alone does not make one unchanged history overtake another under the same factor.",
     "link": {
       "title": "Exponential decay (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Exponential_decay"
@@ -151,7 +151,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Compare organic and bot patterns:\n\n```formula\na = 500,000 / 300 ≈ 1,700\ncapped = 300 × 3 = 900\nwhere\na: searches per bot account in a day\ncapped: the query's count if each user can contribute at most 3 per day\n≈: approximately equal to (rounded from 1,667)\nIn words: each bot account searched about 1,700 times; capping every user at 3 cuts the bot query's count to 900.\n```\n\nWith that cap the bot query's count falls to ~900, far below genuinely popular queries. Add anomaly detection on concentration (share of volume from the top 1% of users or IPs) to catch it outright.",
+    "workedExample": "A distinct-user threshold alone can be passed by many attacker-controlled accounts. Cap repeated contributions per identity and examine concentration and unusual growth, while recognising that identities and IPs are imperfect signals. Uniform sampling reduces human and bot counts alike in expectation. Combine these signals with review and removal; no single threshold proves a query is safe or organic.",
     "link": {
       "title": "Meta engineering: the life of a typeahead query",
       "url": "https://engineering.fb.com/2010/05/17/web/the-life-of-a-typeahead-query/"

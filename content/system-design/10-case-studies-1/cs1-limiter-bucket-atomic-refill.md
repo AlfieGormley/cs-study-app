@@ -11,31 +11,19 @@ sourceLesson: cs1-rate-limiter
 
 Each key has a bucket that holds up to a fixed number of tokens and is topped up at a steady rate. Each request takes a token; an empty bucket means reject. Instead of a timer adding tokens, store just `tokens` and `last_refill` and work out the refill lazily on each request:
 
-```formula
-T_new = min(B, T + (now − last) × r)
+```formula reference
+T_new = min(B, T + Δt r)
 where
-T_new: tokens in the bucket after the refill, before this request takes one
-T: tokens stored at the last update
-B: the bucket capacity, the most tokens it can hold, which is the largest burst allowed
-r: the refill rate, in tokens per second
-now: the current time, in seconds
-last: the time of the last update (last_refill), in seconds
-now − last: seconds since the last update
-min: "the smaller of", which stops the bucket filling beyond B
-In words: add the tokens earned since the last request at r per second, but never more than the capacity B.
+T_new: token balance after refill and before this request spends a token
+T: previous token balance
+B: maximum token balance, defining the available burst capacity
+Δt: nonnegative elapsed time since the last accounted refill, in seconds
+r: refill rate in tokens per second
+min: choose the smaller value, preventing accumulated tokens from exceeding capacity
+In words: idle time earns tokens at the refill rate, but the bucket never holds more than its burst capacity.
 ```
 
-For a capacity of ten tokens and a refill rate of one token a second, substitute a bucket left with two tokens:
-
-```formula
-T_new = min(10, 2 + 5 s × 1/s) = 7
-T_new = min(10, 2 + 60 s × 1/s) = 10
-where
-T_new: available tokens after refill and before spending one
-min: choose the smaller value, capping at ten tokens
-s: seconds; 1/s means one token per second here
-In words: five idle seconds restore the bucket to seven tokens; a minute restores it only to its ten-token capacity.
-```
+For example, five idle seconds at one token per second add five tokens if space remains. A long idle period only fills the bucket to capacity; it does not build an unlimited allowance.
 
 The formula assumes the current time has not moved backwards. The Python fixture clamps negative elapsed time to zero; production timestamp persistence must also avoid granting the same elapsed interval twice after a clock regression.
 
@@ -53,12 +41,12 @@ print(refill(2, 60, 10, 1))
 
 This fixture checks refill arithmetic, not distributed admission. Production code must atomically update the token balance and timestamp and define how clock changes and failover are handled.
 
-- **Pro**: allows controlled bursts (up to *B*) while enforcing a long-run average of *r*. Two numbers per key. Stripe’s published implementation describes this algorithm, and AWS API Gateway’s documentation specifies token-bucket throttling.
+- **Pro**: separates maximum stored burst allowance from the long-run refill rate. Two numbers per key. Stripe’s published implementation describes this algorithm.
 - **Con**: two parameters to tune; bursts are allowed by design, which might not suit a fragile downstream.
 
 ### Leaky bucket
 
-Requests enter a FIFO queue drained at a fixed rate. Output is perfectly smooth, which suits traffic shaping in front of something fragile, but queued requests wait, and bursts are delayed rather than served. As a pure "allow or reject" meter, it behaves like a token bucket. GCRA (generic cell rate algorithm) is an elegant single-timestamp variant.
+Requests enter a FIFO queue drained at a fixed rate. An ideal fixed-rate drain paces output, which suits traffic shaping in front of something fragile, but queued requests wait, and bursts are delayed rather than served. A meter that rejects excess traffic and a queue that delays it have different client-visible behaviour; define which meaning is intended.
 
 > [!tip] Default answer
 > Token bucket for explicit burst-plus-average limits; sliding counters approximate rolling windows but do not provide exact rolling-window enforcement.
@@ -70,10 +58,17 @@ Hundreds of gateway nodes check the same key at the same moment. A naive "read c
 Fixes:
 
 - **Atomic primitives.** For fixed windows, `INCR` is atomic and returns the new value: `INCR key`, then `EXPIRE key 60` on first creation, and compare the returned value with the limit. If the process dies between the two commands the key never expires, so do both in a Lua script or an appropriate transaction. Repeatedly extending a relative TTL changes expiration semantics unless the key includes the fixed window or the expiry is an absolute window boundary.
-- **Lua scripts.** For token buckets, run the read-refill-decrement-write as a single Redis Lua script. Redis executes scripts atomically, so there are no races, and it's still one round trip.
+- **Lua scripts.** For token buckets, run the read-refill-decrement-write as a single Redis Lua script. Redis executes a script atomically on its node, preventing interleaved updates there in one round trip. Atomic execution is not a durability guarantee: Redis Cluster's asynchronous replication can lose acknowledged state on failover, granting extra allowance unless the wider policy accounts for it.
 - **Use the server's clock.** If every gateway passes its own `now`, clock skew between gateways distorts refills. Read time inside the script (`redis.call('TIME')`) so one clock is authoritative per key.
 
 Redis Cluster maps keys to hash slots. The client-tag design co-locates that client's rules for one script; a global fleet counter or IP/account combination can require other slots, so arbitrary combined rules are not automatically atomic.
+
+> [!analogy] Real-world analogy: A small jar of admission tickets
+> Tickets are replenished steadily, but the jar has a fixed capacity. A visitor can spend several saved tickets together.
+>
+> **How it maps:** Stored tickets are burst allowance; replenishment is the sustained rate; rejecting an empty jar prevents spending future allowance.
+>
+> **Where it stops:** Distributed servers must atomically share the balance and account for time and failover; separate jars do not automatically enforce a global limit.
 
 ## Key takeaways
 

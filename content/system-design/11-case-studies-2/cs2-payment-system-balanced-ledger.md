@@ -14,13 +14,13 @@ Double-entry bookkeeping has been the basis of accounting for over 500 years, an
 - Each **transaction** consists of two or more **entries**. Each entry debits or credits one account.
 - **Entries in a transaction sum to zero** per currency:
 
-```formula
+```formula essential
 Σ a_i = 0
 where
-Σ: sigma, "add up all of": here every entry in one transaction
-a_i: the signed amount of entry number i, in minor units; debits positive, credits negative
-i: counts through the entries of the transaction (1, 2, 3, ...)
-In words: within one transaction, the debits and credits in each currency cancel out exactly.
+Σ: add all entries in one transaction for one currency
+a_i: signed amount of entry i in that currency's minor units; debits positive and credits negative
+i: entry number within the transaction
+In words: debits and credits must cancel exactly within each currency, though balance alone does not prove that the economic event is valid.
 ```
 
 This is an accounting equality; balancing entries alone does not prove the economic event is valid or that cash is conserved.
@@ -56,15 +56,7 @@ print(sum(entries.values()))  # 0
 
 Checking the sum-to-zero rule for this transaction:
 
-```formula
-Σ a_i = 9,850 + 150 − 8,000 − 2,000
-Σ a_i = 10,000 − 10,000 = 0
-where
-Σ: sigma, "add up all of": every entry in the transaction
-a_i: the signed amount of entry i, in pence (minor units of GBP); debits positive, credits negative
-i: counts through the four entries
-In words: £100.00 of debits (10,000 pence) exactly cancels £100.00 of credits, so the transaction balances.
-```
+The two debit entries total £100 and the two credit entries total £100. The fee is recorded separately from gross platform revenue under the stated illustrative accounting policy.
 
 When the PSP pays out, a second transaction debits `bank` and credits `psp_clearing` by 9,850. When the driver is paid, `driver_payable` is debited and `bank` credited by 8,000. Each step balances, and every account's balance explains exactly where the money is.
 
@@ -78,7 +70,7 @@ Every payment touches `platform_revenue`, so updating its balance row 1,200 time
 
 - Split it into N sub-accounts, where N is however many you need to spread the writes (`platform_revenue_07` is one of them), and sum them on read.
 - Don't materialise balances for hot accounts. Compute them from entries plus periodic snapshots.
-- Batch ledger entries for hot accounts every few seconds.
+- Batch derived balance aggregation for hot accounts, while preserving atomic durable postings for each accepted business transaction.
 
 Purpose-built ledger databases such as TigerBeetle exist precisely because this workload (tiny, contended, must-be-correct transfers) is awkward for general-purpose databases.
 

@@ -44,7 +44,7 @@ Token-aware client drivers send each request straight to a replica for the key, 
 
 - **1 PB, 1,000 nodes**: vnodes let new nodes stream small ranges from many peers in parallel. Limit concurrent streaming so bootstrapping doesn't hurt foreground latency.
 - **Multiple regions**: replicate per data centre (`NetworkTopologyStrategy`, for example 3 replicas in each of 2 regions), and use `LOCAL_QUORUM` for latency, with asynchronous cross-region replication.
-- **Stronger guarantees** where needed: Paxos-based lightweight transactions for compare-and-set (classic Cassandra Paxos takes four round trips, and newer versions cut that), or move those entities to a consensus-based store. Check the deployed Cassandra release for available transaction protocols; the historical DynamoDB paper provides a separate example of leader-based partitions.
+- **Stronger guarantees** where needed: Paxos-based lightweight transactions for compare-and-set (latency depends on the deployed protocol and release), or move those entities to a consensus-based store. Check the deployed Cassandra release for available transaction protocols; the historical DynamoDB paper provides a separate example of leader-based partitions.
 - **Operational automation**: scheduled repair, node replacement, compaction tuning and capacity forecasting become a platform team's main job.
 
 ## One key can dominate a large fleet

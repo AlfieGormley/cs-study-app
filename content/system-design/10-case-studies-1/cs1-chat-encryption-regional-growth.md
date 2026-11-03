@@ -11,15 +11,15 @@ Earlier units defined durable acknowledgements, ordered conversations and device
 
 ## Deep dive 7: What end-to-end encryption changes
 
-With the Signal Protocol the server routes ciphertext and never sees content. That removes several things a staff interviewer may probe:
+In this Signal-style E2EE design, the server routes ciphertext without message-decryption keys. The design must account for these consequences:
 
 - **No server-side search or indexing.** Search runs on the device over its local history.
 - **New devices need a secure history/key-transfer protocol.** E2EE can coexist with server-stored encrypted history or encrypted backups; a trusted existing device can also transfer history and keys. Retaining only undelivered messages is a product/storage choice, not a requirement of encryption.
 - **Push notifications can't contain the text.** Send a generic or encrypted payload, and let the app decrypt and show the message locally.
 - **Abuse handling** relies on metadata and user reports (which include the reported messages), not content scanning.
-- **Key changes** (a reinstalled app, a new device) must be distributed to contacts, and clients warn when a contact's key changes.
+- **Key changes** (a reinstalled app, a new device) must be distributed to contacts, and clients need a defined key-change verification and warning policy.
 
-The server's job shrinks to routing, storage of opaque blobs, and key distribution, which makes it simpler but moves work and trust to the clients.
+Content processing moves to clients. Servers still handle routing, opaque storage, key distribution, authentication and abuse controls; encryption changes those responsibilities without guaranteeing a simpler service.
 
 ## Bottlenecks and trade-offs
 
@@ -39,7 +39,7 @@ Failure modes to cover:
 
 ## At 10x scale
 
-At five billion users’ worth of assumed traffic, ten times the preceding scenario means about six million messages a second at peak and billions of connections:
+At ten times the measured workload, re-estimate message traffic, connected devices and group amplification independently. Consider these changes when their bottlenecks justify them:
 
 - **Regional gateways and chat services**, with users homed to a region and cross-region routing only for conversations that span regions.
 - **Tiered storage**: recent messages on fast SSD clusters, older history compacted onto cheaper storage.

@@ -9,7 +9,7 @@ sourceLesson: cs1-interview-framework
 
 ## Step 6: Deep dives
 
-This is where you earn the senior rating. Pick the two or three hardest parts of *this* problem and go deep:
+Use this time to show the reasoning behind difficult decisions. Pick the two or three hardest parts of *this* problem and go deep:
 
 - URL shortener: unique ID generation without coordination.
 - Chat: delivering to a user connected to a different server.
@@ -19,7 +19,7 @@ Often the interviewer will steer you here. If they don't, choose yourself: "The 
 
 For each deep dive, show **options and trade-offs**, then choose. "We could hash the URL, use a counter, or use Snowflake IDs. Hashing needs collision handling; a counter needs coordination; Snowflake IDs need clock discipline. I'll use a counter with range allocation because..."
 
-Also cover failure: what happens when this node dies, this region goes dark, this queue backs up? Senior engineers think about failure modes by reflex.
+Also cover failure: what happens when this node dies, this region goes dark, this queue backs up? Make failure behaviour part of the design.
 
 A useful checklist of probes that come up in almost every design, so you can raise them before you're asked:
 
@@ -37,7 +37,7 @@ Spend the last few minutes on:
 - **Bottlenecks**: what breaks first as load grows?
 - **10x scale**: what would you change? (Shard further, add regions, move to async processing.)
 - **Operational concerns**: monitoring, alerting, deployment, data migration.
-- **Cost**: at staff level, say which component dominates the bill (often storage or egress) and one way to cut it.
+- **Cost**: say which component dominates the bill (often storage or egress) and one way to cut it.
 
 Finish with a one-sentence summary of the design and its key trade-off. It leaves the interviewer with a clear picture to write up.
 
@@ -51,7 +51,7 @@ Use these dimensions as a practice checklist; they are not asserted to be the sc
 4. **Trade-offs**: do you articulate alternatives and *why* you chose one?
 5. **Communication**: can the interviewer follow your reasoning? Do you respond well to hints?
 
-Seniority changes the bar. A mid-level candidate is expected to produce a working design with some guidance. A senior candidate drives the conversation, identifies the hard parts unprompted, and discusses failure modes. A staff candidate also talks about evolution, operability, cost and organisational trade-offs.
+For more advanced practice, drive the discussion, identify difficult parts without prompting, and explain evolution, operability, cost and organisational trade-offs. Employers assess these skills differently; these are practice goals rather than universal level definitions.
 
 ## Common mistakes
 

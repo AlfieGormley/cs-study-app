@@ -37,24 +37,11 @@ Segment length is a trade-off. Short segments (2 s) offer more adaptation opport
 
 ## View counts and progress
 
-Writing a row per view at 17 M concurrent viewers is wasteful. Players emit heartbeats every few tens of seconds into a stream such as Kafka. A stream processor deduplicates (one view per session, with a product-specific minimum watch time and additional abuse controls), aggregates per video per minute, and writes counters. Displayed counts can lag by minutes. A lag of minutes may be acceptable for a display counter; billing or audit metrics may need another contract.
+Updating one popular video’s counter for every view can make that row a serialization bottleneck. Players emit heartbeats every few tens of seconds into a stream such as Kafka. A stream processor deduplicates (one view per session, with a product-specific minimum watch time and additional abuse controls), aggregates per video per minute, and writes counters. Displayed counts can lag by minutes. A lag of minutes may be acceptable for a display counter; billing or audit metrics may need another contract.
 
-The numbers show why. The event rate is the number of viewers divided by the gap between each viewer's heartbeats:
+Shorter heartbeat intervals create more ingest work even when the audience is unchanged. Benchmark that event stream separately from the much smaller number of aggregated counter writes.
 
-```formula
-E = C / i
-E = 17,000,000 / 30 s ≈ 570,000 events/s
-where
-E: heartbeat events arriving per second
-C: viewers watching at the same moment; here 17 million at peak
-i: the interval between one player's heartbeats, in seconds (s); here 30
-s: seconds
-events: heartbeat messages
-≈: approximately equal to
-In words: 17 million players each reporting once every 30 seconds send about 570,000 events every second.
-```
-
-That is a workload to benchmark for the chosen partitioning and durability settings, but a viral video would turn `UPDATE videos SET views = views + 1` into a single hot row taking tens of thousands of writes a second. Pre-aggregating in the stream turns that into one write per video per minute.
+That is a workload to benchmark for the chosen partitioning and durability settings, and a sufficiently popular video can turn `UPDATE videos SET views = views + 1` into a single hot row taking tens of thousands of writes a second. Pre-aggregating in the stream turns that into one write per video per minute.
 
 Watch progress can use a versioned KV record keyed by `(user_id, video_id)`. Define ordering across sessions/devices; client-clock LWW can let a delayed update overwrite newer progress, while taking the maximum position breaks intentional rewinds. It is debounced on the client so it isn't written every second.
 
@@ -68,3 +55,4 @@ Watch progress can use a versioned KV record keyed by `(user_id, video_id)`. Def
 - [Adaptive bitrate streaming (Wikipedia)](https://en.wikipedia.org/wiki/Adaptive_bitrate_streaming)
 - [Dynamic Adaptive Streaming over HTTP (Wikipedia)](https://en.wikipedia.org/wiki/Dynamic_Adaptive_Streaming_over_HTTP)
 - [RFC 8216: HTTP Live Streaming](https://www.rfc-editor.org/rfc/rfc8216.html)
+- [Apple CMAF compatibility](https://developer.apple.com/documentation/http-live-streaming/about-the-common-media-application-format-with-http-live-streaming-hls)

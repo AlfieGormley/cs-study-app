@@ -14,7 +14,8 @@ This is an illustrative endpoint contract, not a runnable HTTP request. Arrows d
 ```
 // driver app (persistent connection)
 WS  /v1/driver/stream
-  -> {lat, lng, heading, ts}   every 4 s
+  -> {lat, lng, heading, ts, session, seq}
+     every 4 s (illustrative)
   <- {type:"offer", trip_id, pickup, ttl}
 
 POST /v1/driver/offers/{trip_id}/accept
@@ -87,7 +88,7 @@ Drivers keep a persistent connection (WebSocket, gRPC stream, or MQTT) to a gate
 
 For each update, the location service:
 
-1. Validates it (drops GPS jumps of 5 km in 4 s, and out-of-order timestamps).
+1. Authenticates the driver and validates coordinates. Use a per-session sequence with a reconnect epoch to reject obsolete updates; use server receipt time for freshness and treat client time as untrusted. A plausibility filter can flag large jumps, but its thresholds need testing against GPS error and real travel.
 2. Computes the driver's **cell id** at the indexing resolution.
 3. Updates `driver_loc`. If the cell changed, it moves the driver between `cell_index` sets.
 4. Publishes the update to Kafka for surge, ETA models, fraud checks and trip trails.
@@ -96,10 +97,10 @@ The in-memory index is **sharded by cell**, with neighbouring cells grouped onto
 
 ## Bottlenecks and trade-offs
 
-- **Hot cells**: a stadium emptying creates 50 k requests in one hexagon. Finer cells for dense areas, and batching, keep any one shard from melting.
-- **Consistency vs availability**: in CAP theorem terms, locations are AP, favouring availability (stale by seconds is fine). Driver assignment and trip state are CP, favouring consistency (they must never double-book). Mixing the two tiers deliberately is the key insight.
+- **Hot cells**: a stadium can concentrate requests in a few cells. Finer cells help only if placement distributes the hotspot; batching adds computation as well as assignment opportunities. Apply measured capacity protection.
+- **Consistency vs availability**: during a partition, this design can serve stale location candidates under an explicit freshness policy. Authoritative driver/trip mutations must refuse operations that cannot preserve assignment invariants. These are protocol choices, not automatic properties of a data type.
 - **Straight-line vs ETA**: ETA calls are expensive, so pre-filter cheaply by cell and call routing only for the top candidates.
-- **Mobile networks**: drivers drop out in tunnels. Treat a driver as stale after ~30 s without a ping and exclude them from matching.
+- **Mobile networks**: drivers drop out in tunnels. Use the freshness budget to exclude stale drivers; a degraded-mode policy might permit up to 30 seconds, but that explicitly relaxes the normal 5–10-second target.
 
 ## Evolving at 10x
 

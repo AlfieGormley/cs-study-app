@@ -31,6 +31,13 @@ Receipts are **cumulative cursors** (`upToSeq`), not one event per message. A de
 
 Each device has its own inbox and its own delivered cursor. When a desktop client comes online after a week, it asks "for each conversation, give me everything after my last seq", fetched from history in pages. With end-to-end encryption, each device has its own keys, so senders encrypt for each of the recipient's devices (WhatsApp's multi-device design works this way). A message to a friend with a phone and two laptops, sent from your phone while your own laptop is linked, becomes about four encrypted copies: one per recipient device plus one per other device of yours.
 
+> [!analogy] Real-world analogy: Keeping a dispatch receipt
+> A sender keeps its copy until the depot confirms safe acceptance; the depot keeps the parcel record until the recipient confirms receipt.
+>
+> **How it maps:** Sender outboxes and device inboxes retain recoverable work across lost acknowledgements; stable IDs identify repeat deliveries.
+>
+> **Where it stops:** Digital messages can be copied and redelivered. Durable storage, retention limits and deduplication are required; an acknowledgement is not an unconditional delivery guarantee.
+
 ## Key takeaways
 
 - Keep sender outboxes and recipient inboxes until durable acknowledgement.

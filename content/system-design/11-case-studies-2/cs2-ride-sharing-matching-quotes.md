@@ -32,11 +32,13 @@ WHERE driver_id=:driver
 Only one dispatcher can win that CAS. The offer goes out with a TTL (say 15 s). Bind the offer to a unique offer ID and epoch. A timeout may release only that same still-pending offer; it must not undo a later acceptance or offer. Acceptance must atomically validate and update the driver reservation and trip, or use a recoverable protocol preserving both invariants. Two unrelated CAS operations alone are insufficient.
 
 ### Greedy versus batched matching
-Greedy matching (each request immediately takes the nearest driver) is locally optimal but globally poor. Two riders a block apart can each grab the driver better suited to the other. An illustrative **batched matching** design collects requests for a short window (say 1–2 s), build a cost matrix of ETAs, and solve the assignment problem (for example, Hungarian-style algorithms). The cost is a little extra latency in exchange for lower average pickup times across the city.
+Greedy matching (each request immediately takes the nearest driver) makes a locally attractive choice that can be globally suboptimal. Two riders a block apart can each grab the driver better suited to the other. An illustrative **batched matching** design collects requests for a short window (say 1–2 s), builds a cost matrix of ETAs, and solves the assignment problem (for example, Hungarian-style algorithms). This optimises the chosen estimated assignment cost, while adding delay and computation. Measure whether the net pickup-time benefit survives those costs and estimation errors.
 
 ## Deep dive 4: surge pricing
 
 Surge balances the market. Higher prices can influence supply and demand; the size and timing of the response are empirical and market-dependent.
+
+One illustrative surge policy is:
 
 1. A stream job (Flink or Kafka Streams) consumes ride requests (demand) and available-driver pings (supply).
 2. Every ~1 minute, per H3 cell (around resolution 7–8), compute demand/supply over an overlapping stream time window.
@@ -70,3 +72,4 @@ For the live map, the rider subscribes to the driver's location, and the gateway
 - [H3: hexagonal hierarchical geospatial indexing (docs)](https://h3geo.org/docs/)
 - [Optimistic concurrency control (Wikipedia)](https://en.wikipedia.org/wiki/Optimistic_concurrency_control)
 - [The System Design Primer](https://github.com/donnemartin/system-design-primer)
+- [PostgreSQL row locks](https://www.postgresql.org/docs/current/explicit-locking.html)

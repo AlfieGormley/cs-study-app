@@ -36,6 +36,13 @@ A per-user frequency cap for social alerts can bound noise from distinct events 
 > [!warning] Exactly-once is not achievable end to end
 > If the sender crashes after the provider accepted the SMS but before recording it, the retry sends it again. You can shrink this window, and some providers accept idempotency keys, but without a provider-enforced idempotency contract the ambiguous outcome remains. Finite TTLs and retry budgets can also leave messages undelivered. Decide explicitly which notification types tolerate duplicates.
 
+> [!analogy] Real-world analogy: An express lane with its own staff
+> An express service needs a dedicated queue and staff; it still slows down if all lanes depend on one overloaded dispatch desk.
+>
+> **How it maps:** Priority queues and worker pools isolate backlog, while reserved provider capacity protects the shared sending dependency.
+>
+> **Where it stops:** Reserved capacity and failures need explicit enforcement; a priority label by itself provides no capacity guarantee.
+
 ## Key takeaways
 
 - Separate worker pools and reserve shared provider capacity for critical work.

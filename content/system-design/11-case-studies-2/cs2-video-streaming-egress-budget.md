@@ -3,68 +3,27 @@ id: cs2-video-streaming-egress-budget
 title: Video viewing and egress
 level: intermediate
 minutes: 3
-summary: Convert daily watch hours into concurrency, peak throughput and daily payload.
+summary: Distinguish peak delivery capacity from daily transferred bytes and regional demand.
 sourceLesson: cs2-video-streaming
 ---
 
-**Viewing.** Say 200 M (200 million) daily viewers each watching 1 hour at an average 3 Mbps.
+## Budget simultaneous viewing
 
-The network has to be sized for how many people are watching *at the same moment*, not per day. If viewing were spread evenly over the day, the average number watching at once is total viewing hours divided by the hours in a day:
+Delivery capacity follows viewers watching **at the same moment**, their delivered bitrates and where they are. Daily active viewers alone cannot size a peak link: the same audience can watch evenly through the day or arrive together for a release.
 
-```formula
-C_avg = (D × T_watch) / (24 h)
-C_avg = 200 M × 1 h / 24 h ≈ 8.3 M
-C_peak ≈ 2 × C_avg ≈ 17 M
-where
-C_avg: average number of viewers watching at the same moment
-C_peak: number watching at once at the busiest time of day; assumed about twice the average
-D: daily viewers, people who watch at least once a day; here 200 M
-T_watch: viewing time per viewer per day, in hours (h); here 1 h
-24 h: the hours in one day
-h: hours
-M: million (1,000,000)
-≈: approximately equal to
-In words: 200 million people each watching an hour a day means about 8.3 million watching at any moment on average, and roughly 17 million at the evening peak.
-```
+An illustrative platform has 200 million daily viewers, averaging one watched hour at 3 Mbps. Spread evenly, that is about 8.3 million simultaneous viewers. If the chosen peak is twice that average, delivery approaches 50 Tbps. These are scenario inputs, not measurements of Netflix or YouTube.
 
-The "2x" peak factor is an assumption: real daily curves depend on time zones and audience. Egress (data sent out of your network to viewers) at peak is the number watching times the bitrate each one receives:
+## Peak capacity and daily transfer answer different questions
 
-```formula
-E_peak = C_peak × r
-E_peak = 17 M × 3 Mbps ≈ 51 Tbps ≈ 50 Tbps
-where
-E_peak: peak egress, in terabits per second (Tbps)
-C_peak: viewers watching at once at peak; here about 17 M
-r: average bitrate each viewer streams, in megabits per second (Mbps); here 3
-M: million
-Mbps: megabits per second; 1 Mbps = 1,000,000 bits per second
-Tbps: terabits per second; 1 Tbps = 1,000,000 Mbps
-≈: approximately equal to
-In words: 17 million streams at 3 megabits per second each add up to about 50 terabits per second leaving the platform.
-```
+Peak traffic sizes links and delivery capacity. Total watched time and bitrate determine transferred bytes and the associated bill. Compressing the same viewing into a shorter busy period raises the peak without necessarily changing the day's payload. Holding bitrate and viewing constant while merely adding CDN sites does not reduce the bytes viewers consume.
 
-Daily egress, in bytes, is every viewer's watch time in seconds times the bitrate, divided by 8 to turn bits into bytes:
+Better encoding can reduce both peak bandwidth and total payload at the selected quality, but only for compatible devices receiving that encode. Retries, audio, protocol overhead and prefetch beyond what viewers watch add traffic beyond the simple video-payload model.
 
-```formula
-E_day = D × t × r / 8
-E_day = 200 M × 3,600 s × 3 Mbps / 8
-E_day = 2.7 × 10^17 B ≈ 270 PB
-where
-E_day: data sent to viewers per day, in bytes (B)
-D: daily viewers; here 200 M
-t: viewing time per viewer per day, in seconds (s); 1 hour is 3,600 s
-r: average bitrate, in megabits per second (Mbps); here 3
-8: bits per byte
-M: million
-Mbps: megabits per second; 1 Mbps = 1,000,000 bits per second
-s: seconds
-B: bytes
-PB: petabytes; 1 PB = 10^15 bytes
-≈: approximately equal to
-In words: 200 million hours of viewing at 3 megabits per second is about 270 petabytes of video delivered every day.
-```
+## Place capacity where demand occurs
 
-Serving 50 Tbps to a global audience makes geographic distribution, network capacity and egress cost central design concerns. A CDN also reduces network distance; 50 Tbps is not a universal single-data-centre limit.
+Split the estimate by geography and busy hour. A worldwide average can hide one overloaded region. Test edge capacity, cache misses and origin fetches separately: an edge hit saves an upstream fetch but still sends media to the viewer.
+
+Plan for failures and sudden popularity changes. A spare region or origin link is useful only if routing, cached content and authorised access still work when traffic shifts. The illustrative total motivates distributed delivery; it does not prove a particular number of sites or a universal data-centre limit.
 
 ## Key takeaways
 - Peak egress depends on concurrent viewing rather than daily user count alone.
@@ -74,3 +33,4 @@ Serving 50 Tbps to a global audience makes geographic distribution, network capa
 ## Further reading
 - [Netflix Open Connect overview](https://openconnect.netflix.com/en/)
 - [Content delivery network (Wikipedia)](https://en.wikipedia.org/wiki/Content_delivery_network)
+- [Open Connect technical overview](https://openconnect.netflix.com/Open-Connect-Overview.pdf)

@@ -27,59 +27,26 @@ This case study is a tour of those techniques, and why each one is needed.
 - **Incremental scalability**: add a node and it takes a fair share of the data, with no big-bang resharding.
 - **No single point of failure**: every node is equal (symmetric, decentralised).
 
-## Back-of-the-envelope
+## Capacity has several independent limits
 
-Start with storage. Each key is kept on several nodes; the number of copies is the **replication factor** (RF). Assume 100 TB (terabytes) of logical data, meaning the data as the application sees it, and three replica copies:
+Replication multiplies the physical copies of logical data. Compaction, indexes, commit logs and repair need additional space. A disk that can just hold today's live files may not have room to merge them or recover a failed peer.
 
-```formula
-D = L × RF
-D = 100 TB × 3 = 300 TB
-where
-D: raw data stored across the whole cluster
-L: logical data, one copy of everything; here 100 TB
-RF: replication factor, the number of copies of each key; here 3
-TB: terabytes, 10^12 bytes
-In words: three copies of 100 TB is 300 TB on disk.
-```
+For example, a hypothetical 100 TB logical dataset with three copies needs 300 TB for those copies before other overhead. If a design reserves half of each disk for compaction and headroom, that is a scenario policy to validate against the chosen strategy, not a universal Cassandra rule.
 
-Each node has an 8 TB SSD (solid-state drive), but you keep about half free for SSTable compaction and headroom, so only about 4 TB is usable:
+| Limit | What to measure |
+|---|---|
+| Storage | Replicas, overhead, growth and temporary compaction space |
+| Foreground work | Payloads, caching, replica contacts and retries |
+| Skew | Hot keys and uneven partition sizes |
+| Recovery | Streaming, repair and remaining capacity after failures |
 
-```formula
-n = D / u
-n = 300 TB / 4 TB = 75 nodes
-where
-n: the minimum number of nodes for capacity alone
-D: raw data to store; 300 TB
-u: usable space per node; 8 TB × 50% = 4 TB
-TB: terabytes
-nodes: servers in the cluster
-In words: 300 TB at 4 TB a node needs at least 75 nodes; plan for about 100 to allow growth and losing a rack.
-```
+## Replica operations are not equal-cost disk I/O
 
-Now traffic. Assume 1 M (one million) operations a second, 70% reads. Every logical read asks 2 replicas (a read consistency level of 2) and every logical write is sent to all 3 replicas:
+A logical write sent to several replicas creates several storage-side operations. A read can request full data from one replica and digests from others, or trigger speculative requests and repair. These operations have different CPU, network and disk costs.
 
-```formula
-r = 700,000/s × 2 = 1,400,000/s
-w = 300,000/s × 3 = 900,000/s
-p = (r + w) / n
-p = 2,300,000/s / 100 ≈ 23,000/s
-where
-r: replica reads per second (700,000 logical reads, each asking R = 2 replicas)
-w: replica writes per second (300,000 logical writes, each sent to RF = 3 replicas)
-p: replica operations per node per second
-n: nodes in the cluster; here 100
-s: seconds
-≈: approximately equal to
-In words: a million client operations become about 2.3 million replica operations, about 23,000 a second for each of 100 nodes.
-```
+Do not divide a fleet total evenly over nodes and declare it a throughput benchmark. Check the busiest replica owners, actual consistency levels, cache behaviour, compaction load and disk synchronization policy. Spare capacity must cover the intended failure domain as well as growth.
 
-What matters:
-
-- The 23k/node estimate counts logical replica operations, not equal-cost disk I/Os. Payloads, digests, compaction, caching and skew determine actual capacity; benchmark rather than assuming NVMe makes it comfortable.
-
-> **Content gap:** no reproducible throughput benchmark or universal partition-size threshold is supplied. Storage and traffic figures are scenario assumptions. Product details below describe the cited Cassandra 5.0 documentation and historical Dynamo/DynamoDB papers, not every future release.
-- **Headroom for compaction** is a real sizing factor. Size-tiered compaction can temporarily need as much free space again as the data being compacted.
-- At 100 nodes, plan for routine failures rather than assuming a failure-free fleet. Failure handling is normal operation, not an edge case.
+This case study combines historical Dynamo ideas with cited Cassandra behaviour. Its workload and headroom inputs are illustrative; they do not establish a universal node count or a future product guarantee.
 
 ## Key takeaways
 - Logical storage expands by replication factor before compaction headroom.
@@ -91,3 +58,4 @@ What matters:
 - [Amazon's Dynamo (Werner Vogels)](https://www.allthingsdistributed.com/2007/10/amazons_dynamo.html)
 - [Dynamo architecture (Apache Cassandra docs)](https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html)
 - [Compaction (Apache Cassandra docs)](https://cassandra.apache.org/doc/latest/cassandra/managing/operating/compaction/index.html)
+- [DynamoDB 2022 architecture paper](https://www.usenix.org/system/files/atc22-elhemali.pdf)

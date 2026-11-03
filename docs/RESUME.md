@@ -3,12 +3,15 @@
 The user resumed the rewrite. Durable current progress is in `.handoffs/concept-first/cf2-progress.json`;
 `queue.json` is reconciled against the release audit. Author/verifier evidence is under `evidence/cf3-*`.
 
-Confirmed live checkpoint: `be5f68e` (app `7bd4224b15dc`), with 55/60 modules and 1,643/1,845 lessons
-independently reviewed and published. API Design, Architecture & Scaling Patterns and Reliability are
-independently verified; this candidate brings review coverage to 58/60 modules and 1,760/1,845 lessons.
-Its 92 unit tests, seven local release checks and full-baseline integrity/dictionary audits pass.
-Focused shared glossary and ordered-retry corrections have passed distinct independent verification.
-Both final case-study modules are being rewritten; independent verification must finish before release.
+Confirmed live checkpoint: `48ab471` (app `a8478edb7202`), with 58/60 modules and 1,760/1,845 lessons
+independently reviewed and published. Both final case-study modules now have independent reviews;
+the completed working-library audit covers 60/60 modules and 1,845/1,845 lessons.
+Final integration passes the complete-library audit, 92 tests and browser/offline/progress checks;
+final staged integrity and public deployment are verified separately. A focused independent review also
+corrected two TLS questions to open the precise TLS 1.3 key-schedule definition. The shared LSM diagram
+source now matches its independently reviewed timestamp-reconciliation explanation.
+Historical follow-up leads were reconciled in the integration report: resolved items, nonblocking
+dictionary/source limitations and remaining inspection leads are distinguished explicitly.
 
 Use `worktree/` for scoped author/verifier work; publish only frozen, independently verified modules
 through `release/`. Do not modify the dirty primary checkout. Scope stays 10 subjects, 60 modules,

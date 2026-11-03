@@ -11,7 +11,7 @@
       },
       {
         "text": "Switch the row's isolation level to READ UNCOMMITTED",
-        "explanation": "Wrong. Lower isolation doesn't remove row-lock contention for writes, and it risks reading uncommitted decrements, which can cause overselling."
+        "explanation": "Wrong. Lower isolation does not remove write contention on this row. PostgreSQL treats READ UNCOMMITTED as READ COMMITTED anyway."
       },
       {
         "text": "Cache `remaining` in Redis and decrement only there, syncing to the database hourly",
@@ -19,11 +19,11 @@
       },
       {
         "text": "Remove the check and reconcile oversells later with refunds",
-        "explanation": "Wrong. Overselling a venue's safety capacity is a legal and safety issue, not just a customer-service one. 'No oversell' is the hard requirement."
+        "explanation": "Wrong. Refunding after an oversell violates the explicit no-oversell inventory requirement; it does not repair allocation correctness."
       }
     ],
     "answer": 0,
-    "workedExample": "If each decrement holds the row's exclusive lock for a fixed time, one row can serve at most one transaction per lock duration:\n\n```formula\nC_1 = 1 / t\nC_1 = 1 / 0.002 s = 500 tx/s\nC_N = N × C_1\nC_N = 50 × 500 tx/s = 25,000 tx/s\nwhere\nC_1: ideal ceiling for one row, in transactions per second (tx/s)\nt: how long each transaction holds the row lock, in seconds (s); an assumed 2 ms (milliseconds) = 0.002 s\nC_N: ideal ceiling across N independent bucket rows\nN: number of bucket rows; here 50\ntx: database transactions\ns: seconds\nIn words: a row locked for 2 ms at a time can take at most 500 decrements a second; 50 independent rows could in theory take 25,000.\n```\n\n3,000 a second is six times the single-row ceiling, so p99 latency explodes. The 25,000/s figure is a lock-only theoretical ceiling, not a measured database capacity. Atomically decrement a bucket only when its remaining count is at least the quantity requested. Near sell-out, partial remainders can fragment inventory; combine buckets transactionally or restrict order size. Rebalancing must preserve the total atomically.",
+    "workedExample": "One counter serialises all successful decrements. Multiple independently guarded buckets can spread that contention, but each decrement must reject insufficient stock. Near sell-out, stock can be fragmented across buckets: combine them atomically or restrict the order. Shared database limits and rebalancing still matter; bucket count is not a measured speedup.",
     "link": {
       "title": "Optimistic concurrency control (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Optimistic_concurrency_control"
@@ -33,27 +33,27 @@
     "id": "cs2-ticket-booking-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "You admit 2,000 shoppers/min; each obtains 4 seats and 30% of these holds eventually abandon. Each abandoned checkout retains inventory for its full 8-minute hold lifetime. In steady state with sufficient remaining inventory, what is their average seat occupancy over those full lifetimes?",
+    "prompt": "Many shoppers abandon holds that remain reserved until expiry. With the same hold arrival pattern, what is the effect of shortening the initial hold lifetime?",
     "options": [
       {
-        "text": "About 2,400 seats",
-        "explanation": "Wrong. That is the number of seats abandoned *per minute* (2,000 × 0.3 × 4). Each abandoned hold stays in place for 8 minutes, so multiply by the hold duration."
+        "text": "It increases abandoned inventory occupancy automatically",
+        "explanation": "Wrong. Shorter lifetimes leave each abandoned hold occupying inventory for less time."
       },
       {
-        "text": "About 19,200 seats",
-        "explanation": "Correct. Six hundred abandoned four-seat holds enter each minute and last eight minutes in this model. That ties up 19,200 seats on average, nearly a third of the stadium, rather than the number of shoppers alone."
+        "text": "It reduces average seats tied up, but checkout must preserve valid ownership through payment recovery",
+        "explanation": "Correct. Shorter browse holds release abandoned inventory sooner; PAYMENT_PENDING still needs separate handling."
       },
       {
-        "text": "About 64,000 seats",
-        "explanation": "Wrong. This applies the 8 minutes to all 2,000 shoppers rather than the 30% who abandon. Fans who pay release their hold into SOLD."
+        "text": "It makes all seats available immediately after a shopper stops interacting",
+        "explanation": "Wrong. The server may not know the shopper abandoned; the hold lasts until cancellation or expiry."
       },
       {
-        "text": "Zero, because expired holds are treated as available at read time",
-        "explanation": "Wrong. Lazy expiry makes seats available once they *expire*. Until then, for up to 8 minutes, an abandoned hold still blocks the seat."
+        "text": "It allows a sweeper to release seats with unresolved captures",
+        "explanation": "Wrong. Unknown payment outcomes must be resolved before inventory is reallocated."
       }
     ],
     "answer": 1,
-    "workedExample": "Little's law again: in steady state, the average number of seats sitting in dead holds equals the rate seats enter dead holds times how long each stays there.\n\n```formula\na = 2,000/min × 0.3 = 600/min\nλ = 600/min × 4 seats = 2,400 seats/min\nL = λ × W\nL = 2,400 seats/min × 8 min\nL = 19,200 seats\nwhere\na: shoppers who will abandon, per minute\nλ: the rate seats enter abandoned holds, in seats per minute\nL: average seats tied up in abandoned holds at any moment\nW: how long each abandoned hold keeps its seats, in minutes (min); the full 8-minute hold\n0.3: the 30% of shoppers who abandon\nseats: tickets\nmin: minutes\nIn words: 2,400 seats a minute, each blocked for 8 minutes, keeps 19,200 seats locked up on average.\n```\n\nThat's why the lesson warns about 'sold out' followed by seats reappearing. Levers:\n\n| Change | Dead seats |\n|---|---|\n| hold 8 -> 4 min | 9,600 |\n| explicit cancel on exit | lower |\n| short initial hold, extend at checkout | lower |\n\nExtending the hold only when checkout starts lets you use a short browse hold without punishing fans who are actually paying.",
+    "workedExample": "An abandoned hold consumes inventory for as long as it remains valid. Shorter initial holds can reduce that occupancy if arrivals and behaviour stay comparable. Atomically transition a valid owned hold into PAYMENT_PENDING before external authorisation, then recover uncertain payment outcomes separately.",
     "link": {
       "title": "Building Cloudflare Waiting Room (Cloudflare blog)",
       "url": "https://blog.cloudflare.com/cloudflare-waiting-room/"

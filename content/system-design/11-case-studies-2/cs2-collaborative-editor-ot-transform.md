@@ -52,6 +52,13 @@ An optimistic client has applied its own edits before the server confirms them. 
 
 Keep the example's scope narrow. The single insertion and deletion demonstrate one positional case. Equal-position inserts, overlapping deletions and rich-text formatting introduce additional transformation rules. Convergence and preserving an intended target are separate checks; the worked example does not prove a complete OT library correct.
 
+> [!analogy] Real-world analogy: Keeping a place in a printed draft
+> You mark a word for removal, then someone inserts a sentence before it. Its line number moves while the intended word remains the target.
+>
+> **How it maps:** OT transforms a position-based edit through preceding changes so that the edit still targets the intended text.
+>
+> **Where it stops:** Equal-position edits, overlapping deletions and rich-text formatting need exact protocol rules; human recognition is not an OT correctness proof.
+
 ## Key takeaways
 - Transform positions to preserve the selected characters under concurrent edits.
 - Client-server protocols track acknowledged revision, in-flight operation and local buffer.

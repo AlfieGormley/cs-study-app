@@ -10,8 +10,8 @@
         "explanation": "Partly true but not the main reason. Sorting a capped list of 800 entries is trivial either way; the important wins are storage and mutability."
       },
       {
-        "text": "A post shown in a million timelines is stored once, so edits, deletions and counter updates touch one object, and timelines stay small (~16 bytes per entry).",
-        "explanation": "Correct. Storing bodies would multiply storage by the fan-out factor and turn every edit or like-count change into millions of writes. IDs plus a hydration step from a post cache avoid both."
+        "text": "Store one canonical post body and small references in timelines, then apply edits and deletion checks during hydration; measure entry overhead separately.",
+        "explanation": "Correct. This avoids copying the full body into every timeline. Caches still need freshness enforcement, and counters may live separately; no fixed bytes-per-entry footprint is guaranteed."
       },
       {
         "text": "Redis can't store strings longer than 64 bytes.",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Compare the memory for 300M active timelines × 800 entries:\n\n```formula\nids = 300M × 800 × 16 B ≈ 3.8 TB\nbodies = 300M × 800 × 1 KB ≈ 240 TB\nwhere\nids: memory if timelines hold 16-byte entries (post ID + author ID)\nbodies: memory if timelines hold full posts of about 1 KB each\nM: million\nB: bytes\nKB: kilobyte, 1,000 bytes\nTB: terabyte, 10^12 bytes\n≈: approximately equal to (rounded)\nIn words: storing IDs takes about 3.8 TB; copying whole posts into every timeline would take about 240 TB, over 60 times more.\n```\n\nAnd for a deletion of a post seen by 10M followers:\n\n- IDs: mark the post deleted once; hydration drops it.\n- Full copies: 10M updates.\n\nHydration is one multi-get of ~50 posts, whose latency depends on payloads, shard fan-out, misses and workload; no benchmark is supplied.",
+    "workedExample": "A timeline containing identifiers can refer to one canonical post instead of copying its whole body into every follower’s list. Hydration fetches the current object and must re-check deletion and permissions against sufficiently fresh state. This saves duplicated payload but adds lookups and cache dependencies; canonical storage alone does not instantly invalidate every cached copy.",
     "link": {
       "title": "InfoQ: Timelines at Scale",
       "url": "https://www.infoq.com/presentations/Twitter-Timeline-Scalability/"
@@ -41,15 +41,15 @@
       },
       {
         "text": "Tell users that posts may take a few minutes to appear.",
-        "explanation": "Wrong. It's a poor experience and leads users to post duplicates, thinking the first attempt failed. The fix is cheap, so there's no reason to accept the problem."
+        "explanation": "Wrong for the stated immediate author-view requirement. The design should provide an author read path that sees the acknowledged post."
       },
       {
         "text": "Switch the timeline store to strong consistency across all replicas.",
         "explanation": "Wrong. The post isn't missing because of replica lag; it hasn't been written to the timeline at all yet. Strong consistency on the cache doesn't change when fan-out runs."
       },
       {
-        "text": "Provide read-your-writes: insert the post into the author's own timeline synchronously (or have the client insert it optimistically), and let fan-out to followers stay asynchronous.",
-        "explanation": "Correct. The author is the one person who knows the post exists, so their immediate post-refresh interaction needs a stronger guarantee than the follower feed. A single synchronous write (or client-side insertion) fixes their experience at negligible cost."
+        "text": "Provide a server read-your-writes path for the author, with fresh hydration and recovery from stale caches, while follower fan-out remains asynchronous.",
+        "explanation": "Correct. Merge acknowledged author posts or synchronously update the author view with a reliable fallback. Optimistic client insertion alone only changes that client's UI."
       }
     ],
     "answer": 3,
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Treat the precomputed timeline as a list of *candidates*, not a final answer:\n\nIn production, one Redis LRANGE obtains the page and a batched lookup hydrates its post IDs. This complete Python fixture demonstrates the subsequent eligibility filtering:\n\n```python\n# Fixture represents batched reads.\ntimeline = [1, 2, 3]\nstore = {\n    1: (\"alice\", False),\n    2: (\"bob\", False),\n    3: (\"alice\", True),\n}\nfollowing = {\"alice\"}\n# Read the first page, then hydrate IDs.\nids = timeline[:50]\nposts = [(pid, *store[pid])\n         for pid in ids]\n# Re-check current follows and deletion.\nshow = [pid for pid, author, gone\n        in posts\n        if author in following\n        and not gone]\nprint(show)\n# [1]: exclude unfollowed and deleted.\n```\n\nThe same read-time filter handles unfollows, blocks, mutes and deletes, so none of them needs a fan-out of its own.",
+    "workedExample": "Treat the precomputed timeline as a list of *candidates*, not a final answer:\n\nIn production, one Redis LRANGE obtains the page and a batched lookup hydrates its post IDs. This complete Python fixture demonstrates the subsequent eligibility filtering:\n\n```python\n# Fixture represents batched reads.\ntimeline = [1, 2, 3]\nstore = {\n    1: (\"alice\", False),\n    2: (\"bob\", False),\n    3: (\"alice\", True),\n}\nfollowing = {\"alice\"}\n# Read the first page, then hydrate IDs.\nids = timeline[:50]\nposts = [(pid, *store[pid])\n         for pid in ids]\n# Re-check current follows and deletion.\nshow = [pid for pid, author, gone\n        in posts\n        if author in following\n        and not gone]\nprint(show)\n# [1]: exclude unfollowed and deleted.\n```\n\nThe same read-time filter handles unfollows, blocks, mutes and deletes, so timeline IDs need not be rewritten for every change. The permission and object state still need a freshness/enforcement mechanism; stale caches can otherwise expose removed content.",
     "link": {
       "title": "System Design Primer: design the Twitter timeline",
       "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/twitter/README.md"
@@ -113,7 +113,7 @@
       },
       {
         "text": "The author changed their display name.",
-        "explanation": "Incorrect. Profiles are hydrated from the user cache on each read, so the new name appears automatically. It isn't a visibility rule."
+        "explanation": "Incorrect. A name is profile data, not a visibility rule. Hydration can fetch it, but the new value appears only when the profile cache freshness policy makes it available."
       }
     ],
     "answer": [

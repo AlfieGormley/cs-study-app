@@ -107,14 +107,14 @@ WHERE event_id=:e AND seat_id IN (:s)
            AND hold_expires_at < now()));
 ```
 
-If the affected row count is less than the number of seats requested, **roll back** and return 409 with the seats that were taken. The database's row-level atomicity guarantees only one transaction moves a given row out of AVAILABLE. There's no separate lock service and no read-then-write race.
+If the affected row count is less than the number of seats requested, **roll back** and return 409 with the seats that were taken. For competing claims on the same available row, the conditional update and affected-count check select one winner. Expired holds can be reclaimed later by the specified predicate. There's no separate lock service and no read-then-write race.
 
 Deduplicate and validate the seat-ID list, check the exact affected count, and roll back the whole group on conflict. Both set-based updates and explicit locks can deadlock; use consistent acquisition order and bounded transaction retries. PostgreSQL `now()` is fixed at transaction start: for strict expiry deadlines, lock first, then evaluate a fresh database timestamp in a short transaction.
 
 Note the `hold_expires_at < now()` clause. An expired hold is treated as available **when attempting a new hold**, so correctness never depends on a background sweeper running on schedule. The sweeper only tidies up, which keeps the seat map accurate.
 
 ### Option B: pessimistic locking
-`SELECT ... FOR UPDATE` on the seat rows, check, then update. This is correct, but locks are held across round trips. Under contention, waiters pile up, and multi-seat orders can deadlock unless you **always lock in a consistent order** (for example, sorted by `seat_id`).
+`SELECT ... FOR UPDATE` on the seat rows, check, then update. This is correct, but locks are held across round trips. Under contention, waiters pile up, and multi-seat orders can deadlock when transactions lock overlapping rows in different orders; use a **consistent order** and still handle aborts involving other resources (for example, sorted by `seat_id`).
 
 ### Option C: Redis holds
 `SET seat:{e}:{s} {hold} NX PX 480000` for each seat gives very fast holds with built-in expiry (`NX` sets the key only if it does not already exist; `PX 480000` expires it after 480,000 milliseconds, which is 8 minutes). But Redis is now a second source of truth that must agree with the database. If Redis fails over and loses a recent write (replication is asynchronous), two users can hold the same seat. Use Redis as a **fast pre-filter**, and still make the final, authoritative transition in the database with a conditional update.

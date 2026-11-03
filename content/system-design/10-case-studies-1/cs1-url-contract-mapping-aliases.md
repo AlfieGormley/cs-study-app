@@ -32,7 +32,7 @@ The core access pattern is a point lookup: **code → long URL**. No joins, no r
 
 ```
 links
-  code        PK  (7-char string)
+  code        PK  (string)
   long_url        (up to ~2 KB)
   owner_id
   created_at
@@ -73,6 +73,8 @@ Read and write paths are separate services because they scale very differently: 
 ## Custom alias uniqueness
 
 **Custom aliases** go in the same table using a conditional write ("insert if not exists": DynamoDB `attribute_not_exists`, or a primary key constraint in SQL). To stop a custom alias colliding with a future generated code, either reserve a distinct format for aliases (for example, require them to be 8+ characters or contain a hyphen) or have the generator skip codes that already exist.
+
+Reserve service paths such as `api` and `login`, and enforce the product’s stated impersonation and abuse policy. The idempotency key must be atomically bound to the create request and its stored outcome or recoverable work; merely accepting a header does not enforce it.
 
 ## Key takeaways
 

@@ -19,7 +19,7 @@ With **end-to-end encryption**, fan-out also involves the client. Encrypting sep
 
 ### Large channels (10k–1M members): fan-out on read
 
-For Slack- or Discord-style channels with huge membership, writing to every member's inbox is wasteful because most members aren't looking. Instead:
+For Slack messaging or Discord-style channels with huge membership, writing to every member's inbox is wasteful because most members aren't looking. Instead:
 
 - Store the message once in the channel's partition.
 - Push it only to **currently connected** members who have that channel open or subscribed (pub/sub per channel).
@@ -31,16 +31,16 @@ This is the feed's push vs pull trade-off again, decided by group size.
 
 Presence ("online", "last seen 10:42") is deceptively expensive because every change potentially interests many people.
 
-- **Heartbeats**: the client pings every ~30 s; the gateway updates `presence:{user}` in Redis with a TTL of ~60–90 s. No heartbeat, key expires, user is offline. This handles phones that vanish without a clean disconnect (a tunnel, a dead battery).
+- **Heartbeats**: the client pings every ~30 s; the gateway updates a device presence record in Redis with a TTL of ~60–90 s. Expiry means the device has not recently been observed, rather than proving it is offline. Aggregate active device records for a user and guard refreshes/deletes with connection epochs, so an old connection cannot erase a newer session.
 - **Debounce flapping**: mobile connections drop and reconnect constantly. Wait a few seconds before announcing "offline", or you'll broadcast storms of online/offline transitions.
 - **Fan-out only to interested viewers**: if a user with 500 contacts goes online, don't push to all 500. Push presence only to users who currently have a chat with them open (who have subscribed), and let everyone else fetch presence lazily when they open the chat.
-- **Typing indicators** are ephemeral: send them over the socket, never persist them, and drop them freely under load.
+- **Typing indicators** in this design are ephemeral: send them over the socket, let them expire unless refreshed, and omit them from durable message history. They can be dropped under load.
 
 Without these optimisations, presence traffic can easily exceed message traffic.
 
 ## Size the busiest bucket
 
-At an assumed 50 messages a second and 200 bytes each, a busy channel adds 10 kilobytes a second. A 100-megabyte raw partition target lasts about 10,000 seconds, or 2.8 hours, before replication and database overhead. Choose a shorter bucket or an additional split when observed rates exceed this assumption. A popular announcement can overload readers of the current bucket even when the bucket is small; request coalescing reduces duplicate reads of those same rows.
+A fixed-duration bucket grows with the channel's message rate and stored message size. Choose a shorter bucket or an additional split when measured byte growth exceeds the partition target, including database overhead. A popular announcement can overload readers of the current bucket even when the bucket is small; request coalescing reduces duplicate reads of those same rows.
 
 ## Key takeaways
 

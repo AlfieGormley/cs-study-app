@@ -16,7 +16,7 @@ Hinted handoff covers short outages. After longer ones, or lost hints, replicas 
 
 ## Membership and failure detection: gossip
 
-There's no central coordinator. Each node, about once a second, **gossips** with a random peer, exchanging versioned state such as heartbeats, tokens and status. Information spreads epidemically, typically spreading in O(log N) rounds, where N is the number of nodes and O(log N) means the rounds grow with the logarithm of N (doubling the cluster adds only about one more round), under an idealised connected random-gossip model, not a worst-case deadline.
+Any node can coordinate an individual request; cluster membership has no single central owner in this design. Each node, about once a second, **gossips** with a random peer, exchanging versioned state such as heartbeats, tokens and status. Information spreads epidemically, typically spreading in O(log N) rounds, where N is the number of nodes and O(log N) means the rounds grow with the logarithm of N (doubling the cluster adds only about one more round), under an idealised connected random-gossip model, not a worst-case deadline.
 
 - **Seed nodes** give new nodes a first contact and keep the cluster from splitting into islands.
 - Failure detection is **local and probabilistic**. Cassandra uses the **phi accrual failure detector**, which outputs a suspicion level based on how late heartbeats are compared with their history, instead of a fixed timeout.
@@ -32,7 +32,7 @@ write -> commit log (append; sync policy)
       -> flush when full -> SSTable
          (immutable, sorted file)
 read  -> memtable, then SSTables
-         newest -> oldest, using
+         reconcile timestamps, using
          Bloom filter + index per SSTable
 ```
 
@@ -51,7 +51,7 @@ These are three classic workload-specific strategies, rather than an exhaustive 
 STCS has low write amplification but high space amplification (it needs headroom). LCS limits overlap within each nonzero level for point lookups but rewrites data more often. The fraction of reads satisfied by one SSTable depends on the workload and data distribution. TWCS groups data by time window so whole expired SSTables can be dropped.
 
 ### Deletes and tombstones
-You can't delete from immutable SSTables, so a delete writes a **tombstone**. It must outlive every replica's copy of the old value. Otherwise a replica that missed the delete would "resurrect" the data during repair. Cassandra normally retains tombstones for at least `gc_grace_seconds` (default 10 days); removing them also requires compaction safety conditions. Complete repair across relevant replicas before deletion markers can be removed. An overdue stale replica needs a safe recovery/rebuild procedure, not blind rejoining. Workloads that delete heavily also make reads scan many tombstones, a common performance problem.
+You can't delete from immutable SSTables, so a delete writes a **tombstone**. It must remain until stale copies cannot return without learning the deletion or undergoing a safe rebuild. Otherwise a replica that missed the delete would "resurrect" the data during repair. Cassandra normally retains tombstones for at least `gc_grace_seconds` (default 10 days); removing them also requires compaction safety conditions. Complete repair across relevant replicas before deletion markers can be removed. An overdue stale replica needs a safe recovery/rebuild procedure, not blind rejoining. Workloads that delete heavily also make reads scan many tombstones, a common performance problem.
 
 ## Key takeaways
 - Merkle comparison locates represented differences with hash-collision assumptions.
@@ -65,3 +65,5 @@ You can't delete from immutable SSTables, so a delete writes a **tombstone**. It
 - [Merkle tree (Wikipedia)](https://en.wikipedia.org/wiki/Merkle_tree)
 - [Log-structured merge-tree (Wikipedia)](https://en.wikipedia.org/wiki/Log-structured_merge-tree)
 - [Unified Compaction Strategy](https://cassandra.apache.org/doc/latest/cassandra/managing/operating/compaction/ucs.html)
+- [Cassandra storage engine](https://cassandra.apache.org/doc/latest/cassandra/architecture/storage-engine.html)
+- [Cassandra read repair](https://cassandra.apache.org/doc/latest/cassandra/managing/operating/read_repair.html)

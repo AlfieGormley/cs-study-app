@@ -30,7 +30,14 @@ Leases expire by **time**, and a paused process (a 15 s GC pause, a frozen VM) d
 1. **Fencing tokens**: every lease grant comes with a monotonically increasing number (an etcd revision or ZooKeeper zxid). The protected resource must atomically install/check the current epoch and reject stale writes. A newly granted coordinator lease does not automatically teach an unrelated database its new token.
 2. **Idempotent firing**: the `runs` primary key makes double-firing harmless at the database level, whoever the owner is.
 
-Use both. This is the standard argument (from Martin Kleppmann's critique of Redlock) that **lock-based mutual exclusion needs fencing to be safe**.
+Use both. This is the standard argument (from Martin Kleppmann's critique of Redlock) that **expiring distributed leases require protected-resource safeguards against stale clients**.
+
+> [!analogy] Real-world analogy: Replacing an expired access badge
+> A workplace replaces an old numbered badge when responsibility changes. The door checks the currently authorised badge number.
+>
+> **How it maps:** The badge number is an ownership epoch; the protected database must reject the obsolete owner even if it still believes it is in charge.
+>
+> **Where it stops:** Real badge systems need not use monotonic epochs. The analogy does not supply an atomic database check or a lease protocol.
 
 ## Key takeaways
 - Long delays belong in durable scheduling state rather than an out-of-range queue timer.

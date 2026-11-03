@@ -30,6 +30,13 @@ A new owner must recover the durable sequence state before allocating further me
 
 A lease expiration alone does not stop an old process. It may be paused and unaware that its lease expired. Store a monotonically increasing ownership epoch and make every write validate it at the resource that accepts the message. An expired owner’s delayed request then fails even if its local process believes it is still active. This is separate from the session epoch used to protect gateway routing.
 
+> [!analogy] Real-world analogy: Replacing an authorised signing card
+> When a replacement manager receives a newer signing card, the records desk rejects requests carrying the old card even if the former manager returns.
+>
+> **How it maps:** The storage layer validates the ownership epoch, fencing delayed writes from a paused former owner.
+>
+> **Where it stops:** The epoch must be durable and checked on every relevant write; merely expiring a local lease cannot stop an old process.
+
 ## Key takeaways
 
 - Order by committed server sequences rather than phone clocks.

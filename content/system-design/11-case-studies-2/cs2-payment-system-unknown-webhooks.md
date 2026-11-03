@@ -38,6 +38,13 @@ PSPs report many outcomes **asynchronously** via webhooks: 3-D Secure completion
 
 Multi-PSP setups add **routing**: choose a provider by cost, region, card type and live health, with a circuit breaker for new, unattempted operations. Do not reroute an ambiguous in-flight charge to another PSP: keys are not shared across providers, and the first may already have charged. Resolve its outcome first. Each adapter normalises provider-specific states into your state machine.
 
+> [!analogy] Real-world analogy: A missing payment receipt
+> A shop’s receipt printer fails after the payment terminal sends a request. No receipt does not prove the payment failed.
+>
+> **How it maps:** A timeout leaves the caller uncertain, so it checks the existing payment reference instead of treating every attempt as a new purchase.
+>
+> **Where it stops:** A person checking a terminal does not implement provider idempotency, durable state or automatic reconciliation.
+
 ## Key takeaways
 - Persist intent before sending an external operation.
 - A timeout means UNKNOWN rather than failure.

@@ -19,13 +19,13 @@ POST /v1/links  {longUrl, alias?, ttl?}
 GET  /{code}    -> 302 Location: longUrl
 ```
 
-Things to mention: authentication (API keys or OAuth tokens), pagination (cursor-based, not offset), idempotency keys for writes that might be retried, and rate limits. For live interactive features say *how* the client connects (WebSocket, Server-Sent Events, long polling) and why.
+Things to mention: authentication (API keys or OAuth tokens), pagination (often cursor-based for large, changing histories), idempotency keys for writes that might be retried, and rate limits. For live interactive features say *how* the client connects (WebSocket, Server-Sent Events, long polling) and why.
 
 ## Step 4: Data model
 
 Name the core entities, their key fields and, crucially, the **access patterns**: what you look up by what. The access pattern drives the choice of store and the partition key.
 
-- "Look up a link by its short code" means a key-value lookup; any store works, and the partition key is the code.
+- "Look up a link by its short code" means a key-value lookup; several relational and key-value stores can support it, with the code as a lookup key.
 - "Get a user's last 50 messages in a conversation" means a range scan ordered by time within a partition; a wide-column store such as Cassandra with partition key `conversation_id` and clustering key `message_id` fits well.
 
 Justify SQL vs NoSQL by the access pattern and scale, not by fashion. "Relational, because we need transactions across the order and payment tables" is a good reason. "NoSQL because it scales" is not.

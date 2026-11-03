@@ -18,19 +18,16 @@ sourceLesson: cs1-typeahead
 
 The time-decayed score in step 3 weights each day's searches by how old they are:
 
-```formula
-score = Σ(count_d × 0.9^{age_d})
-0.9^{6.6} ≈ 0.5
-0.9^{30} ≈ 0.04
+```formula reference
+S = Σ(c_d a^{t_d})
 where
-score: the query's ranking score
-Σ: sigma, "add up over every day d" in the history
-d: one day of history
-count_d: how many times the query was searched on day d
-age_d: how many days ago day d was (0 for today)
-0.9^{age_d}: age_d copies of 0.9 multiplied together, the weight for that day; it shrinks by 10% per day of age
-≈: approximately equal to (rounded)
-In words: each day of age multiplies a search's weight by 0.9, so a search's weight halves roughly every 6.6 days and a month-old search keeps only about 4%.
+S: ranking score from the retained daily search counts
+Σ: sum over all retained days d
+d: a day whose search count contributes to the score
+c_d: eligible search count on day d
+a: daily retention factor, greater than zero and less than one
+t_d: age of day d in days, with zero for today
+In words: older searches count less, with each extra day multiplying their weight by the same factor; a smaller factor favours recent activity more strongly.
 ```
 
 The decay factor sets the trade-off: closer to 1 (say 0.98) keeps long-term favourites; smaller (say 0.7) makes suggestions chase the last few days.
@@ -46,6 +43,8 @@ Sometimes a suggestion must disappear *now*: a defamatory phrase, a victim's nam
 - Keep a small **serve-time blocklist** that every suggest node checks before returning results. It's pushed in seconds, like a config change.
 - **Purge** affected prefixes using the selected CDN's documented purge mechanism, or keep edge TTLs short enough that the worst-case exposure is acceptable.
 - Add the term to the pipeline's blocklist so the next build drops it at source.
+
+A distinct-user threshold does not prevent campaigns using many accounts. Cap repeated contributions per identity and review concentrated growth across accounts or network sources. Uniform log sampling reduces both bot and human counts in expectation; it does not selectively remove manipulation.
 
 ## Key takeaways
 

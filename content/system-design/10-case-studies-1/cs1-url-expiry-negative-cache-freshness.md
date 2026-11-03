@@ -11,11 +11,11 @@ The mapping store may replicate asynchronously, while redirect services cache bo
 
 ## Deep dive 4: Caching and expiry
 
-The application uses cache-aside: check Redis, read the store on a miss, then populate Redis. Links are effectively immutable, so cache invalidation is easy; set a TTL (say, 24 hours) and evict on expiry or deletion.
+The application uses cache-aside: check Redis, read the store on a miss, then populate Redis. A destination may be immutable, but expiry, deletion and abuse blocking still change whether it may be served. Choose a freshness policy and enforce logical expiry on reads; a long cache TTL alone cannot promptly apply those changes.
 
 Two subtleties:
 
-- **Negative caching.** Bots hammer random codes. Cache "not found" for a short time (60 s) so they don't all fall through to the database. A Bloom filter can reject absent codes only when it covers all committed codes relevant to that read; a stale filter must not suppress fresh links.
+- **Negative caching.** Cache repeated "not found" lookups briefly, for example 60 seconds. This reduces repeated misses for the same code, but does not stop probes that each use a new code; those need admission controls or a suitable complete membership filter. A Bloom filter can reject absent codes only when it covers all committed codes relevant to that read; a stale filter must not suppress fresh links.
 - **Expiry.** Check `expires_at` on every read (lazy expiry), and let a background job or the store's TTL feature (DynamoDB TTL, Cassandra TTL) physically delete rows later.
 
 ## Deep dive 5: Consistency after create

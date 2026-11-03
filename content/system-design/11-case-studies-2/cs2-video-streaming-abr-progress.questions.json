@@ -15,7 +15,7 @@
       },
       {
         "text": "Remove the 720p rendition so there are fewer rungs to switch between",
-        "explanation": "Wrong. Fewer rungs make each switch a *bigger* visible jump (480p straight to 1080p) and waste bandwidth. The ladder isn't the cause of the instability."
+        "explanation": "Removing a rung does not add smoothing or hysteresis and may make visible quality jumps larger. Validate the ladder and controller together."
       },
       {
         "text": "Have the server choose the bitrate instead of the client",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Diagnose the cause:\n\n- Mobile throughput is noisy. One segment downloads at 8 Mbps and the next at 2 Mbps.\n- A throughput rule picks the highest rung that fits under a safety margin:\n\n```formula\nb ≤ 0.8 × T_last\nwhere\nb: the bitrate of the rendition chosen for the next segment, in megabits per second (Mbps)\nT_last: the throughput measured while downloading the last segment, in Mbps\n0.8: a safety margin, so only 80% of the measured speed is used\n≤: is less than or equal to\nMbps: megabits per second\nIn words: choose the best quality whose bitrate is at most 80% of how fast the last segment arrived.\n```\n\nWith that rule, at 8 Mbps the limit is 6.4 Mbps, so it picks 5 Mbps (1080p); at 2 Mbps the limit is 1.6 Mbps, so it picks 1 Mbps (480p). It flips every segment.\n\nThe fix is to use the **buffer** as a shock absorber:\n\n| Buffer | Choice |\n|---|---|\n| < 10 s | lowest safe rung |\n| 10–30 s | step up gradually |\n| > 30 s | top sustainable rung |\n\nWith 30 s buffered, a 4 s dip doesn't threaten a stall, so there's no reason to drop quality. Add hysteresis (require sustained evidence before switching) to reduce unnecessary switching, then validate the policy on representative network traces.",
+    "workedExample": "A controller that reacts to the most recent download can alternate between high and low renditions as mobile throughput fluctuates. Buffer occupancy tells it whether a brief dip actually threatens playback, while hysteresis discourages repeated threshold crossings. Tune startup, switching and stall behaviour together against representative traces; no controller eliminates every stall.",
     "link": {
       "title": "Adaptive bitrate streaming (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Adaptive_bitrate_streaming"
@@ -41,11 +41,11 @@
       },
       {
         "text": "Repackage on the fly at the edge from a single mezzanine file",
-        "explanation": "Just-in-time packaging is a legitimate technique (used by some origins), but doing it at every edge costs CPU at thousands of sites and still caches two formats. CMAF achieves the saving without per-request work."
+        "explanation": "Just-in-time packaging is legitimate, but adds execution and cache policy decisions. For compatible HLS/DASH playback, shared CMAF media can avoid duplicate media copies without requiring repackaging on every request."
       },
       {
         "text": "Use only DASH and ship a JavaScript DASH player on iOS Safari",
-        "explanation": "Wrong in practice. Native iOS apps and AirPlay rely on HLS, and FairPlay DRM is built around HLS. Dropping HLS breaks a large share of devices."
+        "explanation": "Dropping HLS does not satisfy the stated Apple/HLS requirement. Device, player and DRM support must be checked rather than assuming every platform can use the same DASH path."
       },
       {
         "text": "Package once as CMAF (fragmented MP4) segments, and publish both an HLS playlist and a DASH MPD that reference the same files",
@@ -75,15 +75,15 @@
       },
       {
         "text": "Send view events to a log such as Kafka, deduplicate and aggregate per video per minute in a stream processor, and write the totals",
-        "explanation": "Correct. Thousands of increments a second become one write per video per minute. The count lags slightly, which nobody minds, and the stream step can also apply fraud rules such as a minimum watch time."
+        "explanation": "Correct under a delayed display-count contract. Aggregate deduplicated events and publish totals with retry-safe processor progress; reducing hot-row writes does not itself establish billing accuracy."
       },
       {
         "text": "Cache the count in Redis and drop the database write",
-        "explanation": "Partly helpful for reads, but with no durable write the count is lost when Redis restarts, and there is still no deduplication or fraud filtering. The log-and-aggregate pattern solves both."
+        "explanation": "A cache-only count without a defined durability and retry contract can lose or duplicate updates. Redis can be configured for persistence, but the proposal still needs recovery, deduplication and any required fraud policy."
       }
     ],
     "answer": 2,
-    "workedExample": "Quantify the hot spot. Suppose 2 M viewers start within about 10 minutes (600 seconds):\n\n```formula\nw = V / t\nw = 2,000,000 / 600 s ≈ 3,300 writes/s\nwhere\nw: increments arriving at the one row, in writes per second\nV: viewers starting playback; here 2,000,000\nt: the window they start in, in seconds (s); 10 minutes = 600 s\ns: seconds\nwrites: single-row UPDATE statements\n≈: approximately equal to\nIn words: two million starts in ten minutes is about 3,300 writes a second, all to one row.\n```\n\nEach increment takes the row lock, writes redo and commits. Even at 1 ms (one millisecond) each, one row can take at most about 1,000 increments a second, so 3,300 a second saturates it.\n\nWith stream aggregation:\n\n```\nKafka: 3,300 events/s (model input)\nprocessor: sum per video per minute\nDB: 1 write/min for this video\n```\n\n```formula\nF = w × 60 s / 1\nF = 3,333 writes/s × 60 s ≈ 200,000\nwhere\nF: how many times fewer writes the hot row receives\nw: writes per second without aggregation; here about 3,333\n60 s: one minute, the aggregation window\n1: the single write per minute after aggregation\ns: seconds\nwrites: row updates\n≈: approximately equal to\nIn words: about 200,000 increments a minute collapse into one write a minute.\n```\n\nThat is a reduction of about 200,000 times for the hot row, and it gives you a place to dedupe one view per session.",
+    "workedExample": "Every direct increment competes for the same row even if the database has many shards. A durable event stream can deduplicate view identities and aggregate updates before they reach that row. Persist processor progress and make output publication retry-safe; merely adding Kafka does not prevent duplicate totals. The display count can lag under its chosen contract, while billing or audit counts may need separate guarantees.",
     "link": {
       "title": "The System Design Primer",
       "url": "https://github.com/donnemartin/system-design-primer"
@@ -109,11 +109,11 @@
       },
       {
         "text": "It makes no difference to latency, which is set entirely by the CDN's cache TTL",
-        "explanation": "Wrong. Live latency is dominated by encode and packaging delay plus how much the player buffers, and buffer depth is measured in segments."
+        "explanation": "CDN TTL alone does not set live delay. In the stated policy, keeping a similar number of shorter full segments reduces buffered time; encoding, packaging, network and player policy also contribute."
       }
     ],
     "answer": 1,
-    "workedExample": "Requests per minute is 60 seconds divided by the segment length:\n\n```formula\nq = 60 s / d\nq = 60 s / 6 s = 10\nq = 60 s / 2 s = 30\nwhere\nq: full-segment requests per viewer per minute (excluding manifests, audio and parts)\nd: segment duration, in seconds (s)\ns: seconds\nIn words: cutting segments from 6 s to 2 s triples the requests, from 10 to 30 a minute.\n```\n\nWith an illustrative latency model (encode/package delay of one segment, 2 seconds of transport, a player buffer of three segments):\n\n```formula\nL = d + 2 s + 3 × d\nL = 6 s + 2 s + 18 s = 26 s\nL = 2 s + 2 s + 6 s = 10 s\nwhere\nL: glass-to-glass live latency, in seconds (s)\nd: segment duration, in seconds (s); 6 then 2\n2 s: assumed network transport delay\n3 × d: three buffered segments\ns: seconds\nIn words: under these assumptions, latency falls from 26 seconds to 10 seconds.\n```\n\nThese are chosen assumptions, not universal player behaviour. LL-HLS parts can be delivered before a complete segment exists; not every part must be independently decodable.",
+    "workedExample": "With a similar number of full segments buffered, shorter segments represent less buffered time and require more requests for the same playback duration. Reducing six seconds to two triples full-segment request frequency. Compression cost depends on whether random-access spacing changes too. Low-latency HLS parts can arrive before the parent segment completes; the actual latency still depends on encoder, network and player policy.",
     "link": {
       "title": "HTTP Live Streaming (Apple developer docs)",
       "url": "https://developer.apple.com/documentation/http-live-streaming"

@@ -28,7 +28,7 @@ RateLimit-Remaining: 0
 RateLimit-Reset: 12
 ```
 
-429 is defined in RFC 6585, and `Retry-After` is a standard HTTP header (RFC 9110). The `RateLimit-*` headers above are illustrative, non-standard field names from an earlier draft. The IETF HTTPAPI draft evolves structured quota fields; check the current draft rather than treating these names as a final standard. Many APIs still use their own `X-RateLimit-*` variants (GitHub sends `x-ratelimit-limit`, `-remaining` and `-reset`, the last as a Unix timestamp). Whatever the names, good headers matter: well-behaved clients back off instead of hammering you.
+429 is defined in RFC 6585, and `Retry-After` is a standard HTTP header (RFC 9110). The `RateLimit-*` headers above are illustrative, non-standard field names from an earlier draft. The IETF HTTPAPI draft evolves structured quota fields; check the current draft rather than treating these names as a final standard. APIs can also define their own quota-header contracts; a field name alone does not establish units or reset semantics. Whatever the names, good headers matter: well-behaved clients back off instead of hammering you.
 
 > [!warning] Retry storms
 > If every rejected client retries exactly at the `Retry-After` time, they all come back in the same instant. Client SDKs should add random jitter to retries, and the server can vary `Retry-After` slightly per client.
@@ -75,8 +75,10 @@ For this availability-first example, decide explicitly whether resetting counter
 What you limit by matters as much as the algorithm:
 
 - **API key or user ID** for authenticated traffic: precise and fair.
-- **IP address** for anonymous traffic, with care. Thousands of mobile users can share one carrier-grade NAT address, and an IPv6 attacker can rotate through billions of addresses in a /64. Limit IPv6 by prefix (often /64) and set IPv4 limits loosely enough for shared addresses.
+- **IP address** for anonymous traffic, with care. Thousands of mobile users can share one carrier-grade NAT address, and an IPv6 attacker can rotate through billions of addresses in a /64. Choose a prefix grouping from actual allocation patterns rather than treating /64 as a universal customer identity, and account for shared IPv4 addresses.
 - **Combinations** for specific abuse: per (account, IP) limits on login can reduce some abuse, but distributed credential stuffing needs additional account/global signals and monitoring.
+
+For anonymous signup protection, layer network limits with independently useful identity signals or challenges; a freely resettable session token is weak evidence. Trust forwarded client addresses only through a configured trusted proxy chain, never an arbitrary internet-supplied header. For a security-sensitive route, choose a bounded local fallback or fail closed when the shared limiter is unavailable.
 
 ## Step 5: High-level design
 

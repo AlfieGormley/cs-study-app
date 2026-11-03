@@ -27,7 +27,7 @@ Allow: /shop/help
 
 `/shop/help/returns` matches both rules. `Allow: /shop/help` is longer (10 octets against 5), so it wins and the page may be fetched. `/shop/cart` matches only the `Disallow`, so it's skipped.
 
-Politeness should be **per IP as well as per host**. Thousands of small sites can sit behind one shared-hosting IP, and hitting 500 of them at once still overloads one machine.
+Politeness should be **per IP as well as per host**. Thousands of small sites can sit behind one shared-hosting IP, and fetching many of them at once can overload their shared serving capacity.
 
 ## Distributed crawling
 
@@ -35,7 +35,7 @@ Partition by **host** (consistent hash of the hostname, or the registered domain
 
 - Politeness is enforced **locally**. One node owns a host's back queue and its `next_allowed_at`, without a distributed limiter for that host. Shared-IP limits across different host owners still require coordination or an IP-based scheduling owner. Ownership migration must drain or fence old fetchers, or both owners may fetch concurrently.
 - The robots.txt and DNS caches for that host are local.
-- Rebalancing is cheap with consistent hashing.
+- Consistent hashing limits the fraction of host assignments that move, but transferring frontier state and warming caches still costs work.
 
 When a node extracts a link for a host it doesn't own, it forwards the URL to the owner. Batch these forwards (thousands of URLs per message, through Kafka or direct RPC), because a large share of extracted links point to other hosts, and with dozens of nodes almost all of those hosts are owned by a different node.
 

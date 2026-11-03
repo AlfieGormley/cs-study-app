@@ -25,24 +25,16 @@ Ranking changes the cost model: you're now doing ML inference over a thousand ca
 
 Assume 90,000 feed requests per second, 1,500 candidates each, and 0.2 milliseconds of normalised additive GPU capacity per candidate. This cost already includes the chosen batching strategy; it is a hypothetical input, not a hardware benchmark.
 
-```formula
-g = 90,000/s × 1,500 × 0.0002 s
-g = 27,000 s/s
-h = 90,000/s × 300 × 0.0002 s
-h = 5,400 s/s
-l = 90,000/s × 1,500 × 0.00001 s
-l = 1,350 s/s
-total = h + l = 6,750 s/s
-where
-g: GPU-equivalent capacity for scoring every candidate with the heavy model
-h: heavy-model capacity after pruning to 300 candidates
-l: light-model capacity on all candidates at an assumed 0.01 milliseconds each
-total: combined capacity of the two-stage model
-s: seconds; s/s means seconds of normalised GPU work per elapsed second
-In words: pruning cuts the heavy stage fivefold; counting the cheap first stage too cuts total assumed capacity fourfold.
-```
+Candidate count multiplies the amount of model work. A cheap first stage can reduce how many candidates reach an expensive model, but its own feature lookups and scoring still cost resources. Measure the complete pipeline under representative batching, hardware and latency targets.
 
 Actual batching, model architecture, hardware and utilisation change these inputs. Measure both stages under the same service-level target before translating GPU-equivalents into purchased machines. Under overload, a chronological cached page is a useful degradation path.
+
+> [!analogy] Real-world analogy: A shortlist before detailed interviews
+> A quick screening step narrows many applications before a smaller group receives a detailed assessment.
+>
+> **How it maps:** Candidate generation and light scoring reduce expensive model evaluations.
+>
+> **Where it stops:** Early screening can discard relevant items, so measure recall and bias as well as saved computation; this analogy is not evidence for a hiring process.
 
 ## Key takeaways
 

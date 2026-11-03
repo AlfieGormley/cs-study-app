@@ -32,3 +32,5 @@ Monitor ageing PAYMENT_PENDING orders, missing relay work, provider-key retentio
 ## Further reading
 - [Explicit locking (PostgreSQL docs)](https://www.postgresql.org/docs/current/explicit-locking.html)
 - [How to do distributed locking (Martin Kleppmann)](https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html)
+- [Provider capture deadlines and states](https://docs.stripe.com/payments/place-a-hold-on-a-payment-method)
+- [Provider idempotency contract](https://docs.stripe.com/api/idempotent_requests)

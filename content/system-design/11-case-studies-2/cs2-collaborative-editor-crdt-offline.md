@@ -13,8 +13,8 @@ A **Conflict-free Replicated Data Type** designs the data structure so that the 
 
 For text sequences (RGA, YATA in Yjs, Automerge's list type, Fugue):
 
-- Every character gets a **globally unique, ordered id**, such as `(client_id, counter)`.
-- An insert says "put this character after character id P" rather than "at index 5". Ids don't shift when others edit, so there's nothing to transform.
+- In these sequence designs, inserted elements have **globally unique ids**, such as `(client_id, counter)`. The integration algorithm defines their visible order; sorting raw ids alone is insufficient.
+- An insert names stable surrounding structure rather than only a numeric index. A simple RGA-style example names the preceding element; Yjs uses additional ordering context. The integration rules handle concurrent inserts without OT-style index rebasing.
 - Deletes mark a character as a **tombstone**, because it may still be referenced as an anchor by concurrent inserts.
 - Concurrent inserts at the same anchor are ordered by a deterministic tie-break (for example, comparing ids), so every replica picks the same order.
 
@@ -25,7 +25,7 @@ For text sequences (RGA, YATA in Yjs, Automerge's list type, Fugue):
 
 **Cons**:
 - **Metadata overhead**: ids and tombstones per character. Modern implementations (Yjs, Automerge 2) compress runs well, but a heavily edited document can still carry several times its visible size.
-- **Interleaving anomalies**: some algorithms interleave two users' concurrent words character by character. Newer designs (such as Fugue) avoid this.
+- **Interleaving anomalies**: some algorithms interleave two users' concurrent words character by character. Fugue targets this problem; the related FugueMax algorithm proves the paper’s stronger maximal non-interleaving property.
 - Rich text (formatting spans across concurrent edits) needs extra work. Peritext is one research answer.
 - Removing structural identifiers requires an algorithm-specific safety protocol. Reclaiming deleted payload bytes is different: systems such as Yjs can collect content while retaining enough structure for synchronization.
 
@@ -42,7 +42,7 @@ Martin Kleppmann's talk "CRDTs: the hard parts" is the standard reference for th
 
 For a cloud product like Google Docs, with always-on servers and a need for access control, **server-ordered OT** is proven. For offline-first or local-first apps, **CRDTs** are compelling. Many modern editors use a CRDT library (Yjs) with a central relay server, getting CRDT merging *and* a server for auth and persistence.
 
-Figma, notably, uses neither pure approach for its object tree. Its multiplayer system is server-authoritative, with **last-writer-wins per object property**, inspired by CRDTs. Design documents need much less character-level merging than text.
+Figma’s 2019 engineering account describes neither pure approach for its object tree. That multiplayer design is server-authoritative, with **last-writer-wins per object property**, inspired by CRDTs. Design documents need much less character-level merging than text.
 
 ## Conflict handling and offline
 
@@ -55,7 +55,7 @@ Figma, notably, uses neither pure approach for its object tree. Its multiplayer 
 
 - **20 M concurrent editors**: more session servers. Sharding by `doc_id` distributes independent documents, subject to shared storage, network and hot-document limits, and the gateway tier scales horizontally.
 - **Global latency**: place each document's owner in the region where most of its editors are, migrating it as activity moves. Remote editors still get instant local echo and see others' edits after network transit, batching, durable commit and processing delays.
-- **Rich structures** (tables, embedded spreadsheets, drawings): use a tree CRDT or per-object LWW registers, as Figma does, alongside text sequences.
+- **Rich structures** (tables, embedded spreadsheets, drawings): use a tree CRDT or per-object LWW registers, as described in Figma’s 2019 account, alongside text sequences.
 - **Local-first**: move towards CRDT sync so clients work fully offline, with the server as a relay and backup.
 
 ## Key takeaways

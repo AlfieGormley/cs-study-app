@@ -7,9 +7,9 @@ summary: Debouncing changes the number of requests per search.
 sourceLesson: cs1-typeahead
 ---
 
-Type "how to" into a search box and suggestions appear before you finish the word. Every keystroke is a request, so a search engine's autocomplete gets several times the traffic of search itself, and each response must arrive before the user types the next character.
+Type "how to" into a search box and suggestions appear before you finish the word. Typing can generate several suggestion requests per search; debouncing and local reuse determine how many actually reach the server.
 
-The trick to this problem is realising that **the serving path should do almost no work**. All the expensive thinking (counting, ranking, filtering) happens offline, and the online path is a lookup.
+The trick to this problem is realising that **the serving path should do almost no work**. Precompute expensive counting and candidate selection so the online path starts with a lookup. Current removal rules, trending merges and any personal re-ranking still require bounded serve-time work.
 
 ## Step 1: Requirements
 
@@ -35,55 +35,19 @@ Assume **1 billion searches/day**. Users type ~20 characters per query, but clie
 
 Requests per second are searches per day times requests per search, divided by the seconds in a day:
 
-```formula
-rate = 1B × 6 / (10^5 s) ≈ 60,000/s
-peak = 60,000/s × 3 = 180,000/s
-where
-rate: average suggestion requests per second
-peak: requests per second at the busiest time, using an assumed peak factor of 3
-B: billion (10^9) searches per day
-6: suggestion requests per search after debouncing
-10^5: 100,000, the seconds in a day (86,400) rounded up
-s: seconds; /s means per second
-≈: approximately equal to (rounded)
-In words: a billion searches a day at six requests each is about 60,000 requests a second on average, and three times that at peak.
-```
+Measure suggestion requests per completed search: typing pauses, cancellation, cache reuse and selection all affect it. A daily search count does not establish a universal keystroke multiplier or a peak profile.
 
 What to store? Most queries are rare; the long tail is huge and mostly useless for suggestions. Keep the **top ~100 million queries** by frequency.
 
 Size the three parts of the index: the query strings, the trie nodes (one per distinct prefix), and a top-10 list at every node:
 
-```formula
-strings = 100M × 25 B ≈ 2.5 GB
-max nodes = 100M × 20 = 2 bn
-nodes ≈ 500M
-lists = 500M × 10 × 4 B = 20 GB
-where
-strings: bytes to store the query text itself
-max nodes: the most trie nodes possible, if no two queries shared a prefix
-nodes: the assumed number of trie nodes once shared prefixes are counted once
-lists: bytes for a top-10 list of 4-byte query IDs at every node (40 bytes per node)
-M: million (10^6)
-bn: billion (10^9)
-B: bytes
-GB: gigabyte, 10^9 bytes
-≈: approximately equal to (rounded or assumed)
-In words: the query text is small; the per-node top-10 lists dominate, at about 20 GB, and with overhead the whole index is assumed to be 30–50 GB.
-```
+The index holds query strings, prefix structure and stored candidate lists. Repeating a top-ten list at many prefix nodes can dominate raw text size; pointer, allocator and child-map overhead depend on representation.
 
-(The node count is an assumption: with no sharing at all, 100M queries capped at 20 characters would need up to 2 billion nodes, but popular queries share long prefixes heavily.) A 4-byte ID is enough because 4 bytes is 32 bits:
+The number of distinct prefixes depends on the actual corpus and maximum prefix depth. Do not infer it from the number of queries alone:
 
-```formula
-2^32 ≈ 4.3 × 10^9 > 10^8
-where
-2^32: the number of different values 32 bits can hold, 32 copies of 2 multiplied together
-10^9: a billion; 10^8: a hundred million, the number of queries kept
->: is greater than
-≈: approximately equal to
-In words: 32 bits can number about 4.3 billion things, far more than the 100 million queries to identify.
-```
+Choose an identifier width that covers every retained query, including reserved values. Compact IDs reduce repeated list payload; they do not account for the rest of the index.
 
-Under these compact-layout assumptions, the index may fit in one large machine's RAM. Measure the built representation: pointers, child maps, strings and allocator overhead can make a naive trie much larger. We'll replicate it rather than shard it, which keeps serving simple. Budget for **two copies** in memory, because a node loads the new trie snapshot before releasing the old one: a 50 GB index wants a machine with well over 100 GB of RAM.
+If the measured index and its rollout overlap fit the selected machine’s memory budget, full replication is an option. Measure the built representation: pointers, child maps, strings and allocator overhead can make a naive trie much larger. We'll replicate it rather than shard it, which keeps serving simple. Budget for **two copies** in memory, because a node loads the new trie snapshot before releasing the old one: a 50 GB index wants a machine with well over 100 GB of RAM.
 
 ## Key takeaways
 

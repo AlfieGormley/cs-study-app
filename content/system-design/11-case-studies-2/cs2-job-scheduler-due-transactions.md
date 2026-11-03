@@ -119,7 +119,7 @@ ON CONFLICT DO NOTHING;
 COMMIT;
 ```
 
-- The `(shard_id, next_run_at)` index makes the scan cheap.
+- The `(shard_id, next_run_at)` index supports a bounded due-time scan; locked rows, filtering and workload still affect its cost.
 - `FOR UPDATE SKIP LOCKED` (PostgreSQL, MySQL 8) lets several pollers share a shard safely, because each skips rows another poller has locked.
 - Reading **5 s ahead** and dispatching into an in-memory timer absorbs polling jitter, the small variation in exactly when each poll runs. Persist pending dispatch so timers can be rebuilt after failure; no timer guarantees exact execution time.
 - Computing `next_run_at` *in the same transaction* as the run insert makes the run creation, next-time update and durable outbox intent atomic under the database durability contract. The relay and worker still require recovery and deduplication.
@@ -133,3 +133,4 @@ COMMIT;
 - [Executing cron scripts reliably at scale (Slack Engineering)](https://slack.engineering/executing-cron-scripts-reliably-at-scale/)
 - [Asynchronous task scheduling at Dropbox (Dropbox Tech)](https://dropbox.tech/infrastructure/asynchronous-task-scheduling-at-dropbox)
 - [Amazon SQS visibility timeout (AWS docs)](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html)
+- [PostgreSQL SELECT locking clauses](https://www.postgresql.org/docs/current/sql-select.html)

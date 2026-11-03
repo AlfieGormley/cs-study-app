@@ -29,11 +29,11 @@ Geohash interleaves latitude and longitude bits and base-32 encodes them. Shared
 Recursively split a region into four until each leaf holds at most N points (say 100).
 
 - **Pros**: adapts to density. Central London gets tiny cells and the countryside gets huge ones, which can help manage local density. Query work still depends on radius and the number of results.
-- **Cons**: it's an in-memory structure that must be rebalanced as points move. With 500 k moves a second, splitting and merging nodes gets expensive, so it suits slow-changing data (restaurants, shops) better than moving cars.
+- **Cons**: moving points can require structural maintenance. A quadtree may be held in memory or persisted; benchmark updates, skew and query cost rather than assuming every implementation is unsuitable for moving drivers.
 
 ### S2 (Google)
 
-S2 projects the sphere onto a cube and orders cells along a **Hilbert curve**, which offers useful hierarchical spatial locality rather than a universal performance advantage over geohash's Z-order. Cells have 64-bit ids across 31 levels. A circle can be **covered** by a small set of cells at mixed levels, giving a handful of id ranges to scan. Uber's early dispatch sharded by S2 cell.
+S2 projects the sphere onto a cube and orders cells along a **Hilbert curve**, which offers useful hierarchical spatial locality rather than a universal performance advantage over geohash's Z-order. Cells have 64-bit ids across 31 levels. A circle can be **covered** by cells at mixed levels. The cell-count limit and required accuracy determine the ranges to scan; a small covering may include substantial extra area.
 
 ### H3 (Uber)
 
@@ -45,7 +45,7 @@ H3 tiles the world in **hexagons** across 16 resolutions (0 to 15). Each step do
 | 8 | ~0.74 km² | ~530 m |
 | 9 | ~0.11 km² | ~200 m |
 
-These are averages: because H3 projects from an icosahedron, hexagon area at one resolution varies by up to about 2x across the globe (excluding the smaller pentagons), though neighbouring cells in one city are very close in size. A sphere can't be tiled with hexagons alone, so each resolution also has 12 pentagons.
+These are averages: because H3 projects from an icosahedron, hexagon area at one resolution varies by up to about 2x across the globe (excluding the smaller pentagons), so inspect actual local cell areas when density comparisons require precision. A sphere can't be tiled with hexagons alone, so each resolution also has 12 pentagons.
 
 - A regular planar hexagon has six equally spaced neighbours. H3 approximates this geometry on a sphere; actual centre distances vary with projection distortion and pentagon boundaries. A square has edge neighbours and corner neighbours at different distances. This makes "k-ring" searches (all cells within k steps) and smoothing across neighbours clean.
 - Uber built H3 specifically for surge pricing and supply/demand analysis.
@@ -57,19 +57,7 @@ These are averages: because H3 projects from an icosahedron, hexagon area at one
 
 Away from pentagons, a planar regular-hexagon approximation counts the centre and successive rings. This estimates query work; it is not an exact coverage guarantee for a metric pickup radius.
 
-```formula
-n = 1 + 3k(k + 1)
-n = 1 + 3 × 2 × (2 + 1) = 19
-A = n a = 19 × 0.74 km² ≈ 14 km²
-where
-n: cells including the centre, a count
-k: graph radius in cell-to-cell steps; here 2
-A: approximate covered area, in square kilometres (km²)
-a: average resolution-8 cell area, about 0.74 km²
-km²: square kilometres
-≈: approximately equal after rounding
-In words: two graph rings contain approximately nineteen cells, about fourteen square kilometres under this planar model.
-```
+A regular planar hexagon model contains one centre cell, six first-ring cells and twelve second-ring cells: nineteen altogether. Real H3 neighborhoods can encounter pentagon distortion; a graph neighborhood is not a guarantee of covering a metric-radius circle.
 
 A cell query still needs enough coverage, freshness checks and distance or ETA filtering. Average area does not prove that every point within a chosen circle is covered.
 
@@ -84,3 +72,5 @@ A cell query still needs enough coverage, freshness checks and distance or ETA f
 - [Geohash (Wikipedia)](https://en.wikipedia.org/wiki/Geohash)
 - [Quadtree (Wikipedia)](https://en.wikipedia.org/wiki/Quadtree)
 - [H3 cell statistics](https://h3geo.org/docs/core-library/restable/)
+- [H3 graph traversal](https://h3geo.org/docs/api/traversal/)
+- [Redis geospatial representation](https://redis.io/docs/latest/commands/geoadd/)

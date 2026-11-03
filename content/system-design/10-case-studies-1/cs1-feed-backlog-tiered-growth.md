@@ -15,7 +15,7 @@ The hybrid feed still has an asynchronous fan-out fleet, a timeline cache and ra
 |---|---|---|
 | Push | Fast reads | Write amplification |
 | Pull | Cheap writes | Slow, costly reads |
-| Hybrid | Best of both | Two code paths |
+| Hybrid | Tunes work to account size | Two code paths and migration complexity |
 | IDs in timeline | One copy of post | Hydration step |
 
 Other bottlenecks:
@@ -28,29 +28,13 @@ Other bottlenecks:
 
 At 3 billion DAU and 5 billion posts/day:
 
-- Fan-out becomes ~10M inserts/s, and timeline RAM grows to ~38 TB before replication (sums below). **Lower the celebrity threshold** so more posts are pulled, and fan out only to recently active followers.
+- The assumed fan-out and timeline-memory budgets grow substantially. **Lower the celebrity threshold** so more posts are pulled, and fan out only to recently active followers.
 - **Multi-region**: keep timeline caches in the user's home region. Replicate posts globally (asynchronously) so hydration is local.
 - **Tiered timelines**: keep only the most recent ~200 IDs in RAM and older pages on SSD-backed stores.
-- **Ranking cost dominates**: precompute candidate pools offline, use cheaper first-stage models, and run heavy models on GPUs only for the top few hundred candidates.
+- **If ranking cost dominates**: precompute candidate pools offline, use cheaper first-stage models, and run heavy models on GPUs only for the top few hundred candidates.
 - **Graceful degradation**: under extreme load, serve the chronological cached timeline without ranking rather than failing.
 
-```formula
-rate = 5 bn × 200 / (10^5 s) = 10M/s
-cache = 3 bn × 800 × 16 B ≈ 38 TB
-where
-rate: timeline inserts per second
-cache: raw timeline memory before replication
-bn: billion (10^9): 5 billion posts a day, 3 billion users
-M: million
-200: assumed followers per post
-800: post IDs kept per timeline
-B: bytes
-10^5: 100,000, the seconds in a day rounded
-s: seconds; /s means per second
-TB: terabyte, 10^12 bytes
-≈: approximately equal to
-In words: ten times the posts and users means ten times the inserts, about 10 million a second, and ten times the cache, about 38 TB.
-```
+Growing posts and active users increase different costs: fan-out work and cached timeline memory. Monitor queue age, the number of active timelines, entries retained and rebuild demand before choosing the next optimisation.
 
 ## Key takeaways
 

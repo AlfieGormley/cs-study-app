@@ -11,7 +11,7 @@ A redirect that is reused by a browser or edge cache may never reach the origin.
 
 ## Deep dive 2: 301 vs 302
 
-Both send the browser to the long URL. The difference is caching.
+Both redirect to the target. A 301 says the move is permanent; a 302 says it is temporary. Their default cacheability also differs.
 
 | | 301 Permanent | 302 Found |
 |---|---|---|
@@ -22,7 +22,7 @@ Both send the browser to the long URL. The difference is caching.
 
 A fresh cached redirect can bypass your service, hiding visits and delaying target or expiry changes. A **301** is heuristically cacheable; **302/307** can also be cached with explicit freshness. Use an explicit policy such as `Cache-Control: no-store` when repeat navigation should resolve through your service, and account for analytics delivery failures separately.
 
-Without explicit cache headers, browsers treat a 301 as cacheable and may keep it indefinitely; a 302 is cached only if headers say so. A permanent redirect can still use a short freshness lifetime or `no-store`; the status and cache policy serve different purposes.
+Without explicit freshness, a cache may assign heuristic freshness to a 301. A 302 is not heuristically cacheable by default; explicit cache controls can permit caching. A permanent redirect can still use a short freshness lifetime or `no-store`; the status and cache policy serve different purposes.
 
 > [!note] Content gap: live provider headers
 > Exact Bitly, t.co and TinyURL cache-header claims have been removed. No reproducible set of representative URLs and dated response captures was supplied, so this audit cannot reliably present those variable deployment settings as provider-wide facts.
@@ -31,7 +31,7 @@ So the real lever is `Cache-Control`, not only the status code. Say the trade-of
 
 ## Deep dive 3: Analytics
 
-Never update a counter row synchronously on every redirect. At 30,000 redirects/s, a popular link would become a hot row and add latency to every redirect.
+For this high-volume, availability-first design, avoid updating one counter row synchronously on every redirect. At 30,000 redirects/s, a popular link would become a hot row and add latency to every redirect.
 
 Instead:
 

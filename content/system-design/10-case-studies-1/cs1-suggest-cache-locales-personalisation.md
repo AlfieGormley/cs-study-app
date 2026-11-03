@@ -9,20 +9,9 @@ sourceLesson: cs1-typeahead
 
 ## Deep dive 2: Scaling the serving path
 
-If a representative benchmark establishes 1,000 requests/s per core at the target latency, the core count is the peak rate divided by that:
+Benchmark the actual index and re-ranking path under the target latency, with realistic payloads and cache misses. Reserve capacity for failure and rollout; response time alone does not establish CPU cost.
 
-```formula
-cores = peak / cap
-cores = 180,000/s / (1,000/s) = 180
-where
-cores: CPU cores needed if every one runs flat out
-peak: peak suggestion requests per second
-cap: requests per second one core handles, an assumed 1,000
-/s: per second
-In words: 180,000 requests a second at an assumed 1,000 per core needs 180 fully busy cores, before headroom and before the CDN takes its share.
-```
-
-So 180,000/s requires 180 fully utilized cores before headroom and cache offload. A 1 ms response time alone does not establish CPU cost or throughput.
+Measure the shared and personalised stages separately so their costs and cache behaviour remain visible.
 
 > [!note] Content gap: index and serving benchmarks
 > No reproducible 100-million-query corpus, memory layout or serving benchmark is supplied. The 30–50 GB index size and per-core throughput are hypothetical sizing inputs, not guarantees.
@@ -33,7 +22,7 @@ Suggestions for a given prefix are the **same for everyone** in a locale (until 
 
 - Short prefixes are both the most requested (every query starts with one or two characters) and the most cacheable. The number of possible short prefixes depends on the alphabet and Unicode normalization; it is not necessarily a few thousand for every locale.
 - A CDN with a 5–15 minute TTL can serve a large fraction of all requests without ever reaching your servers.
-- The browser caches responses too, so backspacing costs nothing.
+- The browser can reuse a previously fetched prefix while it remains valid; debouncing may have skipped that prefix.
 
 ### Sharding, if it outgrows one machine
 
@@ -52,7 +41,7 @@ Popularity alone is a decent baseline. Real systems use a **two-stage** approach
 
 Personalisation prevents sharing the same final cached response across users unless the cache key safely separates their results. A common compromise: cache the global top-50 at the edge, and do the personal re-ranking (or blend in the user's own recent searches) on the client or in a thin per-user service.
 
-Facebook's original typeahead took personalisation further: when you focused the search box, it preloaded your friends and frequently visited pages into the browser, so the first few characters were matched entirely client-side.
+Facebook's 2010 account describes preloading connections such as friends, pages, groups, applications and upcoming events into a browser cache when the search box gains focus. Client results receive priority, with an asynchronous server query supplying additional matches. This is a historical design example, not a claim about the current product.
 
 ## Key takeaways
 

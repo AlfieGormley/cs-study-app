@@ -16,7 +16,7 @@ Serving nodes use immutable trie snapshots built offline. A bad snapshot can mak
 | Top-k at each node | Fast reads, more RAM |
 | Daily rebuild | Simple, stale |
 | Trending overlay | Fresh, more moving parts |
-| Edge caching | Huge offload, no personalisation |
+| Edge caching | Shared-candidate reuse; personalise separately |
 
 Failure modes to mention:
 
@@ -28,21 +28,9 @@ Failure modes to mention:
 
 At 10 billion searches/day with 50 locales:
 
-```formula
-peak = 10B × 6 / (10^5 s) × 3 ≈ 1.8M/s
-where
-peak: peak suggestion requests per second
-B: billion
-M: million
-6: suggestion requests per search
-10^5: 100,000, the seconds in a day rounded
-3: the assumed peak factor
-s: seconds; /s means per second
-≈: approximately equal to
-In words: ten times the searches gives about 1.8 million, call it 2 million, suggestion requests a second at peak.
-```
+A tenfold search increase raises serving demand only under the same requests-per-search and peak assumptions. Re-measure client behaviour, locale distribution and caching before scaling.
 
-That is about 2M suggestion requests/s at peak. Then:
+Choose the next change from observed pressure:
 
 - **Edge first**: push the most popular prefixes' responses into CDN workers' memory; the origin sees only the long tail.
 - **Partition by locale and region**, each with its own trie and its own replicas.
@@ -55,6 +43,13 @@ That is about 2M suggestion requests/s at peak. Then:
 Build and validate a versioned artifact before announcing it as current. A canary downloads it, checks integrity and performs representative lookups, including blocked terms and locales. It loads the new trie alongside the old trie, then changes the root with appropriate synchronisation. Readers that started on the old root must be allowed to finish before that memory is released.
 
 Compare error rates, latency, result coverage and suspicious changes against the previous version. Roll out gradually across regions and retain the old artifact so rollback changes a version pointer rather than waiting for a rebuild. A root swap prevents readers seeing a partly built structure; it does not prove that the contents are correct. Validation, canaries and rollback address that separate risk.
+
+> [!analogy] Real-world analogy: Replacing a reference book
+> Prepare a corrected edition, let a small group check it, then give it to readers while allowing those using the old edition to finish.
+>
+> **How it maps:** Validated immutable snapshots are published gradually, and old readers keep their version alive through the handover.
+>
+> **Where it stops:** A pointer change needs runtime synchronisation and sufficient memory; an intact new edition can still contain wrong information.
 
 ## Key takeaways
 

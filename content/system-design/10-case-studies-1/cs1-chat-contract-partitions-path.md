@@ -9,7 +9,7 @@ sourceLesson: cs1-chat-system
 
 ## Step 3: API
 
-Clients hold a persistent **WebSocket** connection (over TLS) for live message traffic. HTTP polling would mean either high latency or a flood of empty requests; WebSockets give a full-duplex channel with tiny per-message overhead. Long polling or server-sent events are fallbacks for restrictive networks.
+Clients hold a persistent **WebSocket** connection (over TLS) for live message traffic. HTTP polling would mean either high latency or a flood of empty requests; WebSockets give a full-duplex channel with tiny per-message overhead. Long polling or server-sent events can provide downstream fallbacks for restrictive networks; SSE is server-to-client, so uploads still need a separate HTTP request path.
 
 Frames over the socket:
 

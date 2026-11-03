@@ -17,80 +17,36 @@ A web crawler sounds simple: fetch a page, extract the links, repeat. At a billi
 - Re-crawl pages to keep them fresh.
 
 ### Non-functional
-- **Politeness**: obey robots.txt, and never overload a host (at most about one request at a time per host, spaced out).
+- **Politeness**: obey robots.txt, space out requests and coordinate host/IP budgets. One request at a time is a conservative starting policy, not proof that a fragile host cannot be overloaded.
 - **Scale**: 1 B pages per month at first, growing 10x.
 - **Robustness**: survive malformed HTML, slow servers, spider traps and crashes, without losing frontier state.
 - **Prioritisation**: important and fresh pages first. The web is effectively infinite, so you never finish.
 - **Extensibility**: new content types and processors can be plugged in.
 
-## Back-of-the-envelope
+## Latency consumes concurrency
 
-Start from the target of 1 B (one billion) pages a month and turn it into a rate per second. A 30-day month contains 2,592,000 seconds:
+An illustrative target of one billion pages in a 30-day month averages roughly 400 pages a second. A planning target of 1,000 fetches a second leaves some room for uneven demand, retries and growth; it is not a measured capacity guarantee.
 
-```formula
-P = N / (30 × 86,400 s)
-P = 1,000,000,000 / 2,592,000 s
-P ≈ 386 ≈ 400 pages/s
-where
-P: average pages fetched per second
-N: pages to fetch per month; here 1 billion
-86,400 s: the number of seconds in one day
-30: days in the month
-s: seconds
-pages: web pages fetched
-≈: approximately equal to
-In words: a billion pages a month works out at roughly 400 pages every second, around the clock.
-```
+Page size governs network and storage payload. Fetch duration governs how many requests remain open. If hosts become slower while you maintain the same completion rate, more fetches must be in flight. That consumes sockets, memory and connection slots even when CPU use is low.
 
-Plan for **1,000 pages/s** to leave room for peaks, retries and growth.
+Little's law is a useful reference for long-run averages in a stable system:
 
-Bandwidth is pages per second times page size. Assume an average HTML page of about 100 KB (kilobytes) uncompressed. Network speeds are quoted in bits, so multiply bytes by 8:
-
-```formula
-D = P × S
-D = 400 pages/s × 100 KB = 40 MB/s
-D = 40 MB/s × 8 = 320 Mbps
-where
-D: download bandwidth needed, in megabytes per second (MB/s) or megabits per second (Mbps)
-P: pages fetched per second; here about 400
-S: average page size; about 100 KB
-pages: web pages fetched
-s: seconds
-KB: kilobytes, 1,000 bytes
-MB: megabytes, 1,000,000 bytes
-Mbps: megabits per second; one byte is 8 bits
-In words: 400 pages a second at 100 KB each is 40 megabytes a second, or about 320 megabits a second on the network.
-```
-
-Storage for a month of pages is the page count times page size:
-
-```formula
-T = N × S
-T = 1,000,000,000 × 100 KB = 100 TB
-where
-T: raw page storage per month
-N: pages fetched per month; here 1 billion
-S: average page size; about 100 KB
-KB: kilobytes, 1,000 bytes
-TB: terabytes, 10^12 bytes (a million million)
-In words: a billion 100 KB pages is 100 terabytes a month, or roughly 25 TB if HTML compresses about four to one.
-```
-
-**Latency drives concurrency.** Little's law links three averages in any steady system: the number of things in progress equals the rate they arrive times how long each one stays.
-
-```formula
+```formula reference
 L = λW
-L = 1,000 pages/s × 1 s = 1,000
 where
-L: requests in flight at the same moment (concurrency)
-λ: the arrival rate: pages started per second; here 1,000
-W: average time one fetch takes, in seconds (s); about 1 s for DNS + TCP + TLS + download
-s: seconds
-pages: web page fetches
-In words: starting 1,000 fetches a second, each taking a second, keeps about 1,000 requests open at once.
+L: average number of fetches in flight, a count
+λ: average fetch completion rate, in fetches per second
+W: average time a fetch remains in flight, in seconds
+In words: sustaining the same fetch rate while requests take longer requires more requests in progress.
 ```
 
-A fetch takes about 1 s on average (DNS + TCP + TLS + download), so 1,000 pages/s means about **1,000 requests in flight**. Little's law holds for long-run averages in a stable system; slow hosts raise W and so raise concurrency. Use async I/O (epoll, an event loop) rather than a thread per request.
+For example, at 1,000 fetches a second with an average one-second lifetime, about 1,000 fetches are open. This is an average, not a safe maximum. Allow for latency tails and bound concurrency, timeouts and response size. Slow hosts must not exhaust all slots and starve healthy ones.
+
+## Keep capacity separate from permission
+
+Asynchronous I/O lets a small number of threads handle many waiting sockets. Lightweight-thread designs are another option; measure their memory and scheduling cost. Neither makes it acceptable to exceed a host's request budget. Coordinate host and shared-IP politeness separately from fleet-wide concurrency.
+
+For storage, distinguish raw fetched bodies from compression, indexes, copies and retention. A hypothetical 100 KB average HTML body excludes images and other resources; rendering JavaScript may create many additional requests and substantial CPU work. Measure the actual crawl mix before committing to a fleet size.
 
 ## Key takeaways
 - Page size and fetch rate determine raw network and storage volume.

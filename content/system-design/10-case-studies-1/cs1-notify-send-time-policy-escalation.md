@@ -25,7 +25,7 @@ Tracking uses provider callbacks: Twilio status webhooks, SES events, APNs/FCM r
 
 ## Bottlenecks and trade-offs
 
-- **Provider rate limits**, not your own servers, are usually the ceiling. Know them and shape traffic to them.
+- **Provider rate limits** can be the binding constraint. Measure them alongside internal bottlenecks and shape traffic to usable provider capacity.
 - **Preference lookups** at 50k/s need caching; accept that a preference change can take a few seconds to apply, with a freshly checked suppression state before marketing sends. Cache invalidation alone does not eliminate races with in-flight sends.
 - **Fan-out from campaigns** can swamp shared stores. Throttle at the scheduler.
 - **Cost vs reach**: SMS can reach many users without an installed app, but needs a reachable SMS-capable number and incurs charges. Push generally has low marginal provider cost but still has infrastructure costs and requires a usable app/device registration. A common pattern is *channel escalation*: send push, and only if it isn't opened within a set time (say 10 minutes), send SMS.
@@ -36,19 +36,7 @@ After a push attempt, persist a delayed job for the SMS decision. At execution, 
 
 ## At 10x scale
 
-At ten billion notifications a day, compute the average with the same rounded-day shortcut. Assume a campaign-inclusive peak factor of five for this scenario:
-
-```formula
-r_avg = 10 bn / (100,000 s) = 100,000/s
-r_peak = 5 × r_avg = 500,000/s
-where
-r_avg: average notifications per second
-r_peak: hypothetical campaign-inclusive peak per second
-bn: billion, one thousand million
-s: seconds; /s means per second
-5: assumed peak factor; actual campaign scheduling can produce a different peak
-In words: ten billion a day is about 100,000 a second on this shortcut; the assumed peak is five times that.
-```
+At ten times the assumed workload, revisit campaign scheduling and channel mix rather than reusing a universal peak multiplier. Higher volume puts pressure on provider quotas, shared stores and callback processing as well as sender workers. Scale those measured bottlenecks while preserving priority isolation and recoverable attempts.
 
 - **Partition everything by `user_id`**: Kafka partitions, the log, and preference caches, to improve locality. Kafka ordering is per partition within a topic; separate priorities/channels, parallel senders and providers do not guarantee end-to-end user-visible order.
 - **Regional deployments** close to users and providers, with each region sending for its own users.

@@ -10,12 +10,12 @@ sourceLesson: cs2-job-scheduler
 ## Multi-tenancy and fairness
 
 - Give each tenant quotas on schedules, firings per second and concurrent runs.
-- Use weighted fair queuing on the work queue (a queue per tenant, or per priority class) so a tenant scheduling 1 M jobs at midnight doesn't delay everyone else's.
+- Use weighted fair queuing on the work queue (a queue per tenant, or per priority class) so a tenant's million-job backlog does not monopolise dispatch. Concurrent-run quotas and shared-dependency limits are also needed.
 - Isolate worker pools for heavy tenants or job types.
 
 ## Bottlenecks and trade-offs
 
-- **Polling interval vs load**: polling every 100 ms per shard is accurate but costs database QPS. Read-ahead plus in-memory timers gives accuracy *and* cheap polling.
+- **Polling interval vs load**: polling every 100 ms per shard is accurate but costs database QPS. Read-ahead and rebuildable timers can reduce polling pressure, but actual start accuracy depends on dispatch and execution load.
 - **More shards** mean finer rebalancing and more parallelism, but more leases to manage. 1,024 shards over 50 nodes is about 20 each.
 - **At-least-once vs at-most-once**: some jobs (sending a bill) prefer at-most-once, risking a missed run rather than a duplicate. Expose it as a per-job choice, with idempotency keys as the default answer.
 - **Database as queue**: benchmark SKIP LOCKED with the actual row size, indexes, contention and durability settings. When the measured dispatch load exceeds the chosen database budget, hand off to Kafka or SQS for dispatch, and keep the database for state.
@@ -23,7 +23,7 @@ sourceLesson: cs2-job-scheduler
 ## Evolving at 10x
 
 - **1 B schedules, about 100 k firings/s**: more shards, timing wheels per shard holding the next few minutes, and dispatch straight into partitioned Kafka topics.
-- **Workflows**: jobs with dependencies (DAGs) and long-running steps lead to durable-execution engines (Temporal, Airflow for batch), which durably track workflow/task progress. Temporal replays workflow history while activities need retry-safe effects; Airflow schedules and retries tasks rather than replaying arbitrary code with the same semantics.
+- **Workflows**: jobs with dependencies (DAGs) and long-running steps lead to workflow engines (Temporal platform, Apache Airflow for batch), which durably track workflow/task progress. Temporal replays workflow history while activities need retry-safe effects; Airflow schedules and retries tasks rather than replaying arbitrary code with the same semantics.
 - **Multi-region**: assign each shard a home region, replicate the job store, and make sure fencing works across regions (a single global coordination service, or per-region shard ownership).
 
 ## Recovery load belongs in the capacity plan
@@ -46,3 +46,5 @@ These are control policies to test with the actual workloads. Neither timing whe
 - [Asynchronous task scheduling at Dropbox (Dropbox Tech)](https://dropbox.tech/infrastructure/asynchronous-task-scheduling-at-dropbox)
 - [CronJob (Kubernetes docs)](https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/)
 - [Amazon SQS visibility timeout (AWS docs)](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html)
+- [Temporal workflow execution](https://docs.temporal.io/workflow-execution)
+- [Apache Airflow architecture](https://airflow.apache.org/docs/apache-airflow/stable/core-concepts/overview.html)
